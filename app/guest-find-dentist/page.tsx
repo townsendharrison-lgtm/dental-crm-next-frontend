@@ -3,5 +3,7 @@
 import FindDentistView from "@/components/dentists/FindDentistView";
 
 export default function GuestFindDentistPage() {
-  return <FindDentistView />;
+  return <div className="pt-6">
+    <FindDentistView />
+  </div>;
 }
