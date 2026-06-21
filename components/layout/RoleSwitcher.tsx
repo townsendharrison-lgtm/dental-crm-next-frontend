@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, X, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -27,27 +27,60 @@ function label(role: UserRole, short = false) {
  * Admin-only role preview switcher. Lets an ADMIN view the app as any other
  * role. Renders nothing for non-admins. Mirrors the old app's floating pill
  * (desktop) and FAB (mobile).
+ *
+ * Features a brief transition overlay when switching modes to provide smooth
+ * visual feedback instead of a jarring content swap.
  */
 export function RoleSwitcher() {
   const router = useRouter();
   const { isAdmin, actualRole, previewRole, setPreviewRole } = useRole();
   const { previewCollapsed, setPreviewCollapsed } = useUIStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
+  const [, startTransition] = useTransition();
+
+  const select = useCallback(
+    (role: UserRole) => {
+      const nextPreviewRole = role === "ADMIN" ? null : role;
+      const effectiveRole = nextPreviewRole || actualRole;
+      const destination = getInitialRouteForRole(effectiveRole);
+
+      // Show transition overlay
+      setTransitioning(true);
+      setMobileOpen(false);
+
+      // Small delay to let the overlay fade in, then commit the state change
+      setTimeout(() => {
+        setPreviewRole(nextPreviewRole);
+
+        startTransition(() => {
+          router.push(destination);
+        });
+
+        // Hide overlay after navigation settles
+        setTimeout(() => {
+          setTransitioning(false);
+        }, 250);
+      }, 120);
+    },
+    [actualRole, setPreviewRole, router],
+  );
 
   if (!isAdmin) return null;
 
   // The active button reflects the current effective role.
   const active: UserRole = previewRole ?? actualRole ?? "ADMIN";
 
-  const select = (role: UserRole) => {
-    const nextPreviewRole = role === "ADMIN" ? null : role;
-    setPreviewRole(nextPreviewRole);
-    setMobileOpen(false);
-    router.push(getInitialRouteForRole(nextPreviewRole || actualRole));
-  };
-
   return (
     <>
+      {/* Transition overlay — masks the content swap */}
+      <div
+        className={cn(
+          "fixed inset-0 z-[200] bg-slate-950/80 backdrop-blur-sm transition-all duration-200 pointer-events-none",
+          transitioning ? "opacity-100" : "opacity-0",
+        )}
+      />
+
       {/* Desktop — floating pill bottom-left */}
       {!previewCollapsed && (
         <div className="fixed bottom-4 left-4 z-50 hidden items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 p-2 pr-3 shadow-2xl backdrop-blur lg:flex animate-in slide-in-from-left-5 duration-200">
@@ -63,9 +96,11 @@ export function RoleSwitcher() {
             <button
               key={role}
               onClick={() => select(role)}
+              disabled={transitioning}
               className={cn(
                 "rounded-full px-3 py-1 text-xs font-semibold transition-all cursor-pointer",
                 active === role ? "bg-indigo-600 text-white shadow-lg" : "text-slate-400 hover:bg-slate-800",
+                transitioning && "opacity-50 pointer-events-none",
               )}
             >
               {label(role)}
@@ -86,11 +121,13 @@ export function RoleSwitcher() {
                 <button
                   key={role}
                   onClick={() => select(role)}
+                  disabled={transitioning}
                   className={cn(
                     "rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
                     active === role
                       ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
                       : "text-slate-400 hover:bg-slate-800",
+                    transitioning && "opacity-50 pointer-events-none",
                   )}
                 >
                   {label(role, true)}

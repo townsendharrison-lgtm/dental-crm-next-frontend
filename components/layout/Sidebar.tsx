@@ -33,7 +33,7 @@ function isActive(pathname: string, href: string) {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout, isAuthenticated } = useAuth();
-  const { role, isAdmin } = useRole();
+  const { role, isAdmin, isPreviewing, previewRole } = useRole();
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const closeMobile = useUIStore((s) => s.closeMobileSidebar);
   const { previewCollapsed, setPreviewCollapsed } = useUIStore();

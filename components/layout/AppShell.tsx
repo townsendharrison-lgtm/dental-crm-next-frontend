@@ -23,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { status } = useAuth();
-  const { isAdmin, role } = useRole();
+  const { isAdmin, role, actualRole, isPreviewing } = useRole();
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -32,9 +32,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
     if (status === "authenticated" && role) {
+      // Admins can access every route — the preview role only affects UI rendering.
+      // Skip redirect when previewing; the RoleSwitcher handles the navigation.
+      if (isAdmin) {
+        const path = window.location.pathname;
+        if (path === "/" || path === "/dashboard") {
+          const initialRoute = getInitialRouteForRole(role);
+          if (initialRoute !== "/dashboard" && path !== initialRoute) {
+            router.replace(initialRoute);
+          }
+        }
+        return;
+      }
       const path = window.location.pathname;
-      if (!canAccess(role, path)) {
-        router.replace(getInitialRouteForRole(role));
+      if (!canAccess(actualRole || role, path)) {
+        router.replace(getInitialRouteForRole(actualRole || role));
       } else if (path === "/" || path === "/dashboard") {
         const initialRoute = getInitialRouteForRole(role);
         if (initialRoute !== "/dashboard" && path !== initialRoute) {
@@ -42,7 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }
       }
     }
-  }, [status, role, router]);
+  }, [status, role, actualRole, isAdmin, router]);
 
   // Sync document title to active sidebar item
   useEffect(() => {
@@ -105,7 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         <GlobalHeader />
-        <div className="mx-auto max-w-7xl duration-500 animate-in fade-in slide-in-from-bottom-4">
+        <div key={role || "default"} className="mx-auto max-w-7xl duration-500 animate-in fade-in slide-in-from-bottom-4">
           {children}
         </div>
       </main>

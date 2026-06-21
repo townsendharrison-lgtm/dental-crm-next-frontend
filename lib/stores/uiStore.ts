@@ -41,7 +41,7 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "dc-ui",
-      partialize: (s) => ({ sidebarCollapsed: s.sidebarCollapsed, previewCollapsed: s.previewCollapsed }),
+      partialize: (s) => ({ sidebarCollapsed: s.sidebarCollapsed, previewCollapsed: s.previewCollapsed, previewRole: s.previewRole }),
     },
   ),
 );
