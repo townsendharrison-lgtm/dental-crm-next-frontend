@@ -613,7 +613,7 @@ export function GlobalHeader() {
   const details = getHeaderDetails(pathname);
 
   return (
-    <div className="hidden lg:block sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md pt-3">
+    <div className="hidden lg:block sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md pt-3 pb-1">
       <div className="mx-auto max-w-7xl flex items-center justify-between py-3">
         <div>
           <h1 className="text-2xl font-bold text-white leading-tight">{details.title}</h1>

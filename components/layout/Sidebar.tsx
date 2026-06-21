@@ -48,7 +48,7 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6">
         {/* Brand */}
         <div className="mb-8 mt-4 flex items-center gap-2 lg:mt-0 lg:gap-3">
-          <div className="relative flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-xl lg:h-7 lg:w-7">
+          <div className="relative flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-lg lg:h-7 lg:w-7">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={LOGO_URL}
@@ -65,7 +65,7 @@ export function Sidebar() {
           </h1>
           <button
             onClick={closeMobile}
-            className="ml-auto shrink-0 rounded-xl p-2 text-slate-400 transition-all hover:bg-slate-800 hover:text-white lg:hidden"
+            className="ml-auto shrink-0 rounded-lg p-2 text-slate-400 transition-all hover:bg-slate-800 hover:text-white lg:hidden"
             aria-label="Close sidebar"
           >
             <X className="h-5 w-5" />
@@ -83,7 +83,7 @@ export function Sidebar() {
                 href={item.href}
                 onClick={closeMobile}
                 className={cn(
-                  "relative flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all",
+                  "relative flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-all",
                   active
                     ? "border border-indigo-600/20 bg-indigo-600/10 text-indigo-400"
                     : "text-slate-400 hover:bg-slate-800 hover:text-white",
@@ -106,7 +106,7 @@ export function Sidebar() {
               href={aiToolItem.href}
               onClick={closeMobile}
               className={cn(
-                "group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl px-4 py-3 text-sm font-bold transition-all",
+                "group relative flex w-full items-center gap-3 overflow-hidden rounded-lg px-4 py-3 text-sm font-bold transition-all",
                 isActive(pathname, aiToolItem.href)
                   ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
                   : "border border-slate-700/50 bg-slate-800/50 text-slate-300 hover:bg-slate-800 hover:text-white",
@@ -140,7 +140,7 @@ export function Sidebar() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => logout()}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-800/50 px-4 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-slate-800 hover:text-white cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-slate-800/50 px-4 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-slate-800 hover:text-white cursor-pointer"
             >
               <LogOut className="h-4 w-4 shrink-0" />
               Sign Out
@@ -148,7 +148,7 @@ export function Sidebar() {
             {isAdmin && previewCollapsed && (
               <button
                 onClick={() => setPreviewCollapsed(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-amber-400 transition-all cursor-pointer"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-amber-400 transition-all cursor-pointer"
                 title="Expand Preview Switcher"
               >
                 <Eye className="h-4 w-4" />

@@ -14,8 +14,8 @@ export const metadata: Metadata = {
   description: "Mentorship and applicant management platform for dental school applicants.",
   manifest: "/manifest.json",
   icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
     apple: "/logo.png",
   },
   appleWebApp: {

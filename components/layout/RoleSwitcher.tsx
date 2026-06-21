@@ -123,7 +123,7 @@ export function RoleSwitcher() {
                   onClick={() => select(role)}
                   disabled={transitioning}
                   className={cn(
-                    "rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
+                    "rounded-lg px-3 py-2.5 text-left text-xs font-bold transition-all",
                     active === role
                       ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
                       : "text-slate-400 hover:bg-slate-800",
