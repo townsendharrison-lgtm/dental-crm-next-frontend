@@ -1,24 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Next.js frontend for the **Dental School Guide CRM**. Talks to the Express/Supabase backend in `../backend`.
 
 ## Getting Started
 
-First, run the development server:
+1. Copy the env vars below into `.env.local`:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+   ```bash
+   # Backend API base URL
+   NEXT_PUBLIC_API_URL=http://localhost:5001
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+   # Supabase (used for client-side access-token refresh)
+   NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+2. Run the dev server:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```bash
+   npm run dev
+   ```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Architecture
+
+- **`proxy.ts`** — Next.js 16's renamed middleware. Handles server-side route protection + role-based redirects using the access-token cookie.
+- **`lib/api/`** — Axios client with auth header injection, single-flight token refresh (via Supabase), and normalised error handling. Query keys live in `queryKeys.ts`.
+- **`lib/stores/`** — Zustand stores for client/UI state (`uiStore`, `authStore`).
+- **`lib/providers/`** — React Query + Auth bootstrap providers (mounted in `app/providers.tsx`).
+- **`lib/auth/`** — Cookie helpers, JWT decode, and the role/route-access map (`roles.ts`).
+- **`components/ui/`** — Shared component library: `Button`, `Card`, `Badge`, `Modal`, `Table`, `Tabs`, `Dropdown`, form fields, `Avatar`, `Spinner`, `EmptyState`.
+- **`components/layout/`** — `Sidebar`, `Header`, `AppShell` (responsive shell), `PageHeader`.
+- **`components/auth/RoleGate.tsx`** — Conditionally render UI by role.
+- **`app/(app)/`** — Authenticated route group wrapped by `AppShell`. Add feature pages here.
+- **`app/login/`** — Public auth page.
+
+### Roles
+
+`ADMIN`, `MENTOR_MANAGER`, `MENTOR`, `STUDENT`, `LETTER_WRITER`, `SETTER`. Route access is centralised in `lib/auth/roles.ts` and navigation in `lib/navigation.ts`.
 
 ## Learn More
 
