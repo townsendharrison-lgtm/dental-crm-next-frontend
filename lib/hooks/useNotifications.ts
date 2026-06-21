@@ -5,7 +5,7 @@ import { queryKeys } from "../api/queryKeys";
 /** Hook to fetch notifications */
 export function useNotifications(unreadOnly = false, enabled = true) {
   return useQuery<SystemNotification[]>({
-    queryKey: queryKeys.notifications.all(),
+    queryKey: queryKeys.notifications.all(unreadOnly),
     queryFn: () => notificationsApi.getNotifications(unreadOnly),
     enabled,
   });

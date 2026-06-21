@@ -38,7 +38,7 @@ function NotificationBell() {
   const [isStandalone, setIsStandalone] = useState(false);
 
   // Fetch notifications
-  const { data: notifications = [] } = useNotifications(false, !!user);
+  const { data: notifications = [] } = useNotifications(true, !!user);
 
   // Mutations
   const markAsReadMutation = useMarkNotificationAsRead();

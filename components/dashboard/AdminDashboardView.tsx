@@ -53,7 +53,7 @@ export function AdminDashboardView() {
   const { data: users = [], isLoading: usersLoading } = useAdminUsers();
   const { data: leads = [], isLoading: leadsLoading } = useLeads();
   const { data: lorRequests = [], isLoading: lorLoading } = useLorRequests();
-  const { data: notifications = [], isLoading: notificationsLoading } = useNotifications();
+  const { data: notifications = [], isLoading: notificationsLoading } = useNotifications(true);
 
   const markNotificationRead = useMarkNotificationAsRead();
   const updateLead = useUpdateLead();
@@ -62,93 +62,46 @@ export function AdminDashboardView() {
   const students = useMemo(() => users.filter((u) => u.role === "STUDENT"), [users]);
   const mentors = useMemo(() => users.filter((u) => u.role === "MENTOR"), [users]);
 
-  // 3. Local storage dismissed alerts logic
-  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const saved = localStorage.getItem("dismissedLeadAlerts");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const handleDismissAlert = (relatedId: string) => {
-    if (!relatedId) return;
-    setDismissedAlerts((prev) => {
-      if (prev.includes(relatedId)) return prev;
-      const updated = [...prev, relatedId];
-      localStorage.setItem("dismissedLeadAlerts", JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  // 4. Aggregate urgent alerts
+  // 3. Aggregate urgent alerts
   const urgentAlerts = useMemo(() => {
     const alerts: Array<{
       id: string;
       title: string;
       message: string;
-      type: "URGENT";
+      type: string;
       createdAt: string;
       relatedId?: string;
       actionType: "LEAD" | "LOR" | "NOTIFICATION";
     }> = [];
 
-    // Filtered real notifications of type URGENT
+    // Filtered real notifications that are UNREAD from the database notification system
     notifications
-      .filter((n) => n.type === "URGENT")
+      .filter((n) => !n.is_read)
       .forEach((n) => {
+        let actionType: "LEAD" | "LOR" | "NOTIFICATION" = "NOTIFICATION";
+        if (n.category === "NEW_LEAD") {
+          actionType = "LEAD";
+        } else if (
+          n.category === "LOR" ||
+          n.title.toLowerCase().includes("letter") ||
+          n.message.toLowerCase().includes("letter")
+        ) {
+          actionType = "LOR";
+        }
+
         alerts.push({
           id: n.id,
           title: n.title,
           message: n.message,
-          type: "URGENT",
+          type: n.type || "URGENT",
           createdAt: n.created_at,
           relatedId: n.related_id || undefined,
-          actionType: "NOTIFICATION",
+          actionType,
         });
       });
 
-    // Five most recent leads as alert cards
-    const sortedLeads = [...leads]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 5);
-
-    sortedLeads.forEach((l) => {
-      const alertId = `lead-alert-${l.id}`;
-      if (!alerts.some((a) => a.relatedId === l.id)) {
-        alerts.push({
-          id: alertId,
-          title: "New Lead Added",
-          message: `${l.name} has been added as a new lead.`,
-          type: "URGENT",
-          createdAt: l.createdAt,
-          relatedId: l.id,
-          actionType: "LEAD",
-        });
-      }
-    });
-
-    // LOR uploaded alerts
-    const uploadedLors = lorRequests.filter((r) => r.status === "UPLOADED");
-    uploadedLors.forEach((lor) => {
-      const writerName = lor.writerName || "A writer";
-      const studentName = lor.studentName || "a student";
-      alerts.push({
-        id: `lor-upload-${lor.id}`,
-        title: "📄 New Letter Uploaded",
-        message: `${writerName} submitted a letter of recommendation for ${studentName}. Tap to review.`,
-        type: "URGENT",
-        createdAt: lor.uploadedAt || new Date().toISOString(),
-        relatedId: lor.id,
-        actionType: "LOR",
-      });
-    });
-
-    // Filter out anything the admin has dismissed
-    return alerts.filter((a) => !(a.relatedId && dismissedAlerts.includes(a.relatedId)));
-  }, [notifications, leads, lorRequests, dismissedAlerts]);
+    return alerts;
+  }, [notifications]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -381,16 +334,36 @@ export function AdminDashboardView() {
           {urgentAlerts.map((notification) => (
             <div
               key={notification.id}
-              className="bg-rose-500/5 border border-rose-500/20 p-4 lg:p-6 rounded-2xl lg:rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:bg-rose-500/10 transition-all shadow-xl shadow-rose-500/5"
+              className={`p-4 lg:p-6 rounded-2xl lg:rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 group transition-all shadow-xl ${
+                notification.type === "URGENT"
+                  ? "bg-rose-500/5 border border-rose-500/20 hover:bg-rose-500/10 shadow-rose-500/5"
+                  : notification.type === "WARNING"
+                  ? "bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 shadow-amber-500/5"
+                  : "bg-indigo-500/5 border border-indigo-500/20 hover:bg-indigo-500/10 shadow-indigo-500/5"
+              }`}
             >
               <div className="flex items-start sm:items-center gap-3 lg:gap-4 min-w-0">
-                <div className="p-2 lg:p-3 bg-rose-500/10 rounded-xl lg:rounded-2xl border border-rose-500/20 shrink-0">
-                  <ShieldAlert className="w-5 h-5 lg:w-6 lg:h-6 text-rose-500" />
+                <div className={`p-2 lg:p-3 rounded-xl lg:rounded-2xl border shrink-0 ${
+                  notification.type === "URGENT"
+                    ? "bg-rose-500/10 border-rose-500/20 text-rose-500"
+                    : notification.type === "WARNING"
+                    ? "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                    : "bg-indigo-500/10 border-indigo-500/20 text-indigo-400"
+                }`}>
+                  <ShieldAlert className="w-5 h-5 lg:w-6 lg:h-6" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <h4 className="font-black text-white tracking-tight text-sm lg:text-base">{notification.title}</h4>
-                    <span className="text-[10px] font-black bg-rose-500/20 text-rose-500 px-2 py-0.5 rounded-full border border-rose-500/30 animate-pulse">Urgent</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border animate-pulse capitalize ${
+                      notification.type === "URGENT"
+                        ? "bg-rose-500/20 text-rose-500 border-rose-500/30"
+                        : notification.type === "WARNING"
+                        ? "bg-amber-500/20 text-amber-500 border-amber-500/30"
+                        : "bg-indigo-500/20 text-indigo-400 border-indigo-500/30"
+                    }`}>
+                      {notification.type.toLowerCase()}
+                    </span>
                   </div>
                   <p className="text-xs lg:text-sm text-slate-400 font-medium line-clamp-2">{notification.message}</p>
                 </div>
@@ -402,12 +375,9 @@ export function AdminDashboardView() {
                       router.push("/admin/letter-portal");
                     } else if (notification.actionType === "LEAD" && notification.relatedId) {
                       setSelectedLeadId(notification.relatedId);
-                    } else if (notification.actionType === "NOTIFICATION") {
-                      markNotificationRead.mutate(notification.id);
                     }
-                    if (notification.relatedId) {
-                      handleDismissAlert(notification.relatedId);
-                    }
+                    // Always mark it read in the database when action is taken
+                    markNotificationRead.mutate(notification.id);
                   }}
                   className="flex-1 sm:flex-none px-4 lg:px-6 py-2.5 lg:py-3 bg-rose-600 hover:bg-rose-500 text-white text-[10px] lg:text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-rose-600/20"
                 >
@@ -415,12 +385,8 @@ export function AdminDashboardView() {
                 </button>
                 <button
                   onClick={() => {
-                    if (notification.relatedId) {
-                      handleDismissAlert(notification.relatedId);
-                    }
-                    if (notification.actionType === "NOTIFICATION") {
-                      markNotificationRead.mutate(notification.id);
-                    }
+                    // Instantly mark read/dismiss from database
+                    markNotificationRead.mutate(notification.id);
                   }}
                   className="p-2.5 lg:p-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-500 hover:text-rose-450 transition-all"
                   title="Dismiss Notification"

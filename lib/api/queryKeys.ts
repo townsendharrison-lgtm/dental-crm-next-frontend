@@ -26,7 +26,7 @@ export const queryKeys = {
     search: (params: Record<string, unknown>) => ["dentists", "search", params] as const,
   },
   notifications: {
-    all: () => ["notifications"] as const,
+    all: (unreadOnly?: boolean) => ["notifications", { unreadOnly }] as const,
   },
   admin: {
     users: () => ["admin", "users"] as const,
