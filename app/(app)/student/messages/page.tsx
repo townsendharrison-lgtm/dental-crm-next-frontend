@@ -11,9 +11,13 @@ import {
   UserPlus,
   X,
   Loader2,
+  Pin,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { messagesApi } from "@/lib/api/messages";
 import { studentsApi } from "@/lib/api/students";
 import { mentorsApi } from "@/lib/api/mentors";
@@ -40,6 +44,58 @@ export default function StudentInboxPage() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
 
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+
+  const handlePin = async (convId: string) => {
+    try {
+      await messagesApi.pin(convId);
+      toast.success("Chat pinned");
+      loadConversations(true);
+    } catch (err) {
+      console.error("Pin error:", err);
+      toast.error("Failed to pin chat.");
+    }
+  };
+
+  const handleUnpin = async (convId: string) => {
+    try {
+      await messagesApi.unpin(convId);
+      toast.success("Chat unpinned");
+      loadConversations(true);
+    } catch (err) {
+      console.error("Unpin error:", err);
+      toast.error("Failed to unpin chat.");
+    }
+  };
+
+  const handleDelete = async (convId: string) => {
+    try {
+      await messagesApi.delete(convId);
+      toast.success("Chat deleted");
+      if (selectedConversationId === convId) {
+        setSelectedConversationId(null);
+      }
+      loadConversations(true);
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast.error("Failed to delete chat.");
+    }
+  };
+
+  const handleRenameGroup = async () => {
+    if (!newGroupName.trim() || !selectedConversationId) return;
+    try {
+      await messagesApi.rename(selectedConversationId, newGroupName.trim());
+      toast.success("Group renamed");
+      setIsRenaming(false);
+      loadConversations(true);
+    } catch (err) {
+      console.error("Rename group error:", err);
+      toast.error("Failed to rename group.");
+    }
+  };
+
   // New Chat Modal States
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [directoryUsers, setDirectoryUsers] = useState<DirectoryUser[]>([]);
@@ -56,9 +112,14 @@ export default function StudentInboxPage() {
     const mainEl = document.querySelector("main");
     if (!mainEl) return;
     const originalOverflow = mainEl.style.overflow;
+    const originalPaddingBottom = mainEl.style.paddingBottom;
+    
     mainEl.style.overflow = "hidden";
+    mainEl.style.paddingBottom = "1.5rem"; // Standardize to pb-6
+    
     return () => {
       mainEl.style.overflow = originalOverflow;
+      mainEl.style.paddingBottom = originalPaddingBottom;
     };
   }, []);
 
@@ -252,11 +313,11 @@ export default function StudentInboxPage() {
   }, [activeConversation, displayParticipants]);
 
   return (
-    <div className="max-w-7xl mx-auto overflow-hidden h-[calc(100vh-8rem)]">
+    <div className="max-w-7xl mx-auto overflow-hidden h-[calc(100vh-7.5rem)]">
       <div className="h-full flex bg-slate-950 border border-slate-800 rounded-lg overflow-hidden shadow-2xl relative">
         
         {/* Left Column: Conversations List */}
-        <div className="w-80 border-r border-slate-800 flex flex-col bg-slate-950/50 backdrop-blur-xl z-20 shrink-0">
+        <div className="w-80 border-r border-slate-800 flex flex-col min-h-0 bg-slate-950/50 backdrop-blur-xl z-20 shrink-0">
           <div className="p-6 border-b border-slate-800/60">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-black text-white tracking-tight">Messages</h2>
@@ -348,6 +409,49 @@ export default function StudentInboxPage() {
                         </p>
                       </div>
                     </div>
+
+                    {/* Pin & Delete Hover Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {c.pinned_by?.includes(currentUserId || "") ? (
+                        <Tooltip content="Unpin Chat">
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await handleUnpin(c.id);
+                            }}
+                            className="p-1 hover:bg-slate-800 rounded-md text-amber-400 cursor-pointer"
+                          >
+                            <Pin className="w-3.5 h-3.5 fill-current" />
+                          </button>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip content="Pin Chat">
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await handlePin(c.id);
+                            }}
+                            className="p-1 hover:bg-slate-800 rounded-md text-slate-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          >
+                            <Pin className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
+                      )}
+
+                      <Tooltip content="Delete Chat">
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (confirm("Are you sure you want to delete this conversation?")) {
+                              await handleDelete(c.id);
+                            }
+                          }}
+                          className="p-1 hover:bg-rose-950/30 hover:text-rose-500 rounded-md text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
+                    </div>
                   </button>
                 );
               })
@@ -356,7 +460,7 @@ export default function StudentInboxPage() {
         </div>
 
         {/* Right Column: Chat View */}
-        <div className="flex-1 flex flex-col bg-slate-900/20 relative z-10">
+        <div className="flex-1 flex flex-col min-h-0 bg-slate-900/20 relative z-10">
           {selectedConversationId && activeConversation ? (
             <>
               <div className="px-6 py-4 border-b border-slate-800/60 flex items-center justify-between bg-slate-950/50 backdrop-blur-xl sticky top-0 z-30">
@@ -373,9 +477,47 @@ export default function StudentInboxPage() {
                     )}
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white tracking-tight">
-                      {chatHeaderTitle}
-                    </h3>
+                    {activeConversation.is_group && isRenaming ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newGroupName}
+                          onChange={(e) => setNewGroupName(e.target.value)}
+                          className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500"
+                        />
+                        <button
+                          onClick={handleRenameGroup}
+                          className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setIsRenaming(false)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 group/title">
+                        <h3 className="text-sm font-bold text-white tracking-tight">
+                          {chatHeaderTitle}
+                        </h3>
+                        {activeConversation.is_group && (
+                          <Tooltip content="Rename Group">
+                            <button
+                              onClick={() => {
+                                setNewGroupName(activeConversation.name || "Group Chat");
+                                setIsRenaming(true);
+                              }}
+                              className="text-slate-500 hover:text-white opacity-0 group-hover/title:opacity-100 transition-opacity cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
+                        )}
+                      </div>
+                    )}
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
                       {activeConversation.is_group ? "Mentorship Group" : displayParticipants[0]?.role}
                     </p>

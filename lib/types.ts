@@ -292,6 +292,8 @@ export interface Conversation {
   participants?: AuthUser[];
   lastMessage?: Message | null;
   unreadCount?: number;
+  pinned_by?: string[];
+  deleted_by?: string[];
 }
 
 export interface Message {

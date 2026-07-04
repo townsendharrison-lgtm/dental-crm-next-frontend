@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./client";
+import { apiGet, apiPost, apiPut, apiDelete } from "./client";
 import type { Conversation, Message } from "@/lib/types";
 
 export interface CreateConversationPayload {
@@ -66,5 +66,33 @@ export const messagesApi = {
    */
   markAsRead: async (conversationId: string): Promise<{ success: boolean }> => {
     return await apiPost<{ success: boolean }>(`/api/conversations/${conversationId}/read`);
+  },
+
+  /**
+   * Pin a conversation.
+   */
+  pin: async (conversationId: string): Promise<{ success: boolean }> => {
+    return await apiPost<{ success: boolean }>(`/api/conversations/${conversationId}/pin`);
+  },
+
+  /**
+   * Unpin a conversation.
+   */
+  unpin: async (conversationId: string): Promise<{ success: boolean }> => {
+    return await apiPost<{ success: boolean }>(`/api/conversations/${conversationId}/unpin`);
+  },
+
+  /**
+   * Delete / hide a conversation for the current user.
+   */
+  delete: async (conversationId: string): Promise<{ success: boolean }> => {
+    return await apiDelete<{ success: boolean }>(`/api/conversations/${conversationId}`);
+  },
+
+  /**
+   * Rename a group conversation.
+   */
+  rename: async (conversationId: string, name: string): Promise<{ success: boolean }> => {
+    return await apiPut<{ success: boolean }>(`/api/conversations/${conversationId}/rename`, { name });
   },
 };

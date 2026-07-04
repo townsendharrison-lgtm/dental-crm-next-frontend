@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils/cn";
 
 export interface TooltipProps {
@@ -21,7 +22,64 @@ export function Tooltip({
   disabled,
 }: TooltipProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; transform: string } | null>(null);
+  
+  const triggerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !triggerRef.current || !mounted) {
+      setCoords(null);
+      return;
+    }
+
+    const updateCoords = () => {
+      if (!triggerRef.current) return;
+      const rect = triggerRef.current.getBoundingClientRect();
+      let top = 0;
+      let left = 0;
+      let transform = "";
+
+      switch (side) {
+        case "top":
+          top = rect.top + window.scrollY;
+          left = rect.left + rect.width / 2 + window.scrollX;
+          transform = "translate(-50%, -100%) translateY(-8px)";
+          break;
+        case "bottom":
+          top = rect.bottom + window.scrollY;
+          left = rect.left + rect.width / 2 + window.scrollX;
+          transform = "translate(-50%, 0) translateY(8px)";
+          break;
+        case "left":
+          top = rect.top + rect.height / 2 + window.scrollY;
+          left = rect.left + window.scrollX;
+          transform = "translate(-100%, -50%) translateX(-8px)";
+          break;
+        case "right":
+          top = rect.top + rect.height / 2 + window.scrollY;
+          left = rect.right + window.scrollX;
+          transform = "translate(0, -50%) translateX(8px)";
+          break;
+      }
+
+      setCoords({ top, left, transform });
+    };
+
+    updateCoords();
+
+    // Reposition on any scroll/resize
+    window.addEventListener("scroll", updateCoords, { passive: true });
+    window.addEventListener("resize", updateCoords);
+    return () => {
+      window.removeEventListener("scroll", updateCoords);
+      window.removeEventListener("resize", updateCoords);
+    };
+  }, [open, side, align, mounted]);
 
   useEffect(() => {
     if (!open) return;
@@ -32,53 +90,40 @@ export function Tooltip({
 
   if (disabled) return <>{children}</>;
 
-  const sideClass = {
-    top: "bottom-full left-1/2 -translate-x-1/2 mb-2",
-    bottom: "top-full left-1/2 -translate-x-1/2 mt-2",
-    left: "right-full top-1/2 -translate-y-1/2 mr-2",
-    right: "left-full top-1/2 -translate-y-1/2 ml-2",
-  }[side];
-
-  const alignOffset = align === "start" ? " -translate-x-0" : align === "end" ? " -translate-x-full" : "";
-
   return (
     <div
-      ref={ref}
-      className="relative inline-flex"
+      ref={triggerRef}
+      className="inline-flex"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       onFocus={() => setOpen(true)}
       onBlur={() => setOpen(false)}
     >
       {children}
-      {open && (
-        <div
-          className={cn(
-            "absolute z-50 whitespace-nowrap rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground shadow-lg",
-            "animate-in fade-in zoom-in-95 duration-100",
-            sideClass,
-            align !== "center" && sideOffsetClass(side, align),
-            className,
-          )}
-          role="tooltip"
-        >
-          {content}
-          <TooltipArrow side={side} />
-        </div>
-      )}
+      {open && mounted && coords && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className={cn(
+              "absolute z-[9999] whitespace-nowrap rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground shadow-lg pointer-events-none",
+              "animate-in fade-in zoom-in-95 duration-100",
+              className,
+            )}
+            style={{
+              position: "absolute",
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              transform: coords.transform,
+            }}
+            role="tooltip"
+          >
+            {content}
+            <TooltipArrow side={side} />
+          </div>,
+          document.body
+        )
+      }
     </div>
   );
-}
-
-function sideOffsetClass(side: TooltipProps["side"], align: TooltipProps["align"]) {
-  if (!align || align === "center") return "";
-  const map: Record<string, Record<string, string>> = {
-    top: { start: "left-0 -translate-x-0", end: "right-0 translate-x-0" },
-    bottom: { start: "left-0 -translate-x-0", end: "right-0 translate-x-0" },
-    left: { start: "top-0 -translate-y-0", end: "bottom-0 translate-y-0" },
-    right: { start: "top-0 -translate-y-0", end: "bottom-0 translate-y-0" },
-  };
-  return map[side ?? "top"][align ?? "center"] ?? "";
 }
 
 function TooltipArrow({ side }: { side?: TooltipProps["side"] }) {
