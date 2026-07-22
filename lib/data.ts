@@ -123,6 +123,10 @@ export const MOCK_PLATFORM_CONFIG: PlatformConfig = {
   acceptedMessage: "Congratulations! Your hard work has paid off. You're going to be a dentist!",
   interviewMessage: "Great job! An interview is a huge milestone. You've got this!",
   waitlistMessage: "You're still in the running! A waitlist is a 'not yet', not a 'no'. Stay positive!",
+  welcomeTemplateStudent:
+    "Welcome {{student_name}} to Dental CRM! We are excited to help you prepare for your applications.",
+  welcomeTemplateMentor:
+    "Welcome Mentor {{mentor_name}} to Dental CRM! Thank you for helping guide our students.",
 };
 
 export const MOCK_AUTO_REPLY_SETTINGS: AutoReplySettings = {

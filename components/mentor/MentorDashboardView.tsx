@@ -245,36 +245,50 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
     (s) => s.readiness === RS.YELLOW || s.readiness === RS.RED,
   ).length;
 
-  const progressionData = useMemo(() => {
-    const months = ["Nov", "Dec", "Jan", "Feb", "Mar"];
-    const cohort = assignedStudents.slice(0, 5);
-    return months.map((month, mIndex) => {
-      const point: Record<string, string | number> = { month };
-      cohort.forEach((student) => {
-        const current = student.strengthScore || student.progress || 70;
-        const growthPerMonth = 2 + (student.name.length % 3);
-        const score = Math.min(
-          100,
-          Math.max(0, current - (4 - mIndex) * growthPerMonth),
-        );
-        point[student.name.split(" ")[0] || "Student"] = Math.round(score);
-      });
-      return point;
-    });
-  }, [assignedStudents]);
-
-  const avgGrowth = useMemo(() => {
-    if (progressionData.length < 2) return 0;
-    const first = progressionData[0];
-    const last = progressionData[progressionData.length - 1];
-    const keys = Object.keys(first).filter((k) => k !== "month");
-    if (!keys.length) return 0;
-    const total = keys.reduce(
-      (sum, key) => sum + (Number(last[key]) - Number(first[key])),
+  const avgStrength = useMemo(() => {
+    if (!assignedStudents.length) return null;
+    const total = assignedStudents.reduce(
+      (sum, s) => sum + (Number(s.strengthScore) || Number(s.progress) || 0),
       0,
     );
-    return Math.round(total / keys.length);
-  }, [progressionData]);
+    return Math.round(total / assignedStudents.length);
+  }, [assignedStudents]);
+
+  /** Last 5 calendar months of completed meetings for this mentor (real DB dates). */
+  const activityByMonth = useMemo(() => {
+    const now = new Date();
+    const keys: { key: string; label: string }[] = [];
+    for (let i = 4; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      keys.push({
+        key,
+        label: d.toLocaleString("en-US", { month: "short" }),
+      });
+    }
+
+    return keys.map(({ key, label }) => {
+      const count = mentorMeetings.filter((m) => {
+        if (!m.completed || !m.date) return false;
+        try {
+          const d = parseLocalDate(m.date);
+          const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          return mk === key;
+        } catch {
+          return false;
+        }
+      }).length;
+      return { month: label, meetings: count };
+    });
+  }, [mentorMeetings]);
+
+  const meetingGrowth = useMemo(() => {
+    if (activityByMonth.length < 2) return 0;
+    const prev = activityByMonth[activityByMonth.length - 2]?.meetings || 0;
+    const curr = activityByMonth[activityByMonth.length - 1]?.meetings || 0;
+    if (prev === 0) return curr > 0 ? 100 : 0;
+    return Math.round(((curr - prev) / prev) * 100);
+  }, [activityByMonth]);
 
   const latencyHours = useMemo(() => {
     const raw =
@@ -304,10 +318,27 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
   const complianceStatus =
     complianceScore >= 95 ? "Optimal" : complianceScore >= 85 ? "Stable" : "Needs attention";
 
+  /** Real bars: completed meetings in each of the last 12 weeks (normalized). */
   const latencyBars = useMemo(() => {
-    const base = [28, 42, 35, 55, 48, 62, 40, 70, 52, 78, 58, 88];
-    return base.map((h, i) => Math.max(12, Math.min(100, h - Math.round(latencyHours) + i)));
-  }, [latencyHours]);
+    const now = new Date();
+    const counts = Array.from({ length: 12 }, (_, i) => {
+      const weekEnd = new Date(now);
+      weekEnd.setDate(now.getDate() - (11 - i) * 7);
+      const weekStart = new Date(weekEnd);
+      weekStart.setDate(weekEnd.getDate() - 7);
+      return mentorMeetings.filter((m) => {
+        if (!m.date) return false;
+        try {
+          const d = parseLocalDate(m.date).getTime();
+          return d >= weekStart.getTime() && d < weekEnd.getTime();
+        } catch {
+          return false;
+        }
+      }).length;
+    });
+    const max = Math.max(1, ...counts);
+    return counts.map((c) => Math.max(c > 0 ? 18 : 8, Math.round((c / max) * 100)));
+  }, [mentorMeetings]);
 
   const smartAlerts = useMemo(() => {
     const alerts: SmartAlert[] = [];
@@ -516,12 +547,12 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3.5">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm text-slate-300">
-            Welcome back, <span className="font-medium text-white">{displayName}</span>
-          </p>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+            Welcome back, {displayName}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
             Your cohort, schedule, and open work in one place.
           </p>
         </div>
@@ -541,7 +572,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         </div>
       </header>
 
-      {/* Insight KPI strip */}
+      {/* Insight KPI strip — actual cohort / meeting / compliance data */}
       <div className="grid gap-3 lg:grid-cols-4">
         <div className="lg:col-span-2 relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-5">
           <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-indigo-500/10 blur-3xl" />
@@ -550,27 +581,34 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                    Strategic growth
+                    Cohort strength
                   </p>
                   <div className="mt-1 h-0.5 w-10 rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500" />
                 </div>
-                <div className="flex items-center gap-2 text-emerald-400">
+                <div
+                  className={cn(
+                    "flex items-center gap-2",
+                    meetingGrowth >= 0 ? "text-emerald-400" : "text-amber-400",
+                  )}
+                >
                   <Activity className="h-4 w-4" />
                   <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    {avgGrowth >= 0 ? "Ascending" : "Watch"}
+                    {meetingGrowth >= 0 ? "Ascending" : "Cooling"}
                   </span>
                 </div>
               </div>
               <div>
                 <p className="text-4xl font-semibold tracking-tight text-white tabular-nums sm:text-5xl">
-                  {avgGrowth >= 0 ? "+" : ""}
-                  {avgGrowth}%
+                  {avgStrength != null ? avgStrength : "—"}
+                  {avgStrength != null && (
+                    <span className="ml-1 text-lg font-semibold text-slate-500">/100</span>
+                  )}
                 </p>
                 <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  Avg increase in score
+                  Avg strength score
                 </p>
                 <p className="mt-2 max-w-xs text-xs text-slate-500">
-                  Capability uplift across your assigned cohort over recent months.
+                  Live average across your assigned students. Chart shows completed meetings by month.
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -596,9 +634,9 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               </div>
             </div>
             <div className="h-[140px] w-full min-w-0 md:max-w-[240px]">
-              {progressionData.length > 0 && Object.keys(progressionData[0]).length > 1 ? (
+              {assignedStudents.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={progressionData}>
+                  <LineChart data={activityByMonth}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
                     <XAxis
                       dataKey="month"
@@ -606,7 +644,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                       tickLine={false}
                       tick={{ fill: "#64748b", fontSize: 10 }}
                     />
-                    <YAxis hide domain={[0, 100]} />
+                    <YAxis hide allowDecimals={false} domain={[0, "auto"]} />
                     <RechartsTooltip
                       contentStyle={{
                         backgroundColor: "#0f172a",
@@ -615,27 +653,20 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                         fontSize: 11,
                       }}
                     />
-                    {Object.keys(progressionData[0])
-                      .filter((k) => k !== "month")
-                      .map((key, i) => {
-                        const colors = ["#6366f1", "#10b981", "#f43f5e", "#f59e0b", "#8b5cf6"];
-                        return (
-                          <Line
-                            key={key}
-                            type="monotone"
-                            dataKey={key}
-                            stroke={colors[i % colors.length]}
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 3, strokeWidth: 0 }}
-                          />
-                        );
-                      })}
+                    <Line
+                      type="monotone"
+                      dataKey="meetings"
+                      name="Meetings done"
+                      stroke="#6366f1"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: "#6366f1", strokeWidth: 0 }}
+                      activeDot={{ r: 4, strokeWidth: 0 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="flex h-full items-center justify-center text-xs text-slate-600">
-                  Assign students to see growth
+                  Assign students to see activity
                 </div>
               )}
             </div>
@@ -661,9 +692,20 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
             <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
               Avg response window
             </p>
-            <div className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-400">
+            <div
+              className={cn(
+                "mt-3 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-semibold",
+                latencyHours <= 12
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                  : "border-amber-500/20 bg-amber-500/10 text-amber-400",
+              )}
+            >
               <TrendingUp className="h-3 w-3" />
-              {latencyHours <= 12 ? "Within 12h SLA" : "Above 12h SLA"}
+              {latencyHours <= 0
+                ? "No latency data yet"
+                : latencyHours <= 12
+                  ? "Within 12h SLA"
+                  : "Above 12h SLA"}
             </div>
           </div>
           <div className="mt-6 grid h-10 grid-cols-12 items-end gap-1">
@@ -675,9 +717,11 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                   i === latencyBars.length - 1 ? "bg-indigo-500" : "bg-slate-800",
                 )}
                 style={{ height: `${h}%` }}
+                title="Meetings scheduled that week"
               />
             ))}
           </div>
+          <p className="mt-2 text-[10px] text-slate-600">Weekly meetings (last 12 weeks)</p>
         </div>
 
         <div className="relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-5">

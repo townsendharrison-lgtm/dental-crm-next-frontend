@@ -32,6 +32,8 @@ import {
   Play,
   CheckSquare,
   CheckCircle,
+  CalendarClock,
+  Bell,
 } from "lucide-react";
 import { MOCK_MENTORS } from "@/lib/data";
 import ApplicationTracker from "./ApplicationTracker";
@@ -102,6 +104,81 @@ function formatRelativeTime(raw: string) {
 
 function cleanNotifTitle(title: string) {
   return title.replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\s]+/u, "").trim() || title;
+}
+
+function notifVisual(notif: SystemNotification) {
+  const title = `${notif.title || ""} ${notif.message || ""}`.toLowerCase();
+  const category = (notif.category || "").toUpperCase();
+
+  if (
+    category.includes("MEETING") ||
+    title.includes("meeting") ||
+    title.includes("reschedule")
+  ) {
+    return {
+      icon: CalendarClock,
+      tone: "border-violet-500/20 bg-violet-500/10 text-violet-300",
+    };
+  }
+  if (
+    category.includes("MESSAGE") ||
+    title.includes("message") ||
+    title.includes("inbox")
+  ) {
+    return {
+      icon: MessageCircle,
+      tone: "border-sky-500/20 bg-sky-500/10 text-sky-300",
+    };
+  }
+  if (title.includes("welcome") || title.includes("excited to help")) {
+    return {
+      icon: Sparkles,
+      tone: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+    };
+  }
+  if (notif.type === "URGENT") {
+    return {
+      icon: AlertCircle,
+      tone: "border-rose-500/20 bg-rose-500/10 text-rose-300",
+    };
+  }
+  if (notif.type === "WARNING") {
+    return {
+      icon: Bell,
+      tone: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+    };
+  }
+  return {
+    icon: Info,
+    tone: "border-indigo-500/20 bg-indigo-500/10 text-indigo-300",
+  };
+}
+
+function resolveNotifMessage(
+  notif: SystemNotification,
+  studentName: string,
+  platformConfig: PlatformConfig,
+) {
+  const stored = (notif.message || "").trim();
+  const title = `${notif.title || ""} ${stored}`.toLowerCase();
+  const isWelcome = title.includes("welcome") || title.includes("excited to help");
+  if (!isWelcome) return stored;
+
+  const template = (
+    platformConfig.welcomeTemplateStudent ||
+    "Welcome {{student_name}} to Dental CRM! We are excited to help you prepare for your applications."
+  ).trim();
+
+  const full = template
+    .replace(/\{\{\s*student_name\s*\}\}/g, studentName)
+    .replace(/\{\{\s*name\s*\}\}/g, studentName)
+    .trim();
+
+  // Older welcome notifications were stored truncated at 80 chars — prefer the full template.
+  if (!stored || stored.length < full.length || full.startsWith(stored)) {
+    return full;
+  }
+  return stored;
 }
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({
@@ -342,63 +419,61 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       {recentUpdates.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Recent updates
-          </h3>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {recentUpdates.map((notif) => {
-              const urgent = notif.type === "URGENT";
-              const warning = notif.type === "WARNING";
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Recent updates
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Latest messages, meetings, and system notes
+              </p>
+            </div>
+            {recentUpdates.some((n) => !n.is_read) && (
+              <span className="rounded-md border border-indigo-500/20 bg-indigo-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-300">
+                {recentUpdates.filter((n) => !n.is_read).length} new
+              </span>
+            )}
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
+            {recentUpdates.map((notif, index) => {
+              const visual = notifVisual(notif);
+              const Icon = visual.icon;
               const when = formatRelativeTime(notifCreatedAt(notif));
+              const title = cleanNotifTitle(notif.title);
+              const message = resolveNotifMessage(notif, student.name, platformConfig);
+
               return (
                 <div
                   key={notif.id}
-                  className={`relative overflow-hidden rounded-xl border p-3.5 transition-colors ${
-                    urgent
-                      ? "border-rose-500/25 bg-rose-500/5"
-                      : warning
-                        ? "border-amber-500/25 bg-amber-500/5"
-                        : !notif.is_read
-                          ? "border-indigo-500/25 bg-indigo-500/5"
-                          : "border-slate-800 bg-slate-900/50"
-                  }`}
+                  className={`flex gap-3 px-4 py-4 transition-colors ${
+                    index > 0 ? "border-t border-slate-800/80" : ""
+                  } ${!notif.is_read ? "bg-slate-900/70" : "hover:bg-slate-900/50"}`}
                 >
-                  <div className="flex gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
-                        urgent
-                          ? "border-rose-500/20 bg-rose-500/10 text-rose-400"
-                          : warning
-                            ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
-                            : "border-indigo-500/20 bg-indigo-500/10 text-indigo-400"
-                      }`}
-                    >
-                      {urgent ? (
-                        <AlertCircle className="h-4 w-4" />
-                      ) : warning ? (
-                        <AlertCircle className="h-4 w-4" />
-                      ) : (
-                        <Info className="h-4 w-4" />
+                  <div
+                    className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${visual.tone}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <h4 className="text-sm font-semibold text-white">{title}</h4>
+                      {!notif.is_read && (
+                        <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-300">
+                          New
+                        </span>
                       )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <h4 className="text-sm font-semibold leading-snug text-white">
-                          {cleanNotifTitle(notif.title)}
-                        </h4>
-                        {!notif.is_read && (
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
-                        )}
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
-                        {notif.message}
-                      </p>
                       {when && (
-                        <p className="mt-2 text-[10px] font-medium uppercase tracking-wider text-slate-600">
-                          {when}
-                        </p>
+                        <span className="text-[11px] text-slate-500 sm:ml-auto">{when}</span>
                       )}
                     </div>
+
+                    {message && (
+                      <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-300">
+                        {message}
+                      </p>
+                    )}
                   </div>
                 </div>
               );

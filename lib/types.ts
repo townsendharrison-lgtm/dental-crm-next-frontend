@@ -1034,6 +1034,8 @@ export interface PlatformConfig {
   acceptedMessage: string;
   interviewMessage: string;
   waitlistMessage: string;
+  welcomeTemplateStudent?: string;
+  welcomeTemplateMentor?: string;
 }
 
 export interface AutoReplySettings {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import {
   useAdminUsers,
@@ -36,6 +36,8 @@ import {
   RotateCw,
   MoreVertical,
   Eraser,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -79,6 +81,8 @@ export default function UserManagement() {
   const [editingRoleValue, setEditingRoleValue] = useState<string>("");
   const [bulkYears, setBulkYears] = useState(3);
   const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [usersPage, setUsersPage] = useState(1);
+  const USERS_PER_PAGE = 8;
 
   // Invitations local state
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
@@ -93,6 +97,18 @@ export default function UserManagement() {
       ),
     [users, userSearch],
   );
+
+  const usersTotalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
+  const pagedUsers = useMemo(() => {
+    const page = Math.min(usersPage, usersTotalPages);
+    const start = (page - 1) * USERS_PER_PAGE;
+    return filteredUsers.slice(start, start + USERS_PER_PAGE);
+  }, [filteredUsers, usersPage, usersTotalPages]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setUsersPage(1);
+  }, [userSearch]);
 
   const pendingInvitations = useMemo(() => invitations.filter((i) => i.status === "PENDING"), [invitations]);
   const pastInvitations = useMemo(() => invitations.filter((i) => i.status !== "PENDING"), [invitations]);
@@ -363,76 +379,6 @@ export default function UserManagement() {
       {/* Users Section */}
       {activeSection === "users" && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 sm:p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="min-w-0">
-                <div className="mb-1 flex items-center gap-2">
-                  <Eraser className="h-4 w-4 text-amber-400" />
-                  <h3 className="text-sm font-semibold text-white">Bulk delete old students</h3>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Remove student accounts created more than a chosen number of years ago. This cannot be undone.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-end gap-2">
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                    Older than (years)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={bulkYears}
-                    onChange={(e) => setBulkYears(Number(e.target.value) || 1)}
-                    className="w-28 rounded-xl border border-input bg-surface px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-                {!bulkConfirm ? (
-                  <button
-                    type="button"
-                    onClick={() => setBulkConfirm(true)}
-                    disabled={oldStudentCandidates.length === 0 || bulkDeleteMutation.isPending}
-                    className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Preview ({oldStudentCandidates.length})
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => void handleBulkDeleteOldStudents()}
-                      disabled={bulkDeleteMutation.isPending}
-                      className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-500 disabled:opacity-50"
-                    >
-                      {bulkDeleteMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                      Delete {oldStudentCandidates.length}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBulkConfirm(false)}
-                      disabled={bulkDeleteMutation.isPending}
-                      className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-800"
-                    >
-                      Cancel
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            {bulkConfirm && (
-              <p className="mt-3 text-xs text-rose-300">
-                Confirm permanent deletion of {oldStudentCandidates.length} student profile
-                {oldStudentCandidates.length === 1 ? "" : "s"} older than {Math.max(1, Number(bulkYears) || 1)} year
-                {Math.max(1, Number(bulkYears) || 1) === 1 ? "" : "s"}.
-              </p>
-            )}
-          </div>
-
           <div className="flex items-center gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -468,162 +414,271 @@ export default function UserManagement() {
               </button>
             </div>
           ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-slate-800">
-                      <th className="text-left p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">User</th>
-                      <th className="text-left p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Role</th>
-                      <th className="text-left p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Joined</th>
-                      <th className="text-right p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50">
-                    {filteredUsers.map((u) => {
-                      const roleBadge = getRoleBadge(u.role);
-                      const isSelf = currentUser?.id === u.id;
-                      return (
-                        <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 font-bold border border-slate-700 text-sm">
-                                {u.name?.[0]?.toUpperCase() || u.email?.[0]?.toUpperCase() || "?"}
+            <>
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-800">
+                        <th className="text-left p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">User</th>
+                        <th className="text-left p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Role</th>
+                        <th className="text-left p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Joined</th>
+                        <th className="text-right p-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {pagedUsers.map((u) => {
+                        const roleBadge = getRoleBadge(u.role);
+                        const isSelf = currentUser?.id === u.id;
+                        return (
+                          <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 font-bold border border-slate-700 text-sm">
+                                  {u.name?.[0]?.toUpperCase() || u.email?.[0]?.toUpperCase() || "?"}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-white flex items-center gap-2">
+                                    {u.name || "Unknown"}
+                                    {isSelf && (
+                                      <span className="text-[9px] bg-indigo-600/30 text-indigo-400 px-1.5 py-0.5 rounded-full font-bold">
+                                        YOU
+                                      </span>
+                                    )}
+                                  </p>
+                                  <p className="text-xs text-slate-500">{u.email}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-bold text-white flex items-center gap-2">
-                                  {u.name || "Unknown"}
-                                  {isSelf && (
-                                    <span className="text-[9px] bg-indigo-600/30 text-indigo-400 px-1.5 py-0.5 rounded-full font-bold">
-                                      YOU
-                                    </span>
-                                  )}
-                                </p>
-                                <p className="text-xs text-slate-500">{u.email}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-bold border ${roleBadge.color}`}>
-                              {roleBadge.label}
-                            </span>
-                          </td>
-                          <td className="p-4">
-                            <p className="text-xs text-slate-500">
-                              {u.created_at
-                                ? new Date(u.created_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
-                                : "-"}
-                            </p>
-                          </td>
-                          <td className="p-4 text-right">
-                            {editingRoleUserId === u.id ? (
-                              <div className="flex items-center justify-end gap-2">
-                                <Dropdown
-                                  trigger={
-                                    <button
-                                      type="button"
-                                      className="bg-surface border border-input rounded-lg text-xs py-1.5 pl-3 pr-8 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-all relative flex items-center justify-between min-w-[7.5rem] text-left"
-                                    >
-                                      <span>{ROLES.find((r) => r.value === editingRoleValue)?.label || editingRoleValue}</span>
-                                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-                                    </button>
-                                  }
-                                  align="right"
-                                >
-                                  {ROLES.map((r) => (
-                                    <DropdownItem
-                                      key={r.value}
-                                      type="button"
-                                      onClick={() => setEditingRoleValue(r.value)}
-                                      className={cn(
-                                        "justify-start text-xs py-1.5 px-3",
-                                        editingRoleValue === r.value && "bg-surface-muted text-foreground"
-                                      )}
-                                    >
-                                      {r.label}
-                                    </DropdownItem>
-                                  ))}
-                                </Dropdown>
-                                <button
-                                  onClick={() => {
-                                    handleUpdateRole(u.id, editingRoleValue);
-                                    setEditingRoleUserId(null);
-                                  }}
-                                  disabled={updateRoleMutation.isPending}
-                                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-all"
-                                >
-                                  {updateRoleMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
-                                </button>
-                                <button
-                                  onClick={() => setEditingRoleUserId(null)}
-                                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-all"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : deleteConfirmId === u.id ? (
-                              <div className="flex items-center justify-end gap-2">
-                                <span className="text-xs text-rose-400 font-bold">Delete?</span>
-                                <button
-                                  onClick={() => handleDeleteUser(u.id)}
-                                  disabled={deleteUserMutation.isPending}
-                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition-all"
-                                >
-                                  {deleteUserMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Yes"}
-                                </button>
-                                <button
-                                  onClick={() => setDeleteConfirmId(null)}
-                                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-all"
-                                >
-                                  No
-                                </button>
-                              </div>
-                            ) : (
-                              <Tooltip content={isSelf ? "Cannot edit your own account" : "Actions"}>
-                                <Dropdown
-                                  trigger={
-                                    <button
-                                      disabled={isSelf}
-                                      className={`p-2 rounded-lg transition-all ${
-                                        isSelf ? "text-slate-700 cursor-not-allowed" : "text-slate-500 hover:text-white hover:bg-slate-800"
-                                      }`}
-                                    >
-                                      <MoreVertical className="w-4 h-4" />
-                                    </button>
-                                  }
-                                  align="right"
-                                >
-                                  <DropdownItem
+                            </td>
+                            <td className="p-4">
+                              <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-bold border ${roleBadge.color}`}>
+                                {roleBadge.label}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <p className="text-xs text-slate-500">
+                                {u.created_at
+                                  ? new Date(u.created_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
+                                  : "-"}
+                              </p>
+                            </td>
+                            <td className="p-4 text-right">
+                              {editingRoleUserId === u.id ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <Dropdown
+                                    trigger={
+                                      <button
+                                        type="button"
+                                        className="bg-surface border border-input rounded-lg text-xs py-1.5 pl-3 pr-8 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-all relative flex items-center justify-between min-w-[7.5rem] text-left"
+                                      >
+                                        <span>{ROLES.find((r) => r.value === editingRoleValue)?.label || editingRoleValue}</span>
+                                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                                      </button>
+                                    }
+                                    align="right"
+                                  >
+                                    {ROLES.map((r) => (
+                                      <DropdownItem
+                                        key={r.value}
+                                        type="button"
+                                        onClick={() => setEditingRoleValue(r.value)}
+                                        className={cn(
+                                          "justify-start text-xs py-1.5 px-3",
+                                          editingRoleValue === r.value && "bg-surface-muted text-foreground"
+                                        )}
+                                      >
+                                        {r.label}
+                                      </DropdownItem>
+                                    ))}
+                                  </Dropdown>
+                                  <button
                                     onClick={() => {
-                                      setEditingRoleValue(u.role);
-                                      setEditingRoleUserId(u.id);
+                                      handleUpdateRole(u.id, editingRoleValue);
+                                      setEditingRoleUserId(null);
                                     }}
+                                    disabled={updateRoleMutation.isPending}
+                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-all"
                                   >
-                                    <Shield className="w-3.5 h-3.5" /> Change Role
-                                  </DropdownItem>
-                                  <DropdownItem
-                                    destructive
-                                    onClick={() => setDeleteConfirmId(u.id)}
+                                    {updateRoleMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingRoleUserId(null)}
+                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-all"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                                  </DropdownItem>
-                                </Dropdown>
-                              </Tooltip>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : deleteConfirmId === u.id ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <span className="text-xs text-rose-400 font-bold">Delete?</span>
+                                  <button
+                                    onClick={() => handleDeleteUser(u.id)}
+                                    disabled={deleteUserMutation.isPending}
+                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition-all"
+                                  >
+                                    {deleteUserMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Yes"}
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirmId(null)}
+                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-all"
+                                  >
+                                    No
+                                  </button>
+                                </div>
+                              ) : (
+                                <Tooltip content={isSelf ? "Cannot edit your own account" : "Actions"}>
+                                  <Dropdown
+                                    trigger={
+                                      <button
+                                        disabled={isSelf}
+                                        className={`p-2 rounded-lg transition-all ${
+                                          isSelf ? "text-slate-700 cursor-not-allowed" : "text-slate-500 hover:text-white hover:bg-slate-800"
+                                        }`}
+                                      >
+                                        <MoreVertical className="w-4 h-4" />
+                                      </button>
+                                    }
+                                    align="right"
+                                  >
+                                    <DropdownItem
+                                      onClick={() => {
+                                        setEditingRoleValue(u.role);
+                                        setEditingRoleUserId(u.id);
+                                      }}
+                                    >
+                                      <Shield className="w-3.5 h-3.5" /> Change Role
+                                    </DropdownItem>
+                                    <DropdownItem
+                                      destructive
+                                      onClick={() => setDeleteConfirmId(u.id)}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                                    </DropdownItem>
+                                  </Dropdown>
+                                </Tooltip>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {filteredUsers.length === 0 && (
+                  <div className="p-12 text-center">
+                    <UserCheck className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+                    <p className="text-slate-500">No users found</p>
+                  </div>
+                )}
               </div>
-              {filteredUsers.length === 0 && (
-                <div className="p-12 text-center">
-                  <UserCheck className="w-12 h-12 text-slate-700 mx-auto mb-3" />
-                  <p className="text-slate-500">No users found</p>
+
+              {filteredUsers.length > 0 && (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-slate-500">
+                    Showing{" "}
+                    <span className="font-semibold text-slate-300">
+                      {(Math.min(usersPage, usersTotalPages) - 1) * USERS_PER_PAGE + 1}
+                      –
+                      {Math.min(Math.min(usersPage, usersTotalPages) * USERS_PER_PAGE, filteredUsers.length)}
+                    </span>{" "}
+                    of <span className="font-semibold text-slate-300">{filteredUsers.length}</span> users
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUsersPage((p) => Math.max(1, p - 1))}
+                      disabled={usersPage <= 1}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                      Prev
+                    </button>
+                    <span className="min-w-[4.5rem] text-center text-xs font-semibold text-slate-400">
+                      {Math.min(usersPage, usersTotalPages)} / {usersTotalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setUsersPage((p) => Math.min(usersTotalPages, p + 1))}
+                      disabled={usersPage >= usersTotalPages}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               )}
-            </div>
+
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 sm:p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="mb-1 flex items-center gap-2">
+                      <Eraser className="h-4 w-4 text-amber-400" />
+                      <h3 className="text-sm font-semibold text-white">Bulk delete old students</h3>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Remove student accounts created more than a chosen number of years ago. This cannot be undone.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                        Older than (years)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={bulkYears}
+                        onChange={(e) => setBulkYears(Number(e.target.value) || 1)}
+                        className="w-28 rounded-xl border border-input bg-surface px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                    </div>
+                    {!bulkConfirm ? (
+                      <button
+                        type="button"
+                        onClick={() => setBulkConfirm(true)}
+                        disabled={oldStudentCandidates.length === 0 || bulkDeleteMutation.isPending}
+                        className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Preview ({oldStudentCandidates.length})
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void handleBulkDeleteOldStudents()}
+                          disabled={bulkDeleteMutation.isPending}
+                          className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-500 disabled:opacity-50"
+                        >
+                          {bulkDeleteMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                          Delete {oldStudentCandidates.length}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBulkConfirm(false)}
+                          disabled={bulkDeleteMutation.isPending}
+                          className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-800"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {bulkConfirm && (
+                  <p className="mt-3 text-xs text-rose-300">
+                    Confirm permanent deletion of {oldStudentCandidates.length} student profile
+                    {oldStudentCandidates.length === 1 ? "" : "s"} older than {Math.max(1, Number(bulkYears) || 1)} year
+                    {Math.max(1, Number(bulkYears) || 1) === 1 ? "" : "s"}.
+                  </p>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}
