@@ -29,7 +29,6 @@ import {
 import {
   Student,
   ReadinessStatus,
-  Message,
   Meeting,
   ActionItem,
   Mentor,
@@ -39,13 +38,21 @@ import { parseLocalDate, isUpcomingMeetingDate } from "@/lib/utils/dateUtils";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+export type StrengthHistorySeries = {
+  studentId: string;
+  name: string;
+  history: Array<{ strength_score: number; recorded_at: string }>;
+};
+
 interface MentorAnalyticsViewProps {
   students: Student[];
-  messages?: Message[];
   meetings?: Meeting[];
   actionItems?: ActionItem[];
   mentorId?: string;
   mentors?: Mentor[];
+  /** Real strength score snapshots per assigned student */
+  strengthHistories?: StrengthHistorySeries[];
+  historiesLoading?: boolean;
   /** Hide the heavy page header when embedded in a subpage shell */
   compact?: boolean;
   onNavigateSchedule?: () => void;
@@ -73,6 +80,28 @@ function monthLabel(key: string) {
   return new Date(y, m - 1, 1).toLocaleString("en-US", { month: "short" });
 }
 
+function endOfMonth(key: string) {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m, 0, 23, 59, 59, 999);
+}
+
+function scoreAtOrBefore(
+  history: Array<{ strength_score: number; recorded_at: string }>,
+  cutoff: Date,
+): number | null {
+  let best: number | null = null;
+  let bestTs = -Infinity;
+  for (const row of history) {
+    const ts = new Date(row.recorded_at).getTime();
+    if (Number.isNaN(ts) || ts > cutoff.getTime()) continue;
+    if (ts >= bestTs) {
+      bestTs = ts;
+      best = Math.max(0, Math.min(100, Math.round(Number(row.strength_score) || 0)));
+    }
+  }
+  return best;
+}
+
 const STUDENT_COLORS = [
   "#6366f1",
   "#10b981",
@@ -86,11 +115,12 @@ const STUDENT_COLORS = [
 
 const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
   students,
-  messages = [],
   meetings = [],
   actionItems = [],
   mentorId,
   mentors = [],
+  strengthHistories = [],
+  historiesLoading = false,
   compact = false,
   onNavigateSchedule,
   onNavigateStudents,
@@ -144,68 +174,89 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
       currentMentor?.profile?.avg_response_time;
     if (typeof raw === "number" && Number.isFinite(raw)) return raw;
     if (typeof raw === "string") {
-      const n = Number.parseFloat(raw);
-      return Number.isFinite(n) ? n : 0;
+      const n = Number.parseFloat(raw.replace(/[^\d.]/g, ""));
+      return Number.isFinite(n) ? n : null;
     }
-    const fromStudents =
-      students.length > 0
-        ? students.reduce((acc, s) => acc + (Number(s.avgResponseTime) || 0), 0) /
-          students.length
-        : 0;
-    return fromStudents;
-  }, [currentMentor, students]);
+    return null;
+  }, [currentMentor]);
 
   const latencyLabel =
     typeof currentMentor?.avgResponseTime === "string" &&
     currentMentor.avgResponseTime.trim()
       ? currentMentor.avgResponseTime
-      : `${latencyHours.toFixed(1)}h`;
+      : latencyHours != null
+        ? `${latencyHours.toFixed(1)}h`
+        : "—";
 
   const meetingVelocity = useMemo(() => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
     const recent = mentorMeetings.filter((m) => {
-      const d = parseLocalDate(m.date);
-      return d >= start && d <= now;
+      try {
+        const d = parseLocalDate(m.date);
+        return d >= start && d <= now;
+      } catch {
+        return false;
+      }
     }).length;
     return Math.round((recent / 3) * 10) / 10;
   }, [mentorMeetings]);
 
-  const chartData = useMemo(() => {
-    return monthKeys.map((key, index) => {
-      const startScore = Math.max(70, complianceScore - (timeframe === "6M" ? 8 : 16));
-      const volatility = Math.sin(index) * 1.5;
-      const value = Math.round(
-        startScore +
-          (complianceScore - startScore) * (index / Math.max(1, monthKeys.length - 1)) +
-          volatility,
-      );
+  /** Real monthly meeting completion % (no fabricated compliance history). */
+  const meetingCompletionData = useMemo(() => {
+    return monthKeys.map((key) => {
+      const monthMeetings = mentorMeetings.filter((m) => {
+        try {
+          return monthKey(parseLocalDate(m.date)) === key;
+        } catch {
+          return false;
+        }
+      });
+      const total = monthMeetings.length;
+      const completed = monthMeetings.filter((m) => m.completed).length;
       return {
         month: monthLabel(key),
-        compliance: Math.min(100, Math.max(0, value)),
-        average: Math.round(86 + Math.cos(index) * 2),
+        scheduled: total,
+        completed,
+        completionRate: total > 0 ? Math.round((completed / total) * 100) : null,
       };
     });
-  }, [monthKeys, complianceScore, timeframe]);
+  }, [monthKeys, mentorMeetings]);
 
+  const seriesForChart = useMemo(() => {
+    if (strengthHistories.length > 0) return strengthHistories.slice(0, 8);
+    return students.slice(0, 8).map((s) => ({
+      studentId: s.id,
+      name: s.name,
+      history: [
+        {
+          strength_score: Math.round(Number(s.strengthScore ?? s.profile?.strength_score ?? 0)),
+          recorded_at: new Date().toISOString(),
+        },
+      ],
+    }));
+  }, [strengthHistories, students]);
+
+  /** Real strength snapshots carried forward by month. */
   const studentStrengthData = useMemo(() => {
-    return monthKeys.map((key, index) => {
-      const point: Record<string, string | number> = { month: monthLabel(key) };
-      let total = 0;
-      students.forEach((student) => {
-        const current = student.strengthScore || student.progress || 70;
-        const start = Math.max(30, current - 28);
-        const progress = Math.round(
-          start + (current - start) * (index / Math.max(1, monthKeys.length - 1)),
-        );
-        const label = student.name.split(" ")[0] || student.name;
-        point[label] = Math.min(100, Math.max(0, progress));
-        total += progress;
+    return monthKeys.map((key) => {
+      const cutoff = endOfMonth(key);
+      const point: Record<string, string | number | null> = { month: monthLabel(key) };
+      const scores: number[] = [];
+
+      seriesForChart.forEach((series) => {
+        const label = series.name.split(" ")[0] || series.name;
+        const score = scoreAtOrBefore(series.history, cutoff);
+        point[label] = score;
+        if (score != null) scores.push(score);
       });
-      point.avgStrength = students.length ? Math.round(total / students.length) : 0;
+
+      point.avgStrength = scores.length
+        ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+        : null;
       return point;
     });
-  }, [monthKeys, students]);
+  }, [monthKeys, seriesForChart]);
 
   const activityData = useMemo(() => {
     return monthKeys.map((key) => {
@@ -218,23 +269,11 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
       }).length;
 
       const tasksCount = mentorActions.filter((a) => {
-        const due = dueOf(a);
-        if (!due) return false;
+        if (a.status !== "COMPLETED") return false;
+        const stamp = a.updated_at || a.created_at || dueOf(a);
+        if (!stamp) return false;
         try {
-          return monthKey(parseLocalDate(due)) === key && a.status === "COMPLETED";
-        } catch {
-          return false;
-        }
-      }).length;
-
-      const messagesCount = messages.filter((m) => {
-        const created = (m as any).createdAt || (m as any).created_at || (m as any).timestamp;
-        if (!created) return false;
-        try {
-          return (
-            monthKey(parseLocalDate(String(created))) === key &&
-            ((m.senderId || m.sender_id) === mentorId || !mentorId)
-          );
+          return monthKey(parseLocalDate(String(stamp).slice(0, 10))) === key;
         } catch {
           return false;
         }
@@ -244,10 +283,9 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
         month: monthLabel(key),
         meetings: meetingsCount,
         tasks: tasksCount,
-        messages: messagesCount,
       };
     });
-  }, [monthKeys, mentorMeetings, mentorActions, messages, mentorId]);
+  }, [monthKeys, mentorMeetings, mentorActions]);
 
   const readinessData = [
     {
@@ -287,8 +325,14 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
     {
       label: "Avg. Response Time",
       value: latencyLabel,
-      change: latencyHours <= 12 ? "Within SLA" : "SLA risk",
-      trend: latencyHours <= 12 ? "up" : "down",
+      change:
+        latencyHours == null
+          ? "Not set"
+          : latencyHours <= 12
+            ? "Within SLA"
+            : "SLA risk",
+      trend:
+        latencyHours == null ? "neutral" : latencyHours <= 12 ? "up" : "down",
       icon: Clock,
       color: "text-amber-400",
     },
@@ -311,14 +355,12 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
     }> = [];
     const now = new Date();
 
-    if (latencyHours > 12) {
+    if (latencyHours != null && latencyHours > 12) {
       gaps.push({
         title: "High Response Latency",
         desc: `Average response time is ${latencyHours.toFixed(1)}h, exceeding the 12h SLA.`,
         severity: "high",
-        affected: students
-          .filter((s) => (Number(s.avgResponseTime) || 0) > 12)
-          .map((s) => s.name),
+        affected: [],
       });
     }
 
@@ -382,12 +424,23 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
   }, [students, mentorMeetings, mentorActions, latencyHours]);
 
   const atRiskCount = readinessData.find((r) => r.name === "At Risk")?.value || 0;
+  const criticalCount = readinessData.find((r) => r.name === "Critical")?.value || 0;
   const insightCopy =
-    atRiskCount > 0
-      ? `${atRiskCount} student${atRiskCount === 1 ? "" : "s"} are at risk. Front-load meetings this week and clear overdue tasks to lift compliance.`
-      : students.length === 0
-        ? "Accept pending assignments to start building your analytics baseline."
-        : "Your cohort looks healthy. Keep response latency under 12h and stay ahead on meetings.";
+    criticalCount > 0
+      ? `${criticalCount} student${criticalCount === 1 ? "" : "s"} are critical. Prioritize meetings and overdue tasks this week.`
+      : atRiskCount > 0
+        ? `${atRiskCount} student${atRiskCount === 1 ? "" : "s"} are at risk. Front-load meetings this week and clear overdue tasks.`
+        : students.length === 0
+          ? "Accept pending assignments to start building your analytics baseline."
+          : "Your cohort looks healthy. Keep response latency under 12h and stay ahead on meetings.";
+
+  const hasMeetingTrendData = meetingCompletionData.some((d) => (d.scheduled || 0) > 0);
+  const hasStrengthTrendData = studentStrengthData.some(
+    (d) => d.avgStrength != null || seriesForChart.some((s) => {
+      const label = s.name.split(" ")[0] || s.name;
+      return d[label] != null;
+    }),
+  );
 
   return (
     <div className={cn("space-y-5 animate-in fade-in duration-300", !compact && "pb-10")}>
@@ -487,8 +540,10 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 sm:p-5 lg:col-span-2">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-white">Compliance score trend</h3>
-              <p className="text-xs text-slate-500">Your score vs system baseline</p>
+              <h3 className="text-sm font-semibold text-white">Meeting completion rate</h3>
+              <p className="text-xs text-slate-500">
+                Completed vs scheduled meetings ({timeframe === "6M" ? "6" : "12"} months)
+              </p>
             </div>
             <div className="flex gap-2">
               {(["6M", "1Y"] as const).map((tf) => (
@@ -509,50 +564,57 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
             </div>
           </div>
           <div className="h-[280px] w-full sm:h-[320px]">
-            <ResponsiveContainer width="100%" height="100%" key={timeframe}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  stroke="#64748b"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="#64748b"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `${v}%`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#0f172a",
-                    border: "1px solid #334155",
-                    borderRadius: 12,
-                    fontSize: 12,
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="compliance"
-                  name="Your Compliance"
-                  stroke="#6366f1"
-                  strokeWidth={3}
-                  dot={{ r: 3, fill: "#6366f1", strokeWidth: 0 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="average"
-                  name="System Average"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {!hasMeetingTrendData ? (
+              <EmptyState
+                icon={<Calendar className="h-8 w-8" />}
+                title="No meetings in this range"
+                description="Completion rate appears once meetings are scheduled on your calendar."
+              />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%" key={timeframe}>
+                <LineChart data={meetingCompletionData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    stroke="#64748b"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="#64748b"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    domain={[0, 100]}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: 12,
+                      fontSize: 12,
+                    }}
+                    formatter={(value, name) => {
+                      if (name === "completionRate") {
+                        return value == null ? ["No meetings", "Completion"] : [`${value}%`, "Completion"];
+                      }
+                      return [value, name];
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="completionRate"
+                    name="completionRate"
+                    stroke="#6366f1"
+                    strokeWidth={3}
+                    connectNulls={false}
+                    dot={{ r: 3, fill: "#6366f1", strokeWidth: 0 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -627,7 +689,7 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
           <div>
             <h3 className="text-sm font-semibold text-white">Student strength progression</h3>
             <p className="text-xs text-slate-500">
-              Individual paths vs cohort average ({timeframe === "6M" ? "6" : "12"} months)
+              Live strength history snapshots ({timeframe === "6M" ? "6" : "12"} months)
             </p>
           </div>
           <div className="flex items-center gap-4 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -644,6 +706,16 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
             icon={<Activity className="h-8 w-8" />}
             title="No progression data"
             description="Strength trends appear after students are on your roster."
+          />
+        ) : historiesLoading ? (
+          <div className="flex h-[320px] items-center justify-center text-slate-500">
+            Loading strength history…
+          </div>
+        ) : !hasStrengthTrendData ? (
+          <EmptyState
+            icon={<Activity className="h-8 w-8" />}
+            title="No strength history yet"
+            description="Scores are recorded as student profiles update. Current scores will appear once available."
           />
         ) : (
           <div className="h-[320px] w-full">
@@ -662,6 +734,7 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
+                  domain={[0, 100]}
                   tickFormatter={(v) => `${v}%`}
                 />
                 <Tooltip
@@ -678,19 +751,21 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
                   name="Average Strength"
                   stroke="#ffffff"
                   strokeWidth={2.5}
+                  connectNulls
                   dot={{ r: 3, fill: "#ffffff", strokeWidth: 0 }}
                 />
-                {students.slice(0, 8).map((student, idx) => {
-                  const label = student.name.split(" ")[0] || student.name;
+                {seriesForChart.map((series, idx) => {
+                  const label = series.name.split(" ")[0] || series.name;
                   return (
                     <Line
-                      key={student.id}
+                      key={series.studentId}
                       type="monotone"
                       dataKey={label}
-                      name={student.name}
+                      name={series.name}
                       stroke={STUDENT_COLORS[idx % STUDENT_COLORS.length]}
                       strokeWidth={1.5}
                       strokeDasharray="5 5"
+                      connectNulls
                       dot={false}
                     />
                   );
@@ -706,7 +781,7 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-white">Monthly engagement</h3>
-              <p className="text-xs text-slate-500">Meetings, completed tasks, and messages</p>
+              <p className="text-xs text-slate-500">Scheduled meetings and completed tasks</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950 p-2 text-indigo-400">
               <Zap className="h-4 w-4" />
@@ -733,9 +808,8 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
                     fontSize: 12,
                   }}
                 />
-                <Bar dataKey="messages" name="Messages" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={14} />
-                <Bar dataKey="meetings" name="Meetings" fill="#818cf8" radius={[4, 4, 0, 0]} barSize={14} />
-                <Bar dataKey="tasks" name="Tasks done" fill="#10b981" radius={[4, 4, 0, 0]} barSize={14} />
+                <Bar dataKey="meetings" name="Meetings" fill="#818cf8" radius={[4, 4, 0, 0]} barSize={18} />
+                <Bar dataKey="tasks" name="Tasks done" fill="#10b981" radius={[4, 4, 0, 0]} barSize={18} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -3,9 +3,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import type { LOREmailConfig } from "@/lib/types";
-import { useLorConfig, useUpdateLorConfig, useSendLorTestEmail } from "@/lib/hooks/useLor";
+import { useUpdateLorConfig, useSendLorTestEmail } from "@/lib/hooks/useLor";
+import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea, Select } from "@/components/ui/Form";
+import { cn } from "@/lib/utils/cn";
 import {
   Settings,
   Mail,
@@ -73,6 +75,13 @@ export const AdminLetterVaultConfig: React.FC<AdminLetterVaultConfigProps> = ({ 
       toast.error(err?.message || "Failed to save configuration.");
     }
   };
+
+  usePageHeaderAction({
+    label: updateConfigMutation.isPending ? "Saving…" : "Save changes",
+    icon: <Save className="w-4 h-4" />,
+    onClick: handleSave,
+    disabled: updateConfigMutation.isPending,
+  });
 
   const handleSendTest = async () => {
     if (!testEmail) return;
@@ -152,34 +161,27 @@ export const AdminLetterVaultConfig: React.FC<AdminLetterVaultConfigProps> = ({ 
         </p>
       </div>
 
-      {/* Tabs & Actions Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        {/* Tabs */}
-        <div className="flex flex-wrap gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl w-fit">
-          {tabs.map((tab) => (
-            <Button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              variant={activeTab === tab.id ? "primary" : "ghost"}
-              size="sm"
-              className="w-full sm:w-auto cursor-pointer"
-            >
-              <tab.icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </Button>
-          ))}
-        </div>
-
-        {/* Action Button */}
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <Button
-            onClick={handleSave}
-            isLoading={updateConfigMutation.isPending}
-            leftIcon={<Save className="w-4 h-4" />}
-            className="w-full sm:w-auto cursor-pointer"
-          >
-            Save Changes
-          </Button>
+      <div className="overflow-x-auto no-scrollbar">
+        <div className="inline-flex min-w-max sm:min-w-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1">
+          {tabs.map((tab) => {
+            const selected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition-all",
+                  selected
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white",
+                )}
+              >
+                <tab.icon className="h-3.5 w-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -187,7 +189,7 @@ export const AdminLetterVaultConfig: React.FC<AdminLetterVaultConfigProps> = ({ 
       <div className="grid lg:grid-cols-5 gap-6 lg:items-start">
         <div className="lg:col-span-3 space-y-6">
           {activeTab === "design" && (
-            <section className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 space-y-8">
+            <section className="bg-slate-900 border border-slate-800 rounded-xl p-8 space-y-8">
               <div className="grid sm:grid-cols-2 gap-8">
                 <div className="space-y-4">
                   <label className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2 text-[9px]">
@@ -241,7 +243,7 @@ export const AdminLetterVaultConfig: React.FC<AdminLetterVaultConfigProps> = ({ 
           )}
 
           {activeTab === "content" && (
-            <section className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 space-y-6">
+            <section className="bg-slate-900 border border-slate-800 rounded-xl p-8 space-y-6">
               <div className="space-y-4">
                 <label className="text-sm font-bold text-slate-500 uppercase tracking-widest text-[9px]">
                   Email Subject Line
@@ -339,7 +341,7 @@ export const AdminLetterVaultConfig: React.FC<AdminLetterVaultConfigProps> = ({ 
           )}
 
           {activeTab === "reminders" && (
-            <section className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 space-y-6">
+            <section className="bg-slate-900 border border-slate-800 rounded-xl p-8 space-y-6">
               <div className="space-y-6">
                 <h3 className="text-2xl font-bold text-white">Automated Reminder Schedule</h3>
                 <p className="text-sm text-slate-400">
@@ -392,7 +394,7 @@ export const AdminLetterVaultConfig: React.FC<AdminLetterVaultConfigProps> = ({ 
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-4 bg-slate-950 border border-slate-800 rounded-2xl">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-4 bg-slate-950 border border-slate-800 rounded-lg">
                   <div className="flex items-center gap-2 flex-1">
                     <Input
                       type="number"
@@ -539,7 +541,7 @@ export const AdminLetterVaultConfig: React.FC<AdminLetterVaultConfigProps> = ({ 
           )}
 
           <div className="grid sm:grid-cols-2 gap-6">
-            <section className="bg-slate-900 border border-slate-800 rounded-[2rem] sm:rounded-[2.5rem] p-6">
+            <section className="bg-slate-900 border border-slate-800 rounded-xl sm:rounded-xl p-6">
               <h3 className="text-base font-bold text-white mb-3 flex items-center gap-2">
                 <Mail className="w-4 h-4 text-amber-400" /> Template Variables
               </h3>
@@ -571,7 +573,7 @@ export const AdminLetterVaultConfig: React.FC<AdminLetterVaultConfigProps> = ({ 
               </div>
             </section>
 
-            <section className="bg-slate-900 border border-slate-800 rounded-[2rem] sm:rounded-[2.5rem] p-6 space-y-3">
+            <section className="bg-slate-900 border border-slate-800 rounded-xl sm:rounded-xl p-6 space-y-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Send className="w-4 h-4 text-emerald-400" /> Send Test Email
               </h3>
@@ -600,12 +602,12 @@ export const AdminLetterVaultConfig: React.FC<AdminLetterVaultConfigProps> = ({ 
 
         {/* Live Preview */}
         <div className="lg:col-span-2 lg:sticky lg:top-4">
-          <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-6 overflow-hidden">
+          <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 overflow-hidden">
             <h3 className="text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2">
               <Eye className="w-4 h-4 text-indigo-400" /> Live Preview
             </h3>
 
-            <div className="rounded-2xl overflow-hidden border border-slate-800 bg-[#0f172a]">
+            <div className="rounded-lg overflow-hidden border border-slate-800 bg-[#0f172a]">
               <div
                 className="p-5 text-center text-white"
                 style={{

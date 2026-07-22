@@ -9,6 +9,7 @@ import { getNavItems, getAiToolItem, showAiTools } from "@/lib/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
 import { useUIStore } from "@/lib/stores/uiStore";
+import { useUnreadMessageCount } from "@/lib/hooks/useUnreadMessageCount";
 import { Avatar } from "@/components/ui";
 import { UserAccountModal } from "@/components/layout/UserAccountModal";
 
@@ -46,6 +47,7 @@ export function Sidebar() {
   const aiToolItem = getAiToolItem(role);
   const displayName = user?.name || "System User";
   const displayEmail = user?.email || user?.role?.toLowerCase() || "";
+  const { unreadCount } = useUnreadMessageCount();
 
   const content = (
     <>
@@ -79,6 +81,7 @@ export function Sidebar() {
           {navItems.map((item) => {
             const active = isActive(pathname, item.href);
             const Icon = item.icon;
+            const isInbox = item.label === "Inbox" || /\/messages$/.test(item.href);
             return (
               <Link
                 key={item.href}
@@ -93,6 +96,11 @@ export function Sidebar() {
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="flex-1 truncate text-left">{item.label}</span>
+                {isInbox && unreadCount > 0 && (
+                  <span className="ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}

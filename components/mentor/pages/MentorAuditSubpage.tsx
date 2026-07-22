@@ -2,11 +2,14 @@
 
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
+import { useQueries } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useMentor } from "@/lib/hooks/useMentors";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
 import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useActionItems } from "@/lib/hooks/useActionItems";
+import { studentsApi } from "@/lib/api/students";
+import { queryKeys } from "@/lib/api/queryKeys";
 import MentorAnalyticsView from "@/components/mentor/MentorAnalyticsView";
 import MentorSubpageShell, {
   mentorDisplayName,
@@ -45,6 +48,33 @@ export default function MentorAuditSubpage({ basePath }: MentorAuditSubpageProps
     [actionItemsRaw],
   );
 
+  const roster = useMemo(
+    () => students.filter((s) => s.mentorId === mentorId),
+    [students, mentorId],
+  );
+
+  const strengthQueries = useQueries({
+    queries: roster.map((s) => ({
+      queryKey: queryKeys.students.strengthHistory(s.id),
+      queryFn: () => studentsApi.strengthHistory(s.id),
+      enabled: !!s.id,
+      staleTime: 60_000,
+    })),
+  });
+
+  const strengthHistories = useMemo(
+    () =>
+      roster.map((s, i) => ({
+        studentId: s.id,
+        name: s.name,
+        history: (strengthQueries[i]?.data || []).map((row) => ({
+          strength_score: Number(row.strength_score) || 0,
+          recorded_at: row.recorded_at,
+        })),
+      })),
+    [roster, strengthQueries],
+  );
+
   if (mentorLoading || studentsLoading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -57,7 +87,6 @@ export default function MentorAuditSubpage({ basePath }: MentorAuditSubpageProps
     return <div className="py-16 text-center text-slate-500">Mentor not found.</div>;
   }
 
-  const roster = students.filter((s) => s.mentorId === mentorId);
   const name = mentorDisplayName(mentor);
 
   return (
@@ -77,6 +106,8 @@ export default function MentorAuditSubpage({ basePath }: MentorAuditSubpageProps
         actionItems={actionItems}
         mentorId={mentorId}
         mentors={[mentor]}
+        strengthHistories={strengthHistories}
+        historiesLoading={strengthQueries.some((q) => q.isLoading)}
       />
     </MentorSubpageShell>
   );

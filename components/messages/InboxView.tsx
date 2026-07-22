@@ -19,9 +19,11 @@ import {
   Info,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { messagesApi } from "@/lib/api/messages";
+import { queryKeys } from "@/lib/api/queryKeys";
 import { studentsApi } from "@/lib/api/students";
 import { mentorsApi } from "@/lib/api/mentors";
 import { usersApi } from "@/lib/api/users";
@@ -107,6 +109,7 @@ function isSameChatDay(a?: string, b?: string) {
 
 export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   const { user: currentUser } = useAuth();
+  const queryClient = useQueryClient();
   const currentUserId = currentUser?.id;
   const router = useRouter();
   const pathname = usePathname();
@@ -159,6 +162,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     try {
       const list = await messagesApi.list();
       setConversations(list);
+      queryClient.setQueryData(queryKeys.messages.conversations(), list);
       return list;
     } catch (err: unknown) {
       console.error("Failed to load conversations:", err);

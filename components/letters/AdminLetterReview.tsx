@@ -361,7 +361,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
 
       {/* Fetch Error Banner */}
       {fetchError && (
-        <div className="flex items-center justify-between gap-4 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+        <div className="flex items-center justify-between gap-4 p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
             <p className="text-xs text-rose-400/70">{(fetchError as Error)?.message || "Network Error"}</p>
@@ -380,7 +380,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
       {/* Tabs & Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         {/* Tab Switch */}
-        <div className="flex gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl w-fit">
+        <div className="flex gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-lg w-fit">
           <Button
             onClick={() => setActiveTab("pending")}
             variant={activeTab === "pending" ? "primary" : "ghost"}
@@ -418,7 +418,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by student, writer, or ID..."
-              className="bg-slate-900 border border-slate-800 rounded-2xl py-3 pl-12 pr-6 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all w-full md:w-80"
+              className="bg-slate-900 border border-slate-800 rounded-lg py-3 pl-12 pr-6 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all w-full md:w-80"
             />
           </div>
         </div>
@@ -435,7 +435,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
             if (!countdown) return null;
             return (
               <div
-                className={`flex items-center gap-4 p-5 rounded-2xl border ${countdown.bgColor} ${
+                className={`flex items-center gap-4 p-5 rounded-lg border ${countdown.bgColor} ${
                   countdown.borderColor
                 } ${countdown.urgent ? "animate-pulse" : ""}`}
               >
@@ -469,7 +469,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
 
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
-              <section className="bg-slate-900 border border-slate-800 rounded-[2.5rem] overflow-hidden">
+              <section className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div className="p-8 border-b border-slate-800 flex items-center justify-between">
                   <h3 className="text-xl font-bold text-white">Pending Review</h3>
                   <span className="px-3 py-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-full text-[10px] font-bold uppercase tracking-widest">
@@ -515,7 +515,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                         })()}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                           <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400">
+                            <div className="w-12 h-12 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-400">
                               <FileText className="w-6 h-6" />
                             </div>
                             <div>
@@ -556,7 +556,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                     ))
                   ) : (
                     <div className="p-20 text-center">
-                      <div className="w-20 h-20 bg-slate-950 rounded-3xl flex items-center justify-center text-slate-800 mx-auto mb-6 border border-slate-800">
+                      <div className="w-20 h-20 bg-slate-950 rounded-xl flex items-center justify-center text-slate-800 mx-auto mb-6 border border-slate-800">
                         <CheckCircle className="w-10 h-10" />
                       </div>
                       <h4 className="text-xl font-bold text-white mb-2">Queue is empty</h4>
@@ -571,7 +571,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
 
             <div className="space-y-6">
               {selectedRequest ? (
-                <section className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 space-y-8 sticky top-8 animate-in slide-in-from-right duration-300">
+                <section className="bg-slate-900 border border-slate-800 rounded-xl p-8 space-y-8 sticky top-8 animate-in slide-in-from-right duration-300">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-bold text-white">Review Details</h3>
                     <button
@@ -588,7 +588,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                       const cd = getDaysUntilDue(getDueDate(selectedRequest));
                       if (!cd) return null;
                       return (
-                        <div className={`p-5 rounded-2xl border text-center ${cd.bgColor} ${cd.borderColor}`}>
+                        <div className={`p-5 rounded-lg border text-center ${cd.bgColor} ${cd.borderColor}`}>
                           <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 text-[9px]">
                             Due Date
                           </p>
@@ -605,7 +605,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                       );
                     })()}
 
-                    <div className="p-6 bg-slate-950 border border-slate-800 rounded-3xl space-y-4">
+                    <div className="p-6 bg-slate-950 border border-slate-800 rounded-xl space-y-4">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-xl bg-indigo-600/20 flex items-center justify-center text-indigo-400">
                           <User className="w-5 h-5" />
@@ -636,7 +636,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                       <button
                         onClick={() => handleCopyTrackingLink(selectedRequest.id)}
                         disabled={copyingLink === selectedRequest.id}
-                        className="w-full mt-4 flex items-center justify-center gap-2 py-3 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-bold rounded-2xl transition-all cursor-pointer disabled:opacity-50 text-sm"
+                        className="w-full mt-4 flex items-center justify-center gap-2 py-3 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-bold rounded-lg transition-all cursor-pointer disabled:opacity-50 text-sm"
                       >
                         {copyingLink === selectedRequest.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -654,13 +654,13 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                       <div className="grid grid-cols-2 gap-4">
                         <button
                           onClick={() => handleAccept(selectedRequest.id)}
-                          className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-emerald-600/20 cursor-pointer text-sm"
+                          className="flex items-center justify-center gap-2 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-emerald-600/20 cursor-pointer text-sm"
                         >
                           <CheckCircle className="w-5 h-5" /> Accept
                         </button>
                         <button
                           onClick={() => setShowDeclineModal(selectedRequest.id)}
-                          className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-rose-600/20 cursor-pointer text-sm"
+                          className="flex items-center justify-center gap-2 py-4 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-rose-600/20 cursor-pointer text-sm"
                         >
                           <XCircle className="w-5 h-5" /> Decline
                         </button>
@@ -671,7 +671,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                       <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest text-[9px]">
                         Document Preview
                       </h4>
-                      <div className="aspect-[3/4] bg-slate-950 border border-slate-800 rounded-3xl flex flex-col items-center justify-center p-8 text-center group">
+                      <div className="aspect-[3/4] bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center justify-center p-8 text-center group">
                         <FileText className="w-16 h-16 text-slate-800 mb-4 group-hover:text-indigo-500 transition-colors" />
                         <p className="text-sm text-slate-500 mb-6 truncate max-w-full">
                           Letter of Recommendation.pdf
@@ -707,7 +707,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                   </div>
                 </section>
               ) : (
-                <section className="bg-slate-900/50 border border-dashed border-slate-800 rounded-[2.5rem] p-12 text-center flex flex-col items-center justify-center h-full min-h-[400px]">
+                <section className="bg-slate-900/50 border border-dashed border-slate-800 rounded-xl p-12 text-center flex flex-col items-center justify-center h-full min-h-[400px]">
                   <AlertCircle className="w-12 h-12 text-slate-800 mb-4" />
                   <h4 className="text-lg font-bold text-slate-600 mb-2">No Letter Selected</h4>
                   <p className="text-sm text-slate-700 max-w-[200px]">
@@ -753,7 +753,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
             )}
           </div>
 
-          <section className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+          <section className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -958,9 +958,9 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
             className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
             onClick={() => !deleting && setDeleteTarget(null)}
           />
-          <div className="relative bg-slate-900 border border-slate-800 rounded-3xl p-8 w-full max-w-md space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="relative bg-slate-900 border border-slate-800 rounded-xl p-8 w-full max-w-md space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-400 border border-rose-500/20 shrink-0">
+              <div className="w-14 h-14 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-400 border border-rose-500/20 shrink-0">
                 <AlertTriangle className="w-7 h-7" />
               </div>
               <div>
@@ -975,7 +975,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
               </div>
             </div>
 
-            <div className="p-4 bg-rose-500/5 border border-rose-500/20 rounded-2xl space-y-2">
+            <div className="p-4 bg-rose-500/5 border border-rose-500/20 rounded-lg space-y-2">
               <p className="text-sm text-slate-300 leading-relaxed">This will permanently delete:</p>
               <ul className="text-sm text-slate-400 space-y-1 ml-4 list-disc">
                 <li>The letter request record{deleteTarget.type === "bulk" ? "s" : ""}</li>
@@ -1019,7 +1019,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
             className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
             onClick={() => setShowDeclineModal(null)}
           />
-          <div className="relative bg-slate-900 border border-slate-800 rounded-3xl p-8 w-full max-w-lg space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="relative bg-slate-900 border border-slate-800 rounded-xl p-8 w-full max-w-lg space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-bold text-white">Decline Letter</h3>
               <button

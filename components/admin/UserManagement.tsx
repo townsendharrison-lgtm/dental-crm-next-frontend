@@ -76,6 +76,7 @@ export default function UserManagement() {
 
   // Users local state
   const [userSearch, setUserSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<UserRole | "ALL">("ALL");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editingRoleUserId, setEditingRoleUserId] = useState<string | null>(null);
   const [editingRoleValue, setEditingRoleValue] = useState<string>("");
@@ -87,16 +88,16 @@ export default function UserManagement() {
   // Invitations local state
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
-  const filteredUsers = useMemo(
-    () =>
-      users.filter(
-        (u) =>
-          u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-          u.email?.toLowerCase().includes(userSearch.toLowerCase()) ||
-          u.role?.toLowerCase().includes(userSearch.toLowerCase()),
-      ),
-    [users, userSearch],
-  );
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return users.filter((u) => {
+      if (roleFilter !== "ALL" && u.role !== roleFilter) return false;
+      if (!q) return true;
+      return (
+        u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
+      );
+    });
+  }, [users, userSearch, roleFilter]);
 
   const usersTotalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
   const pagedUsers = useMemo(() => {
@@ -105,10 +106,10 @@ export default function UserManagement() {
     return filteredUsers.slice(start, start + USERS_PER_PAGE);
   }, [filteredUsers, usersPage, usersTotalPages]);
 
-  // Reset to page 1 when search changes
+  // Reset to page 1 when search or role filter changes
   useEffect(() => {
     setUsersPage(1);
-  }, [userSearch]);
+  }, [userSearch, roleFilter]);
 
   const pendingInvitations = useMemo(() => invitations.filter((i) => i.status === "PENDING"), [invitations]);
   const pastInvitations = useMemo(() => invitations.filter((i) => i.status !== "PENDING"), [invitations]);
@@ -258,7 +259,7 @@ export default function UserManagement() {
 
       {/* Invite Section */}
       {activeSection === "invite" && (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 space-y-6">
           <h2 className="text-xl font-bold text-white flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600/10 rounded-xl flex items-center justify-center text-indigo-400 border border-indigo-500/20">
               <UserPlus className="w-5 h-5" />
@@ -267,7 +268,7 @@ export default function UserManagement() {
           </h2>
 
           {inviteError && (
-            <div className="flex items-center gap-3 p-4 bg-rose-600/10 border border-rose-500/20 rounded-2xl text-rose-400 text-sm">
+            <div className="flex items-center gap-3 p-4 bg-rose-600/10 border border-rose-500/20 rounded-lg text-rose-400 text-sm">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{inviteError}</span>
             </div>
@@ -339,7 +340,7 @@ export default function UserManagement() {
 
           {/* Generated link */}
           {(inviteSuccess || generatedLink) && (
-            <div className="p-5 bg-emerald-600/10 border border-emerald-500/20 rounded-2xl space-y-3">
+            <div className="p-5 bg-emerald-600/10 border border-emerald-500/20 rounded-lg space-y-3">
               <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
                 <Check className="w-4 h-4" /> {inviteSuccess || "Invitation sent!"}
               </div>
@@ -379,17 +380,36 @@ export default function UserManagement() {
       {/* Users Section */}
       {activeSection === "users" && (
         <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <Shield className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as UserRole | "ALL")}
+                className="appearance-none rounded-xl border border-input bg-surface py-2.5 pl-9 pr-9 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Filter by role"
+              >
+                <option value="ALL">All roles</option>
+                {ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            </div>
+
+            <div className="relative w-full max-w-xs sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               <input
                 type="text"
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
-                placeholder="Search users by name, email, or role..."
-                className="w-full bg-surface border border-input rounded-xl py-3 pl-11 pr-4 text-foreground text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent transition-all placeholder:text-muted-foreground"
+                placeholder="Search name or email..."
+                className="w-full rounded-xl border border-input bg-surface py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
+
             <Tooltip content="Refresh">
               <RefreshButton
                 onClick={() => refetchUsers()}
@@ -403,7 +423,7 @@ export default function UserManagement() {
               <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
             </div>
           ) : usersError ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
               <AlertCircle className="w-12 h-12 text-rose-400 mx-auto mb-4" />
               <p className="text-slate-400">{(usersError as Error)?.message || "Failed to fetch users"}</p>
               <button
@@ -415,7 +435,7 @@ export default function UserManagement() {
             </div>
           ) : (
             <>
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -687,7 +707,7 @@ export default function UserManagement() {
       {activeSection === "invitations" && (
         <div className="space-y-6">
           {/* Pending invitations */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-400" /> Pending ({pendingInvitations.length})
@@ -775,7 +795,7 @@ export default function UserManagement() {
 
           {/* Past invitations */}
           {pastInvitations.length > 0 && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
               <div className="p-4 border-b border-slate-800">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Check className="w-4 h-4 text-slate-500" /> Past Invitations ({pastInvitations.length})

@@ -104,4 +104,7 @@ export const queryKeys = {
     detail: (id: string) => ["courses", id] as const,
     submissions: (status?: string) => ["courses", "submissions", { status }] as const,
   },
+  messages: {
+    conversations: () => ["messages", "conversations"] as const,
+  },
 } as const;
