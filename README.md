@@ -1,6 +1,6 @@
 Next.js frontend for the **Dental School Guide CRM**. Talks to the Express/Supabase backend in `../backend`.
 
-## Getting Started
+## Getting Started.
 
 1. Copy the env vars below into `.env.local`:
 
