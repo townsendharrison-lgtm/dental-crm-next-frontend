@@ -1,20 +1,30 @@
 ﻿"use client";
 
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, CardContent } from "@/components/ui/Card";
+import { Loader2 } from "lucide-react";
+import { useMentorManagerOps } from "@/lib/hooks/useMentorManagerOps";
+import ActiveNudgesView from "@/components/mentor/ActiveNudgesView";
 
-export default function Page() {
+export default function MentorManagerActiveNudgesPage() {
+  const ops = useMentorManagerOps({
+    messagesHref: "/mentor-manager/messages",
+    basePath: "/mentor-manager/mentors",
+  });
+
+  if (ops.isLoading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <PageHeader
-        title="Placeholder"
-        description="This page is under construction."
-      />
-      <Card>
-        <CardContent className="pt-5">
-          <p className="text-sm text-slate-400">Coming soon.</p>
-        </CardContent>
-      </Card>
-    </div>
+    <ActiveNudgesView
+      alerts={ops.alerts}
+      rows={ops.complianceRows}
+      onSendNudge={ops.onSendNudge}
+      onOpenChat={ops.onOpenChat}
+      onAuditMentor={ops.onAuditMentor}
+    />
   );
 }

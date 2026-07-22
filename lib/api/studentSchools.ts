@@ -4,7 +4,7 @@ import type { StudentSchool } from "@/lib/types";
 export interface CreateStudentSchoolPayload {
   studentId?: string; // required if created by staff; defaults to student self
   schoolId: string;
-  category: "Reach" | "Target" | "Safety";
+  category: string;
   status?: "Interested" | "Applying" | "Applied" | "Interviewed" | "Accepted" | "Waitlisted" | "Rejected";
   appliedDate?: string | null;
   interviewDate?: string | null;

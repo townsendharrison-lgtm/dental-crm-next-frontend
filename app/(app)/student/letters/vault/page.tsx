@@ -29,7 +29,7 @@ export default function StudentLetterVaultPage() {
       student={student}
       requests={requests}
       onSendRequest={() => refetch()}
-      onBack={() => router.push("/resources")}
+      onBack={() => router.push("/student/resources")}
       onRefresh={async () => {
         await refetch();
       }}

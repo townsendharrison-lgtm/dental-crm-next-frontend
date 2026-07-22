@@ -40,20 +40,37 @@ messaging.onBackgroundMessage((payload) => {
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// Handle notification click — open the app
+// Handle notification click — open deep link when provided
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
+  const data = event.notification.data || {};
+  const targetUrl = data.link || data.url || "/";
+
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      // If there's already an open tab, focus it
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
-          return client.focus();
+          client.focus();
+          if ("navigate" in client && targetUrl) {
+            try {
+              const absolute =
+                targetUrl.startsWith("http")
+                  ? targetUrl
+                  : `${self.location.origin}${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
+              return client.navigate(absolute);
+            } catch {
+              // fall through to openWindow
+            }
+          }
+          return;
         }
       }
-      // Otherwise open a new tab
-      return clients.openWindow("/");
+      const absolute =
+        targetUrl.startsWith("http")
+          ? targetUrl
+          : `${self.location.origin}${targetUrl.startsWith("/") ? targetUrl : `/${targetUrl}`}`;
+      return clients.openWindow(absolute);
     })
   );
 });

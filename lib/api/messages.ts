@@ -95,4 +95,18 @@ export const messagesApi = {
   rename: async (conversationId: string, name: string): Promise<{ success: boolean }> => {
     return await apiPut<{ success: boolean }>(`/api/conversations/${conversationId}/rename`, { name });
   },
+
+  /**
+   * Add members to a group conversation.
+   */
+  addMembers: async (conversationId: string, userIds: string[]): Promise<Conversation> => {
+    return await apiPost<Conversation>(`/api/conversations/${conversationId}/members`, { userIds });
+  },
+
+  /**
+   * Remove a member from a group conversation.
+   */
+  removeMember: async (conversationId: string, memberId: string): Promise<Conversation> => {
+    return await apiDelete<Conversation>(`/api/conversations/${conversationId}/members/${memberId}`);
+  },
 };

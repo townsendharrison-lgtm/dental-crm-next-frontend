@@ -1,20 +1,11 @@
-﻿"use client";
+"use client";
 
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, CardContent } from "@/components/ui/Card";
+import SchoolFilterView from "@/components/student/SchoolFilterView";
 
-export default function Page() {
+export default function MentorSchoolFilterPage() {
   return (
-    <div>
-      <PageHeader
-        title="Placeholder"
-        description="This page is under construction."
-      />
-      <Card>
-        <CardContent className="pt-5">
-          <p className="text-sm text-slate-400">Coming soon.</p>
-        </CardContent>
-      </Card>
+    <div className="pt-6">
+      <SchoolFilterView isMentorView={true} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { apiGet, apiPut, apiDelete } from "./client";
+import { apiClient, apiGet, apiPut, apiDelete } from "./client";
 import type { SetterUser, UserRole } from "@/lib/types";
 
 /** Raw user shape returned by the backend (snake_case goals). */
@@ -42,6 +42,11 @@ export const usersApi = {
     return mapUser(user);
   },
 
+  /** Update current user's display name (and optional avatar URL). */
+  updateProfile: async (updates: { name?: string; avatar?: string }): Promise<RawUser> => {
+    return await apiPut<RawUser>("/api/users/profile", updates);
+  },
+
   /** Update a setter's lead goals. Admins edit any setter; others edit self. */
   updateGoal: async (
     setterId: string,
@@ -50,6 +55,18 @@ export const usersApi = {
   ): Promise<void> => {
     const endpoint = isAdmin ? `/api/admin/users/${setterId}` : "/api/users/profile";
     await apiPut(endpoint, updates);
+  },
+
+  /**
+   * Upload a profile photo to Supabase `avatars` bucket.
+   * Pass `userId` only when an admin/manager updates someone else.
+   */
+  uploadAvatar: async (file: File, userId?: string): Promise<RawUser> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (userId) formData.append("userId", userId);
+    const { data } = await apiClient.post<RawUser>("/api/users/avatar", formData);
+    return data;
   },
 
   /** Admin only: delete a setter (and their leads). */

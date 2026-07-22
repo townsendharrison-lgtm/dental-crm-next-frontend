@@ -1,6 +1,19 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { ReactNode } from "react";
 import type { UserRole } from "@/lib/types";
+
+/** Optional primary action rendered in the global page header. */
+export interface PageHeaderAction {
+  label: string;
+  onClick: () => void;
+  /** Optional leading icon (e.g. `<Plus className="w-4 h-4" />`). */
+  icon?: ReactNode;
+  /** Visual style. Defaults to primary (indigo). */
+  variant?: "primary" | "secondary";
+  /** When true, button is non-interactive. */
+  disabled?: boolean;
+}
 
 interface UIState {
   /** Desktop sidebar collapsed (icon-only) state. Persisted. */
@@ -20,6 +33,14 @@ interface UIState {
   /** Previews bar collapsed state. */
   previewCollapsed: boolean;
   setPreviewCollapsed: (collapsed: boolean) => void;
+
+  /**
+   * Optional header CTA for the current page.
+   * Set via `usePageHeaderAction`. Cleared automatically on unmount.
+   * Not persisted — null means no button.
+   */
+  pageHeaderAction: PageHeaderAction | null;
+  setPageHeaderAction: (action: PageHeaderAction | null) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -38,10 +59,17 @@ export const useUIStore = create<UIState>()(
 
       previewCollapsed: false,
       setPreviewCollapsed: (previewCollapsed) => set({ previewCollapsed }),
+
+      pageHeaderAction: null,
+      setPageHeaderAction: (pageHeaderAction) => set({ pageHeaderAction }),
     }),
     {
       name: "dc-ui",
-      partialize: (s) => ({ sidebarCollapsed: s.sidebarCollapsed, previewCollapsed: s.previewCollapsed, previewRole: s.previewRole }),
+      partialize: (s) => ({
+        sidebarCollapsed: s.sidebarCollapsed,
+        previewCollapsed: s.previewCollapsed,
+        previewRole: s.previewRole,
+      }),
     },
   ),
 );

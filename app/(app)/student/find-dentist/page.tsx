@@ -8,7 +8,7 @@ export default function StudentFindDentistPage() {
 
   return (
     <FindDentistView
-      onBack={() => router.push("/resources")}
+      onBack={() => router.push("/student/resources")}
       onBackText="Back to Resources"
       hideHeaderOnDesktop={true}
     />

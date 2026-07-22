@@ -1,142 +1,194 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import {
   BookOpen,
+  Clock,
   ExternalLink,
+  ArrowUpRight,
   Search,
-  Zap,
-  MessageCircle,
-  FileText,
-  Shield,
-  Target,
-  Users,
-  Award,
-  Rocket,
-  CheckCircle,
-  Star,
-  Trophy,
-  Flame,
-  Heart,
-  BarChart,
-  ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useResources } from "@/lib/hooks/useResources";
+import type { Resource } from "@/lib/types";
+import { renderBadgeIcon } from "@/lib/utils/badgeIcons";
+import { Badge, Button, EmptyState, Input, SelectMenu, Spinner } from "@/components/ui";
+import { cn } from "@/lib/utils/cn";
 
-interface ResourceItem {
-  id: string;
-  title: string;
-  url: string;
-  estimatedTime: string;
-  category: string;
-  icon: string;
+function resourceTime(r: Resource) {
+  return r.estimatedTime || r.estimated_time || "5m";
 }
 
-const RESOURCES: ResourceItem[] = [
-  { id: "r1", title: "Find a Dentist", url: "/student/find-dentist", estimatedTime: "5m", category: "Outreach", icon: "Search" },
-  { id: "r2", title: "DAT Accelerator", url: "https://dataccelerator.com", estimatedTime: "Ongoing", category: "Study", icon: "Zap" },
-  { id: "r3", title: "Mentor Assistant", url: "/student/mentor-assistant", estimatedTime: "10m", category: "Support", icon: "MessageCircle" },
-  { id: "r4", title: "Personal Statement Help", url: "#", estimatedTime: "30m", category: "Writing", icon: "FileText" },
-  { id: "r5", title: "Letter Vault", url: "/student/letters/vault", estimatedTime: "15m", category: "Documents", icon: "Shield" },
-  { id: "r6", title: "Casper Hub", url: "#", estimatedTime: "20m", category: "Testing", icon: "Target" },
-  { id: "r7", title: "Interview Hub", url: "#", estimatedTime: "45m", category: "Interview", icon: "Users" },
-  { id: "r8", title: "Competitive Alignment Index", url: "#", estimatedTime: "10m", category: "Analytics", icon: "BarChart" },
-];
+function isActiveResource(r: Resource) {
+  if (r.isActive !== undefined) return Boolean(r.isActive);
+  if (r.is_active !== undefined) return Boolean(r.is_active);
+  return true;
+}
 
-export default function ResourcesPage() {
+export default function StudentResourcesPage() {
   const router = useRouter();
+  const { data: resources = [], isLoading, isError, refetch, isFetching } = useResources();
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("All");
 
-  const getIcon = (iconName: string) => {
-    switch (iconName) {
-      case "Search": return <Search size={24} />;
-      case "Zap": return <Zap size={24} />;
-      case "MessageCircle": return <MessageCircle size={24} />;
-      case "FileText": return <FileText size={24} />;
-      case "Shield": return <Shield size={24} />;
-      case "Target": return <Target size={24} />;
-      case "Users": return <Users size={24} />;
-      case "BookOpen": return <BookOpen size={24} />;
-      case "Award": return <Award size={24} />;
-      case "Rocket": return <Rocket size={24} />;
-      case "CheckCircle": return <CheckCircle size={24} />;
-      case "Star": return <Star size={24} />;
-      case "Trophy": return <Trophy size={24} />;
-      case "Flame": return <Flame size={24} />;
-      case "Heart": return <Heart size={24} />;
-      case "BarChart": return <BarChart size={24} />;
-      default: return <BookOpen size={24} />;
+  const activeResources = useMemo(
+    () =>
+      [...resources]
+        .filter(isActiveResource)
+        .sort((a, b) => {
+          const ao = a.sortOrder ?? a.sort_order ?? 0;
+          const bo = b.sortOrder ?? b.sort_order ?? 0;
+          if (ao !== bo) return ao - bo;
+          return a.title.localeCompare(b.title);
+        }),
+    [resources],
+  );
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    activeResources.forEach((r) => {
+      if (r.category?.trim()) set.add(r.category.trim());
+    });
+    return ["All", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [activeResources]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return activeResources.filter((r) => {
+      if (category !== "All" && r.category !== category) return false;
+      if (!q) return true;
+      return (
+        r.title.toLowerCase().includes(q) ||
+        r.category.toLowerCase().includes(q) ||
+        r.url.toLowerCase().includes(q)
+      );
+    });
+  }, [activeResources, search, category]);
+
+  const handleResourceClick = (resource: Resource) => {
+    const url = (resource.url || "").trim();
+    if (!url || url === "#") {
+      toast.info(`${resource.title} is coming soon`);
+      return;
     }
+    if (url.startsWith("/")) {
+      router.push(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const handleResourceClick = (resource: ResourceItem) => {
-    if (resource.url.startsWith("/")) {
-      router.push(resource.url);
-    } else if (resource.url === "#") {
-      toast.info(`${resource.title} is coming soon!`);
-    } else {
-      window.open(resource.url, "_blank", "noopener,noreferrer");
-    }
-  };
+  if (isLoading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Spinner className="h-8 w-8 text-indigo-500" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center px-4">
+        <EmptyState
+          icon={<BookOpen className="h-8 w-8" />}
+          title="Could not load resources"
+          description="Check your connection and try again."
+          action={
+            <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
+              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+              Retry
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-slate-300 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-12">
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-5xl font-black text-white tracking-tighter mb-2"
-          >
-            STUDENT <span className="text-indigo-500">RESOURCES</span>
-          </motion.h1>
-          <p className="text-slate-500 font-medium tracking-wide uppercase text-xs">
-            Essential Tools & Support for Your Journey
-          </p>
-        </header>
+    <div className="space-y-5 pb-10 pt-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search resources…"
+            className="pl-9"
+          />
+        </div>
+        <div className="w-full sm:w-56">
+          <SelectMenu
+            value={category}
+            onChange={setCategory}
+            options={categories.map((c) => ({
+              value: c,
+              label: c === "All" ? "All categories" : c,
+            }))}
+          />
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {RESOURCES.map((resource, index) => {
-            const isInternal = resource.url.startsWith("/");
-            const isPlaceholder = resource.url === "#";
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={<BookOpen className="h-8 w-8" />}
+          title={activeResources.length === 0 ? "No resources yet" : "No matching resources"}
+          description={
+            activeResources.length === 0
+              ? "Your admin can publish resources from Engagement → Student Resources."
+              : "Try a different search or category."
+          }
+        />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((resource) => {
+            const url = (resource.url || "").trim();
+            const isInternal = url.startsWith("/");
+            const isPlaceholder = !url || url === "#";
+            const cta = isInternal
+              ? "Open in app"
+              : isPlaceholder
+                ? "Coming soon"
+                : "Open link";
 
             return (
-              <motion.div
+              <button
                 key={resource.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
+                type="button"
                 onClick={() => handleResourceClick(resource)}
-                className="group bg-slate-900/40 border border-slate-800 p-8 rounded-3xl hover:border-indigo-500/50 transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer"
+                className="group flex cursor-pointer flex-col rounded-xl border border-slate-800 bg-slate-900/40 p-5 text-left transition-colors hover:border-indigo-500/40 hover:bg-slate-900/70"
               >
-                {!isInternal && !isPlaceholder && (
-                  <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ExternalLink size={20} className="text-indigo-400" />
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
+                    {renderBadgeIcon(resource.icon || "BookOpen", "h-5 w-5")}
                   </div>
-                )}
-
-                <div>
-                  <div className="w-14 h-14 bg-indigo-600/10 rounded-2xl flex items-center justify-center text-indigo-400 mb-6 group-hover:scale-110 transition-transform">
-                    {getIcon(resource.icon)}
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-indigo-400 transition-colors">
-                    {resource.title}
-                  </h3>
-                  <p className="text-sm text-slate-500 leading-relaxed mb-6">
-                    {resource.category} • {resource.estimatedTime}
-                  </p>
+                  {!isInternal && !isPlaceholder && (
+                    <ExternalLink className="h-4 w-4 shrink-0 text-slate-600 transition-colors group-hover:text-indigo-400" />
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2 text-xs font-bold text-indigo-400 uppercase tracking-widest">
-                  {isInternal ? "Open Feature" : isPlaceholder ? "Coming Soon" : "Access Resource"}{" "}
-                  <ChevronRight size={14} />
+                <h3 className="text-base font-semibold text-white transition-colors group-hover:text-indigo-300">
+                  {resource.title}
+                </h3>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge variant="primary">{resource.category || "General"}</Badge>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                    <Clock className="h-3 w-3" />
+                    {resourceTime(resource)}
+                  </span>
                 </div>
-              </motion.div>
+
+                <div className="mt-auto flex items-center gap-1.5 pt-5 text-xs font-semibold text-indigo-400">
+                  {cta}
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </div>
+              </button>
             );
           })}
         </div>
-      </div>
+      )}
     </div>
   );
 }

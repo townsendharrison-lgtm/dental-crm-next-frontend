@@ -38,7 +38,7 @@ export function Dropdown({ trigger, children, align = "right", className, menuCl
         <div
           className={cn(
             "absolute z-40 mt-2 min-w-[14rem] overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-xl shadow-black/20",
-            "animate-in fade-in zoom-in-95 duration-150",
+            "animate-in fade-in duration-100",
             align === "right" ? "right-0" : "left-0",
             menuClassName,
           )}

@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { notificationsApi, type SystemNotification } from "../api/notifications";
+import {
+  notificationsApi,
+  type SystemNotification,
+  type BroadcastNotification,
+} from "../api/notifications";
 import { queryKeys } from "../api/queryKeys";
 
 /** Hook to fetch notifications */
@@ -11,13 +15,51 @@ export function useNotifications(unreadOnly = false, enabled = true) {
   });
 }
 
+/** Admin: list broadcast system alerts */
+export function useBroadcasts(enabled = true) {
+  return useQuery<BroadcastNotification[]>({
+    queryKey: queryKeys.notifications.broadcasts(),
+    queryFn: notificationsApi.listBroadcasts,
+    enabled,
+  });
+}
+
+/** Admin: send a broadcast alert */
+export function useBroadcastNotification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      title: string;
+      message: string;
+      type?: "INFO" | "WARNING" | "URGENT";
+      targetRole?: "STUDENT" | "MENTOR" | "BOTH";
+    }) => notificationsApi.broadcast(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.notifications.broadcasts() });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+/** Admin: delete a broadcast batch */
+export function useDeleteBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (relatedId: string) => notificationsApi.deleteBroadcast(relatedId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.notifications.broadcasts() });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
 /** Hook to get unread notification count */
 export function useUnreadNotificationsCount(enabled = true) {
   return useQuery<number>({
     queryKey: ["notifications", "unread-count"],
     queryFn: notificationsApi.getUnreadCount,
     enabled,
-    refetchInterval: 30000, // Polling fallback every 30s
+    refetchInterval: 30000,
   });
 }
 

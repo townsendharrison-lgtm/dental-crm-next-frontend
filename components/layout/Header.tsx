@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bell, Clock, Target, Award, Smartphone, Download, AlertCircle, Menu, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -21,12 +21,14 @@ import {
   useMarkAllNotificationsAsRead,
   useClearAllNotifications,
 } from "@/lib/hooks/useNotifications";
+import type { SystemNotification } from "@/lib/types";
 
 const LOGO_URL =
   "https://images.squarespace-cdn.com/content/64d0277a0640507c114633ad/b8543df7-ec9e-4d64-912e-e80bb44c8757/Untitled+design-3.png?content-type=image%2Fpng";
 
 function NotificationBell() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { user } = useAuth();
   const { role } = useRole();
   const token = getAccessToken();
@@ -154,9 +156,53 @@ function NotificationBell() {
     });
   };
 
-  const handleNotificationClick = (id: string, isRead: boolean) => {
-    if (!isRead) {
-      markAsReadMutation.mutate(id);
+  const handleNotificationClick = (notif: SystemNotification) => {
+    if (!notif.is_read) {
+      markAsReadMutation.mutate(notif.id);
+    }
+
+    const category = (notif.category || "").toUpperCase();
+    setIsOpen(false);
+
+    if (category === "ASSIGNMENT" && (role === "MENTOR" || role === "MENTOR_MANAGER")) {
+      router.push("/mentor/students");
+      return;
+    }
+    if (category === "MEETING" && notif.related_id) {
+      const id = encodeURIComponent(notif.related_id);
+      const href =
+        role === "ADMIN"
+          ? `/admin/schedule?meetingId=${id}`
+          : role === "MENTOR_MANAGER"
+            ? `/mentor-manager/schedule?meetingId=${id}`
+            : role === "MENTOR"
+              ? `/mentor/schedule?meetingId=${id}`
+              : role === "STUDENT"
+                ? `/student/momentum?meetingId=${id}`
+                : null;
+      if (href) {
+        router.push(href);
+        return;
+      }
+    }
+    if (category === "NEW_MESSAGE") {
+      const href =
+        role === "STUDENT"
+          ? notif.related_id
+            ? `/student/messages/${notif.related_id}`
+            : "/student/messages"
+          : role === "MENTOR"
+            ? notif.related_id
+              ? `/mentor/messages/${notif.related_id}`
+              : "/mentor/messages"
+            : role === "MENTOR_MANAGER"
+              ? notif.related_id
+                ? `/mentor-manager/messages/${notif.related_id}`
+                : "/mentor-manager/messages"
+              : notif.related_id
+                ? `/admin/messages/${notif.related_id}`
+                : "/admin/messages";
+      router.push(href);
     }
   };
 
@@ -271,7 +317,7 @@ function NotificationBell() {
                 return (
                   <div
                     key={notif.id}
-                    onClick={() => handleNotificationClick(notif.id, notif.is_read)}
+                    onClick={() => handleNotificationClick(notif)}
                     className={`p-4 hover:bg-slate-800/40 transition-colors flex gap-3 cursor-pointer ${isUnread ? "bg-indigo-950/10 border-l-2 border-l-indigo-500 pl-3.5" : ""
                       }`}
                   >
@@ -322,13 +368,45 @@ function NotificationBell() {
   );
 }
 
+function HeaderActionButton({ compact = false }: { compact?: boolean }) {
+  const action = useUIStore((s) => s.pageHeaderAction);
+  if (!action) return null;
+
+  const isSecondary = action.variant === "secondary";
+  const disabled = !!action.disabled;
+
+  return (
+    <button
+      type="button"
+      onClick={action.onClick}
+      disabled={disabled}
+      className={
+        compact
+          ? `inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              isSecondary
+                ? "border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                : "bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20"
+            }`
+          : `inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              isSecondary
+                ? "border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                : "bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20"
+            }`
+      }
+    >
+      {action.icon}
+      <span className={compact ? "max-w-[9rem] truncate" : undefined}>{action.label}</span>
+    </button>
+  );
+}
+
 /** Mobile top bar — fixed, matches the old app's header. */
 export function MobileHeader() {
   const openMobile = useUIStore((s) => s.openMobileSidebar);
 
   return (
     <div className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between border-b border-slate-800 bg-slate-900/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-lg lg:hidden">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <button
           onClick={openMobile}
           className="rounded-xl border border-slate-700 bg-slate-800 p-2 text-slate-300 transition-all hover:bg-slate-700 hover:text-white"
@@ -337,7 +415,7 @@ export function MobileHeader() {
           <Menu className="h-5 w-5" />
         </button>
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={LOGO_URL}
@@ -354,7 +432,10 @@ export function MobileHeader() {
           </h1>
         </div>
       </div>
-      <NotificationBell />
+      <div className="flex shrink-0 items-center gap-2">
+        <HeaderActionButton compact />
+        <NotificationBell />
+      </div>
     </div>
   );
 }
@@ -386,7 +467,7 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
   },
   "/admin/school-selection": {
     title: "School Selection",
-    description: "Select dental schools based on filters and preferences.",
+    description: "Create strategic selection plans for students — manually or with AI.",
   },
   "/admin/courses": {
     title: "Courses",
@@ -394,7 +475,7 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
   },
   "/admin/analytics": {
     title: "Platform Analytics",
-    description: "Comprehensive platform control and analytical insights.",
+    description: "Live cohort funnels, school performance, and compliance signals.",
   },
   "/admin/research": {
     title: "Admissions Research",
@@ -412,9 +493,13 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
     title: "Inbox",
     description: "Communicate with students, mentors, and administrators.",
   },
+  "/admin/rules-engine": {
+    title: "Rules Engine",
+    description: "Platform rules, auto-replies, welcome templates, and status messages.",
+  },
   "/admin/settings": {
     title: "Rules Engine",
-    description: "Manage global platform constraints and preferences.",
+    description: "Platform rules, auto-replies, welcome templates, and status messages.",
   },
   "/admin/users": {
     title: "User Management",
@@ -498,7 +583,7 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
   },
   "/student/resources": {
     title: "Resources",
-    description: "Explore curriculum, DAT prep, and shadowing logs.",
+    description: "Admin-curated tools and guides for your application journey.",
   },
   "/student/messages": {
     title: "Inbox",
@@ -570,6 +655,18 @@ function getHeaderDetails(pathname: string) {
   if (ROUTE_DETAILS[pathname]) {
     return ROUTE_DETAILS[pathname];
   }
+  if (pathname.match(/^\/admin\/messages\/[^/]+/)) {
+    return ROUTE_DETAILS["/admin/messages"];
+  }
+  if (pathname.match(/^\/mentor-manager\/messages\/[^/]+/)) {
+    return ROUTE_DETAILS["/mentor-manager/messages"];
+  }
+  if (pathname.match(/^\/mentor\/messages\/[^/]+/)) {
+    return ROUTE_DETAILS["/mentor/messages"];
+  }
+  if (pathname.match(/^\/student\/messages\/[^/]+/)) {
+    return ROUTE_DETAILS["/student/messages"];
+  }
   if (pathname === "/admin/setter-management/all" || pathname === "/setter/setter-management/all") {
     return {
       title: "All Setters",
@@ -580,6 +677,33 @@ function getHeaderDetails(pathname: string) {
     return {
       title: "Setter Details",
       description: "View individual setter leads and performance metrics.",
+    };
+  }
+  if (
+    pathname.match(/^\/admin\/mentors\/[^/]+\/students/) ||
+    pathname.match(/^\/mentor-manager\/mentors\/[^/]+\/students/)
+  ) {
+    return {
+      title: "Students",
+      description: "Roster and readiness for this mentor.",
+    };
+  }
+  if (
+    pathname.match(/^\/admin\/mentors\/[^/]+\/audit/) ||
+    pathname.match(/^\/mentor-manager\/mentors\/[^/]+\/audit/)
+  ) {
+    return {
+      title: "Audit",
+      description: "Performance and compliance for this mentor.",
+    };
+  }
+  if (
+    pathname.match(/^\/admin\/mentors\/[^/]+\/profile/) ||
+    pathname.match(/^\/mentor-manager\/mentors\/[^/]+\/profile/)
+  ) {
+    return {
+      title: "Profile",
+      description: "Mentor details and management meetings.",
     };
   }
   for (const route of Object.keys(ROUTE_DETAILS)) {
@@ -613,15 +737,16 @@ export function GlobalHeader() {
   const details = getHeaderDetails(pathname);
 
   return (
-    <div className="hidden lg:block sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md pt-3 pb-1">
-      <div className="mx-auto max-w-7xl flex items-center justify-between py-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white leading-tight">{details.title}</h1>
+    <div className="hidden lg:block sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md pt-2">
+      <div className="mx-auto max-w-7xl flex items-center justify-between gap-4 py-2.5 border-b border-slate-800/80 mb-4">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-white leading-tight">{details.title}</h1>
           {details.description && (
-            <p className="text-sm text-slate-400 font-medium leading-normal">{details.description}</p>
+            <p className="text-sm text-slate-400 font-medium leading-normal mt-0.5">{details.description}</p>
           )}
         </div>
-        <div className="flex items-center">
+        <div className="flex shrink-0 items-center gap-3">
+          <HeaderActionButton />
           <NotificationBell />
         </div>
       </div>

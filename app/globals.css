@@ -538,3 +538,9 @@ body {
   50% { transform: translateX(-3px); }
   70% { transform: translateX(3px); }
 }
+
+/* Opacity-only overlay enter (no transform — avoids fly-in when portaled from modals) */
+@keyframes menu-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

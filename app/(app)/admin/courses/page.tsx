@@ -1,20 +1,20 @@
-﻿"use client";
+"use client";
 
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, CardContent } from "@/components/ui/Card";
+import { Loader2 } from "lucide-react";
+import AdminCoursesView from "@/components/admin/AdminCoursesView";
+import { useCourses, useCourseSubmissions } from "@/lib/hooks/useCourses";
 
-export default function Page() {
-  return (
-    <div>
-      <PageHeader
-        title="Placeholder"
-        description="This page is under construction."
-      />
-      <Card>
-        <CardContent className="pt-5">
-          <p className="text-sm text-slate-400">Coming soon.</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
+export default function AdminCoursesPage() {
+  const { data: courses = [], isLoading: coursesLoading } = useCourses();
+  const { data: submissions = [], isLoading: submissionsLoading } = useCourseSubmissions();
+
+  if (coursesLoading || submissionsLoading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
+
+  return <AdminCoursesView courses={courses} submissions={submissions} />;
 }

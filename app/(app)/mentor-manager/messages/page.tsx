@@ -1,8 +1,7 @@
 "use client";
 
-import { PlaceholderView } from "@/components/dashboard/PlaceholderView";
+import { InboxPageShell } from "@/components/messages/InboxView";
 
-export default function Page() {
-  return <PlaceholderView />;
+export default function MentorManagerInboxPage() {
+  return <InboxPageShell variant="admin" />;
 }
-

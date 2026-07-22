@@ -26,6 +26,28 @@ export interface CreateResearchCasePayload {
   specialCircumstances?: string;
 }
 
+/** Flatten snake_case API rows into the camelCase fields the admin UI expects. */
+export function normalizeResearchCase(c: ResearchCase): ResearchCase {
+  const accepted = c.acceptedSchoolIds ?? c.accepted_schools ?? [];
+  const rejected = c.rejected_schools ?? [];
+  return {
+    ...c,
+    studentName: c.studentName ?? c.student_name_anonymized,
+    datAA: c.datAA ?? c.dat_aa,
+    datTS: c.datTS ?? c.dat_ts,
+    totalShadowingHours: c.totalShadowingHours ?? c.shadowing_hours ?? 0,
+    totalVolunteeringHours: c.totalVolunteeringHours ?? c.volunteering_hours ?? 0,
+    researchExperience: c.researchExperience ?? c.research_hours ?? 0,
+    personalStatementThemes:
+      c.personalStatementThemes ?? c.personal_statement_themes ?? [],
+    acceptedSchoolIds: Array.isArray(accepted) ? accepted : [],
+    accepted_schools: Array.isArray(accepted) ? accepted : [],
+    rejected_schools: Array.isArray(rejected) ? rejected : [],
+    applicationUrl: c.applicationUrl ?? c.application_url ?? null,
+    createdAt: c.createdAt ?? c.created_at,
+  };
+}
+
 export const researchCasesApi = {
   /**
    * Fetch historical research cases matching given query criteria.
@@ -42,21 +64,26 @@ export const researchCasesApi = {
     const endpoint = `/api/research-cases${queryStr ? `?${queryStr}` : ""}`;
 
     const response = await apiGet<{ cases: ResearchCase[] }>(endpoint);
-    return response.cases || [];
+    return (response.cases || []).map(normalizeResearchCase);
   },
 
   /**
    * Create a new research case reference profile (Admin only).
    */
   create: async (payload: CreateResearchCasePayload): Promise<ResearchCase> => {
-    return await apiPost<ResearchCase>("/api/research-cases", payload);
+    const created = await apiPost<ResearchCase>("/api/research-cases", payload);
+    return normalizeResearchCase(created);
   },
 
   /**
    * Update details of a research case (Admin only).
    */
-  update: async (id: string, updates: Partial<CreateResearchCasePayload>): Promise<ResearchCase> => {
-    return await apiPut<ResearchCase>(`/api/research-cases/${id}`, updates);
+  update: async (
+    id: string,
+    updates: Partial<CreateResearchCasePayload>,
+  ): Promise<ResearchCase> => {
+    const updated = await apiPut<ResearchCase>(`/api/research-cases/${id}`, updates);
+    return normalizeResearchCase(updated);
   },
 
   /**

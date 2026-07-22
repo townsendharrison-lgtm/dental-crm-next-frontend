@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, X, Eye } from "lucide-react";
@@ -8,6 +9,8 @@ import { getNavItems, getAiToolItem, showAiTools } from "@/lib/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
 import { useUIStore } from "@/lib/stores/uiStore";
+import { Avatar } from "@/components/ui";
+import { UserAccountModal } from "@/components/layout/UserAccountModal";
 
 const LOGO_URL =
   "https://images.squarespace-cdn.com/content/64d0277a0640507c114633ad/b8543df7-ec9e-4d64-912e-e80bb44c8757/Untitled+design-3.png?content-type=image%2Fpng";
@@ -33,10 +36,11 @@ function isActive(pathname: string, href: string) {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout, isAuthenticated } = useAuth();
-  const { role, isAdmin, isPreviewing, previewRole } = useRole();
+  const { role, isAdmin } = useRole();
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const closeMobile = useUIStore((s) => s.closeMobileSidebar);
   const { previewCollapsed, setPreviewCollapsed } = useUIStore();
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const navItems = getNavItems(role);
   const aiToolItem = getAiToolItem(role);
@@ -46,7 +50,6 @@ export function Sidebar() {
   const content = (
     <>
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6">
-        {/* Brand */}
         <div className="mb-8 mt-4 flex items-center gap-2 lg:mt-0 lg:gap-3">
           <div className="relative flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-lg lg:h-7 lg:w-7">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -72,7 +75,6 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="space-y-1">
           {navItems.map((item) => {
             const active = isActive(pathname, item.href);
@@ -96,7 +98,6 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* AI Tools */}
         {showAiTools(role) && (
           <div className="mt-8 border-t border-slate-800/50 pt-8">
             <h3 className="mb-4 px-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
@@ -125,22 +126,24 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* User block */}
       <div className="space-y-3 border-t border-slate-800 p-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-800 font-semibold text-slate-300">
-            {displayName[0]?.toUpperCase() || "U"}
-          </div>
+        <button
+          type="button"
+          onClick={() => setAccountOpen(true)}
+          className="flex w-full cursor-pointer items-center gap-3 rounded-xl p-1.5 text-left transition-colors hover:bg-slate-800/60"
+          title="Edit profile"
+        >
+          <Avatar name={displayName} src={user?.avatar} size="md" className="rounded-full" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-white">{displayName}</p>
             <p className="truncate text-xs text-slate-500">{displayEmail}</p>
           </div>
-        </div>
+        </button>
         {isAuthenticated && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => logout()}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-slate-800/50 px-4 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-slate-800 hover:text-white cursor-pointer"
+              className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-800/50 px-4 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-slate-800 hover:text-white"
             >
               <LogOut className="h-4 w-4 shrink-0" />
               Sign Out
@@ -148,7 +151,7 @@ export function Sidebar() {
             {isAdmin && previewCollapsed && (
               <button
                 onClick={() => setPreviewCollapsed(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-amber-400 transition-all cursor-pointer"
+                className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-800/50 text-slate-400 transition-all hover:bg-slate-800 hover:text-amber-400"
                 title="Expand Preview Switcher"
               >
                 <Eye className="h-4 w-4" />
@@ -162,12 +165,10 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Desktop */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-slate-800 bg-slate-900 lg:flex">
         {content}
       </aside>
 
-      {/* Mobile drawer */}
       <div
         className={cn(
           "fixed inset-0 z-[100] transition-all duration-300 lg:hidden",
@@ -190,6 +191,8 @@ export function Sidebar() {
           {content}
         </aside>
       </div>
+
+      <UserAccountModal open={accountOpen} onClose={() => setAccountOpen(false)} />
     </>
   );
 }

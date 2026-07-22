@@ -1,8 +1,7 @@
 "use client";
 
-import { PlaceholderView } from "@/components/dashboard/PlaceholderView";
+import TasksPage from "@/components/tasks/TasksPage";
 
-export default function Page() {
-  return <PlaceholderView />;
+export default function AdminTasksPage() {
+  return <TasksPage />;
 }
-

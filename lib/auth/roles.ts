@@ -41,7 +41,8 @@ export const PUBLIC_PREFIXES = [
   "/letters/upload",
   "/guest-letter-request",
   "/guest-letter-track",
-  "/guest-find-dentist"
+  "/guest-find-dentist",
+  "/share",
 ];
 
 /**

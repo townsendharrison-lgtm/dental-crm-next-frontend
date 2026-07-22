@@ -1,8 +1,7 @@
 "use client";
 
-import { PlaceholderView } from "@/components/dashboard/PlaceholderView";
+import SchedulePage from "@/components/schedule/SchedulePage";
 
-export default function Page() {
-  return <PlaceholderView />;
+export default function MentorManagerSchedulePage() {
+  return <SchedulePage />;
 }
-

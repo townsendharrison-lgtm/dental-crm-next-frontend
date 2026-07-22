@@ -8,6 +8,7 @@ export interface CreateApplicationPayload {
   appliedDate?: string | null;
   interviewDate?: string | null;
   decisionDate?: string | null;
+  notes?: string | null;
 }
 
 export const applicationsApi = {
@@ -44,6 +45,7 @@ export const applicationsApi = {
     if (updates.appliedDate !== undefined) mappedUpdates.appliedDate = updates.appliedDate;
     if (updates.interviewDate !== undefined) mappedUpdates.interviewDate = updates.interviewDate;
     if (updates.decisionDate !== undefined) mappedUpdates.decisionDate = updates.decisionDate;
+    if (updates.notes !== undefined) mappedUpdates.notes = updates.notes;
 
     return await apiPut<Application>(`/api/applications/${id}`, mappedUpdates);
   },

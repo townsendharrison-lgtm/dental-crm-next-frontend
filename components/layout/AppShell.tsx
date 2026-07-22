@@ -117,7 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         <GlobalHeader />
-        <div key={role || "default"} className="mx-auto max-w-7xl duration-500 animate-in fade-in slide-in-from-bottom-4">
+        <div key={role || "default"} className="mx-auto max-w-7xl duration-300 animate-in fade-in">
           {children}
         </div>
       </main>

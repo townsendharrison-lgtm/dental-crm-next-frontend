@@ -10,6 +10,8 @@ const sizeMap = {
   md: "max-w-md",
   lg: "max-w-lg",
   xl: "max-w-2xl",
+  "2xl": "max-w-5xl",
+  full: "max-w-6xl",
 };
 
 export interface ModalProps {
@@ -21,6 +23,9 @@ export interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   closeOnBackdrop?: boolean;
+  closeOnEscape?: boolean;
+  /** Stretch modal to nearly full viewport height */
+  fullHeight?: boolean;
 }
 
 export function Modal({
@@ -32,17 +37,21 @@ export function Modal({
   children,
   footer,
   closeOnBackdrop = true,
+  closeOnEscape = true,
+  fullHeight = false,
 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && closeOnEscape) onClose();
+    };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [open, onClose, closeOnEscape]);
 
   if (!open || typeof document === "undefined") return null;
 
@@ -58,13 +67,14 @@ export function Modal({
       />
       <div
         className={cn(
-          "relative z-10 w-full overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl shadow-black/50",
-          "animate-in fade-in zoom-in-95 duration-150",
+          "relative z-10 w-full overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-2xl shadow-black/50",
+          "opacity-0 animate-[menu-fade-in_150ms_ease-out_forwards]",
           sizeMap[size],
+          fullHeight && "flex h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex-col",
         )}
       >
         {(title || description) && (
-          <div className="flex items-start justify-between gap-4 border-b border-slate-800 p-5">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-800 p-5">
             <div>
               {title ? <h2 className="text-lg font-semibold">{title}</h2> : null}
               {description ? (
@@ -80,9 +90,18 @@ export function Modal({
             </button>
           </div>
         )}
-        <div className="max-h-[70vh] overflow-y-auto p-5">{children}</div>
+        <div
+          className={cn(
+            "p-5",
+            fullHeight
+              ? "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+              : "max-h-[70vh] overflow-y-auto",
+          )}
+        >
+          {children}
+        </div>
         {footer ? (
-          <div className="flex items-center justify-end gap-2 border-t border-slate-800 bg-slate-800/30 p-4">
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-800 bg-slate-800/30 p-4">
             {footer}
           </div>
         ) : null}

@@ -40,29 +40,42 @@ import { useLeads, useUpdateLead } from "@/lib/hooks/useLeads";
 import { useLorRequests } from "@/lib/hooks/useLor";
 import { useNotifications, useMarkNotificationAsRead } from "@/lib/hooks/useNotifications";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { useStudents } from "@/lib/hooks/useStudentProfile";
+import { useMentors } from "@/lib/hooks/useMentors";
+import { useMeetings } from "@/lib/hooks/useMeetings";
+import { useTasks } from "@/lib/hooks/useTasks";
+import { useActionItems } from "@/lib/hooks/useActionItems";
+import { useCourseSubmissions } from "@/lib/hooks/useCourses";
+import { normalizeStudents } from "@/lib/utils/normalizeStudent";
 import type { Lead } from "@/lib/types";
 
 export function AdminDashboardView() {
   const router = useRouter();
   const { user } = useAuth();
-  const [activeView, setActiveView] = useState<"overview" | "assignments" | "analytics">("overview");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [mentorSearch, setMentorSearch] = useState("");
 
-  // 1. Fetch real data using hooks
   const { data: users = [], isLoading: usersLoading } = useAdminUsers();
   const { data: leads = [], isLoading: leadsLoading } = useLeads();
   const { data: lorRequests = [], isLoading: lorLoading } = useLorRequests();
   const { data: notifications = [], isLoading: notificationsLoading } = useNotifications(true);
+  const { data: studentProfiles = [], isLoading: studentsLoading } = useStudents();
+  const { data: mentorProfiles = [], isLoading: mentorsLoading } = useMentors();
+  const { data: meetings = [] } = useMeetings();
+  const { data: staffTasks = [] } = useTasks();
+  const { data: actionItems = [] } = useActionItems();
+  const { data: courseSubmissions = [], isLoading: submissionsLoading } = useCourseSubmissions("PENDING");
 
   const markNotificationRead = useMarkNotificationAsRead();
   const updateLead = useUpdateLead();
 
-  // 2. Filter students and mentors
-  const students = useMemo(() => users.filter((u) => u.role === "STUDENT"), [users]);
-  const mentors = useMemo(() => users.filter((u) => u.role === "MENTOR"), [users]);
+  const students = useMemo(() => normalizeStudents(studentProfiles), [studentProfiles]);
+  const mentors = useMemo(
+    () => mentorProfiles.filter((m) => m.role !== "ADMIN"),
+    [mentorProfiles],
+  );
+  const userStudents = useMemo(() => users.filter((u) => u.role === "STUDENT"), [users]);
 
-  // 3. Aggregate urgent alerts
   const urgentAlerts = useMemo(() => {
     const alerts: Array<{
       id: string;
@@ -74,7 +87,6 @@ export function AdminDashboardView() {
       actionType: "LEAD" | "LOR" | "NOTIFICATION";
     }> = [];
 
-    // Filtered real notifications that are UNREAD from the database notification system
     notifications
       .filter((n) => !n.is_read)
       .forEach((n) => {
@@ -103,106 +115,117 @@ export function AdminDashboardView() {
     return alerts;
   }, [notifications]);
 
-  // Calculate statistics
   const stats = useMemo(() => {
-    const totalStudents = students.length;
-
-    // Lead conversion rate
+    const totalStudents = students.length || userStudents.length;
     const totalLeads = leads.length;
     const paidLeads = leads.filter((l) => l.isPaid).length;
     const conversionRate = totalLeads > 0 ? (paidLeads / totalLeads) * 100 : 0;
 
+    const readinessScores = { GREEN: 100, YELLOW: 50, RED: 0 } as const;
+    const withReadiness = students.filter((s) => s.readiness);
+    const avgReadiness =
+      withReadiness.length > 0
+        ? Math.round(
+            withReadiness.reduce(
+              (sum, s) => sum + (readinessScores[s.readiness as keyof typeof readinessScores] ?? 50),
+              0,
+            ) / withReadiness.length,
+          )
+        : null;
+
+    const readinessDist = {
+      green: students.filter((s) => s.readiness === "GREEN").length,
+      yellow: students.filter((s) => s.readiness === "YELLOW").length,
+      red: students.filter((s) => s.readiness === "RED").length,
+    };
+
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const inactiveStudents = students.filter((s) => {
+      const last =
+        s.lastMeetingDate || s.lastContactDate || s.profile?.last_meeting_date || s.profile?.last_contact_date;
+      if (!last) return true;
+      return new Date(last).getTime() < thirtyDaysAgo;
+    });
+
+    const avgCompliance =
+      mentors.length > 0
+        ? Math.round(
+            mentors.reduce(
+              (sum, m) =>
+                sum + (m.complianceScore ?? m.profile?.compliance_score ?? 0),
+              0,
+            ) / mentors.length,
+          )
+        : null;
+
     return {
       totalStudents,
       conversionRate: Math.round(conversionRate),
+      avgReadiness,
+      readinessDist,
+      inactiveCount: inactiveStudents.length,
+      avgCompliance,
     };
-  }, [students, leads]);
+  }, [students, userStudents, leads, mentors]);
 
-  // Filtered mentors list
+  const mentorMetrics = useMemo(() => {
+    const now = Date.now();
+    const map = new Map<
+      string,
+      { latency: string; noMtg: number; overdue: number; noTasks: number; compliance: number }
+    >();
+
+    for (const mentor of mentors) {
+      const studentIds = mentor.studentIds || students.filter((s) => s.mentorId === mentor.id).map((s) => s.id);
+      const mentorMeetings = meetings.filter((m) => (m.mentor_id || m.mentorId) === mentor.id);
+      const studentsWithoutMeeting = studentIds.filter((sid) => {
+        const hasUpcoming = mentorMeetings.some(
+          (m) => (m.student_id || m.studentId) === sid && !m.completed && new Date(m.date).getTime() >= now,
+        );
+        return !hasUpcoming;
+      }).length;
+
+      const overdue = [
+        ...actionItems.filter(
+          (a) =>
+            studentIds.includes(a.student_id || a.studentId || "") &&
+            a.status !== "COMPLETED" &&
+            new Date(a.due_date || a.dueDate || 0).getTime() < now,
+        ),
+        ...staffTasks.filter(
+          (t) =>
+            (t.assigned_to || t.assignedTo) === mentor.id &&
+            t.status !== "COMPLETED" &&
+            new Date(t.due_date || t.dueDate || 0).getTime() < now,
+        ),
+      ].length;
+
+      const pendingStaff = staffTasks.filter(
+        (t) => (t.assigned_to || t.assignedTo) === mentor.id && t.status !== "COMPLETED",
+      ).length;
+
+      map.set(mentor.id, {
+        latency: String(mentor.avgResponseTime ?? mentor.profile?.avg_response_time ?? "—"),
+        noMtg: studentsWithoutMeeting,
+        overdue,
+        noTasks: pendingStaff === 0 ? studentIds.length : 0,
+        compliance: mentor.complianceScore ?? mentor.profile?.compliance_score ?? 0,
+      });
+    }
+    return map;
+  }, [mentors, students, meetings, actionItems, staffTasks]);
+
   const filteredMentors = useMemo(() => {
-    return mentors.filter((m) =>
-      m.name.toLowerCase().includes(mentorSearch.toLowerCase()) ||
-      m.email.toLowerCase().includes(mentorSearch.toLowerCase())
+    return mentors.filter(
+      (m) =>
+        m.name.toLowerCase().includes(mentorSearch.toLowerCase()) ||
+        m.email.toLowerCase().includes(mentorSearch.toLowerCase()),
     );
   }, [mentors, mentorSearch]);
 
   const selectedLead = useMemo(() => {
     return leads.find((l) => l.id === selectedLeadId);
   }, [leads, selectedLeadId]);
-
-  if (activeView === "assignments") {
-    return (
-      <div className="space-y-6 pb-12">
-        <header className="flex items-center justify-between">
-          <div>
-            <button
-              onClick={() => setActiveView("overview")}
-              className="text-xs font-bold text-slate-500 uppercase tracking-widest hover:text-white mb-2 block transition-colors"
-            >
-              ← Back to Overview
-            </button>
-            <h2 className="text-3xl font-bold text-white mb-1">Student Assignments</h2>
-            <p className="text-sm text-slate-400 lg:hidden">Assign new students to mentors and manage workloads.</p>
-          </div>
-        </header>
-
-        <div className="flex flex-col items-center justify-center min-h-[400px] border border-dashed border-slate-800 rounded-3xl bg-slate-900/40 p-8 text-center">
-          <Users className="w-16 h-16 text-indigo-500/40 mb-4 animate-pulse" />
-          <span className="px-3 py-1 text-xs font-bold tracking-wider text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-full uppercase mb-3">
-            Coming Soon
-          </span>
-          <h3 className="text-xl font-bold text-white mb-2">Student Assignments Module Integration Pending</h3>
-          <p className="text-sm text-slate-500 max-w-lg mb-6">
-            Student-mentor relationship mappings, accept/decline flows, active workload distribution charts, 
-            and welcome templates require database schema migrations that are currently in progress.
-          </p>
-          <button
-            onClick={() => setActiveView("overview")}
-            className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl border border-slate-800 transition-all"
-          >
-            Return to Dashboard Overview
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (activeView === "analytics") {
-    return (
-      <div className="space-y-6 pb-12">
-        <header className="flex items-center justify-between">
-          <div>
-            <button
-              onClick={() => setActiveView("overview")}
-              className="text-xs font-bold text-slate-500 uppercase tracking-widest hover:text-white mb-2 block transition-colors"
-            >
-              ← Back to Overview
-            </button>
-            <h2 className="text-3xl font-bold text-white mb-1">Platform Analytics</h2>
-            <p className="text-sm text-slate-400 lg:hidden">Comprehensive dental school guide operational control & reports.</p>
-          </div>
-        </header>
-
-        <div className="flex flex-col items-center justify-center min-h-[400px] border border-dashed border-slate-800 rounded-3xl bg-slate-900/40 p-8 text-center">
-          <BarChart3 className="w-16 h-16 text-rose-500/40 mb-4 animate-pulse" />
-          <span className="px-3 py-1 text-xs font-bold tracking-wider text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-full uppercase mb-3">
-            Coming Soon
-          </span>
-          <h3 className="text-xl font-bold text-white mb-2">Operational Analytics Development Pending</h3>
-          <p className="text-sm text-slate-500 max-w-lg mb-6">
-            Advanced system-wide performance statistics, regional partner density analytics, and compliance log analytics 
-            are scheduled for the next development iteration. No mock metrics are displayed.
-          </p>
-          <button
-            onClick={() => setActiveView("overview")}
-            className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl border border-slate-800 transition-all"
-          >
-            Return to Dashboard Overview
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 lg:space-y-8 pb-12">
@@ -218,15 +241,15 @@ export function AdminDashboardView() {
         {/* Buttons matching exactly */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex gap-2">
           <button
-            onClick={() => setActiveView("assignments")}
-            className="flex items-center justify-center gap-2 px-4 lg:px-6 py-2.5 lg:py-3 bg-slate-900 border border-slate-800 text-white text-xs lg:text-sm font-bold rounded-2xl hover:bg-slate-800 transition-all"
+            onClick={() => router.push("/admin/mentors")}
+            className="flex items-center justify-center gap-2 px-4 lg:px-6 py-2.5 lg:py-3 bg-slate-900 border border-slate-800 text-white text-xs lg:text-sm font-bold rounded-2xl hover:bg-slate-800 transition-all cursor-pointer"
           >
             <Users className="w-4 h-4 text-emerald-400 shrink-0" />{" "}
             <span className="truncate">Student Assignments</span>
           </button>
           <button
-            onClick={() => setActiveView("analytics")}
-            className="flex items-center justify-center gap-2 px-4 lg:px-6 py-2.5 lg:py-3 bg-slate-900 border border-slate-800 text-white text-xs lg:text-sm font-bold rounded-2xl hover:bg-slate-800 transition-all"
+            onClick={() => router.push("/admin/analytics")}
+            className="flex items-center justify-center gap-2 px-4 lg:px-6 py-2.5 lg:py-3 bg-slate-900 border border-slate-800 text-white text-xs lg:text-sm font-bold rounded-2xl hover:bg-slate-800 transition-all cursor-pointer"
           >
             <BarChart3 className="w-4 h-4 text-rose-450 shrink-0" /> <span className="truncate">Platform Analytics</span>
           </button>
@@ -243,7 +266,7 @@ export function AdminDashboardView() {
             <FileCheck className="w-4 h-4 text-emerald-400 shrink-0" /> <span className="truncate">Letter Review</span>
           </button>
           <button
-            onClick={() => router.push("/admin/settings")}
+            onClick={() => router.push("/admin/rules-engine")}
             className="flex items-center justify-center gap-2 px-4 lg:px-6 py-2.5 lg:py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs lg:text-sm font-bold rounded-2xl transition-all col-span-2 sm:col-span-1"
           >
             <Settings className="w-4 h-4 shrink-0" /> <span className="truncate">Global Settings</span>
@@ -273,11 +296,13 @@ export function AdminDashboardView() {
             <div className="p-2 lg:p-3 bg-slate-950 rounded-xl lg:rounded-2xl border border-slate-800 text-emerald-400">
               <GraduationCap className="w-5 h-5 lg:w-6 lg:h-6" />
             </div>
-            <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-500/20">Coming Soon</span>
+            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg">Real-Time</span>
           </div>
           <p className="text-slate-500 font-bold text-[10px] lg:text-xs uppercase tracking-widest">Avg Readiness</p>
-          <p className="text-2xl lg:text-3xl font-black text-slate-450 mt-1">Coming Soon</p>
-          <p className="text-[9px] text-slate-550 mt-1">Database schema integration pending</p>
+          <p className="text-2xl lg:text-3xl font-black text-white mt-1">
+            {studentsLoading ? "..." : stats.avgReadiness !== null ? `${stats.avgReadiness}%` : "—"}
+          </p>
+          <p className="text-[9px] text-slate-550 mt-1">Based on GREEN / YELLOW / RED profiles</p>
         </div>
 
         {/* Lead Conversion */}
@@ -308,7 +333,7 @@ export function AdminDashboardView() {
         </div>
       </div>
 
-      {/* Student Inactivity Callout (Coming soon state styled verbatim from original layout) */}
+      {/* Student Inactivity Callout */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl lg:rounded-3xl p-5 lg:p-8 relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 lg:gap-6">
           <div className="flex items-center gap-4 lg:gap-6">
@@ -318,10 +343,20 @@ export function AdminDashboardView() {
             <div>
               <h3 className="text-lg lg:text-2xl font-bold text-white mb-1">Student Inactivity Monitor</h3>
               <p className="text-sm lg:text-base text-slate-400">
-                <span className="text-amber-400 font-bold">Coming Soon</span> — Meeting scheduler integration will automatically flag students inactive past 30 days.
+                <span className="text-amber-400 font-bold">{stats.inactiveCount} student{stats.inactiveCount === 1 ? "" : "s"}</span>{" "}
+                with no meeting/contact in the last 30 days
+                {stats.inactiveCount > 0 ? " — review Mentor Ops to re-engage." : "."}
               </p>
             </div>
           </div>
+          {stats.inactiveCount > 0 && (
+            <button
+              onClick={() => router.push("/admin/mentors")}
+              className="px-5 py-2.5 bg-amber-600/20 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-xl hover:bg-amber-600/30 transition-all cursor-pointer"
+            >
+              Open Mentor Ops
+            </button>
+          )}
         </div>
         <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none hidden lg:block">
           <Hourglass size={160} className="text-amber-500" />
@@ -456,11 +491,11 @@ export function AdminDashboardView() {
             </div>
             <div className="flex items-end gap-3">
               <div className="text-right hidden sm:block">
-                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Coming Soon</p>
-                <p className="text-[10px] font-bold text-slate-550">System Confidence: —</p>
+                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Live</p>
+                <p className="text-[10px] font-bold text-slate-550">From mentor profiles</p>
               </div>
-              <div className="text-2xl lg:text-3xl font-black text-slate-400 tracking-tighter">
-                Coming Soon
+              <div className="text-2xl lg:text-3xl font-black text-white tracking-tighter">
+                {stats.avgCompliance !== null ? `${stats.avgCompliance}%` : "—"}
               </div>
             </div>
           </div>
@@ -477,27 +512,79 @@ export function AdminDashboardView() {
                 <div className="w-3 h-3 rounded-full bg-rose-500" />
               </div>
             </div>
-            <div className="flex flex-col items-center justify-center h-36 lg:h-48 border border-dashed border-slate-850 rounded-2xl bg-slate-950/20 p-4 text-center">
-              <GraduationCap className="w-10 h-10 text-slate-700 mb-2 animate-pulse" />
-              <span className="px-2.5 py-0.5 text-[9px] font-black tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full uppercase mb-1">
-                Coming Soon
-              </span>
-              <p className="text-xs font-bold text-white mb-1">Readiness distribution map pending</p>
-              <p className="text-[10px] text-slate-500">Student evaluation matrices not yet integrated.</p>
-            </div>
+            {studentsLoading ? (
+              <div className="flex items-center justify-center h-36 lg:h-48 text-slate-500 text-sm">Loading…</div>
+            ) : (
+              <div className="space-y-4 h-36 lg:h-48 flex flex-col justify-center">
+                {[
+                  { label: "Green", count: stats.readinessDist.green, color: "bg-emerald-500", text: "text-emerald-400" },
+                  { label: "Yellow", count: stats.readinessDist.yellow, color: "bg-amber-500", text: "text-amber-400" },
+                  { label: "Red", count: stats.readinessDist.red, color: "bg-rose-500", text: "text-rose-400" },
+                ].map((row) => {
+                  const total = Math.max(stats.totalStudents, 1);
+                  const pct = Math.round((row.count / total) * 100);
+                  return (
+                    <div key={row.label} className="space-y-1.5">
+                      <div className="flex justify-between text-xs">
+                        <span className={`font-bold ${row.text}`}>{row.label}</span>
+                        <span className="text-slate-400 font-bold">
+                          {row.count} ({pct}%)
+                        </span>
+                      </div>
+                      <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                        <div className={`h-full ${row.color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Course Submissions Inbox */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl lg:rounded-3xl p-5 lg:p-8">
-            <h3 className="text-xl font-bold text-white mb-6">Course Submissions Inbox</h3>
-            <div className="flex flex-col items-center justify-center h-36 lg:h-48 border border-dashed border-slate-850 rounded-2xl bg-slate-950/20 p-4 text-center">
-              <FileCheck className="w-10 h-10 text-slate-700 mb-2 animate-pulse" />
-              <span className="px-2.5 py-0.5 text-[9px] font-black tracking-widest text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-full uppercase mb-1">
-                Coming Soon
-              </span>
-              <p className="text-xs font-bold text-white mb-1">Course submissions feed pending</p>
-              <p className="text-[10px] text-slate-500">shadowing worksheet & certificate modules pending deployment.</p>
+            <div className="mb-6 flex items-center justify-between gap-3">
+              <h3 className="text-xl font-bold text-white">Course Submissions Inbox</h3>
+              <button
+                type="button"
+                onClick={() => router.push("/admin/courses")}
+                className="text-xs font-bold text-indigo-400 hover:text-indigo-300"
+              >
+                View All
+              </button>
             </div>
+            {submissionsLoading ? (
+              <div className="flex h-36 items-center justify-center text-sm text-slate-500">Loading…</div>
+            ) : courseSubmissions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-36 lg:h-48 border border-dashed border-slate-850 rounded-2xl bg-slate-950/20 p-4 text-center">
+                <FileCheck className="w-10 h-10 text-slate-700 mb-2" />
+                <p className="text-xs font-bold text-white mb-1">No pending submissions</p>
+                <p className="text-[10px] text-slate-500">Worksheet & certificate reviews will show here.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {courseSubmissions.slice(0, 5).map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => router.push("/admin/courses")}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-left transition-colors hover:border-indigo-500/30"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">
+                        {sub.student?.name || sub.student?.email || "Student"}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {sub.course?.title || "Course"} · {sub.type}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                      Review
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -519,10 +606,22 @@ export function AdminDashboardView() {
 
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl cursor-help hover:bg-slate-800 transition-colors">
-                <div className="w-2 h-2 rounded-full bg-slate-500" />
-                <span className="text-xs font-bold text-slate-400">—</span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Compliance Status (Coming Soon)</span>
+              <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl">
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    (stats.avgCompliance ?? 0) >= 80
+                      ? "bg-emerald-500"
+                      : (stats.avgCompliance ?? 0) >= 50
+                        ? "bg-amber-500"
+                        : "bg-rose-500"
+                  }`}
+                />
+                <span className="text-xs font-bold text-slate-200">
+                  {stats.avgCompliance !== null ? `${stats.avgCompliance}%` : "—"}
+                </span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Avg Compliance
+                </span>
               </div>
             </div>
 
@@ -538,11 +637,13 @@ export function AdminDashboardView() {
           </div>
         </div>
 
-        {usersLoading ? (
+        {usersLoading || mentorsLoading ? (
           <div className="text-center py-12 text-slate-500">Loading mentors list...</div>
         ) : filteredMentors.length > 0 ? (
           <div className="grid grid-cols-1 gap-4">
-            {filteredMentors.map((mentor, idx) => (
+            {filteredMentors.map((mentor) => {
+              const metrics = mentorMetrics.get(mentor.id);
+              return (
               <div
                 key={mentor.id}
                 className="bg-slate-900 border border-slate-800 p-4 lg:p-6 rounded-2xl lg:rounded-3xl group hover:border-indigo-500/30 transition-all shadow-xl space-y-3 lg:space-y-0 lg:flex lg:flex-wrap lg:items-center lg:gap-8"
@@ -562,73 +663,75 @@ export function AdminDashboardView() {
                   </div>
                   <div className="min-w-0">
                     <h4 className="text-base lg:text-lg font-bold text-white tracking-tight group-hover:text-indigo-400 transition-colors truncate">{mentor.name}</h4>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Mentor Profile</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
+                      {(mentor.studentIds || []).length} students
+                    </p>
                   </div>
                 </div>
 
-                {/* Styled columns mirroring old dashboard verbatim, with Coming Soon values */}
                 <div className="grid grid-cols-3 lg:flex lg:flex-1 gap-1.5 lg:gap-6 lg:justify-around">
                   <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
                     <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
                       <Clock className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-indigo-400" /> Latency
                     </p>
-                    <p className="text-[10px] font-bold text-slate-550 mt-1 tracking-wide">Coming Soon</p>
+                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.latency ?? "—"}</p>
                   </div>
                   <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
                     <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
                       <CalendarX className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-amber-400" /> No Mtg
                     </p>
-                    <p className="text-[10px] font-bold text-slate-550 mt-1 tracking-wide">Coming Soon</p>
+                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.noMtg ?? 0}</p>
                   </div>
                   <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
                     <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
                       <AlertTriangle className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-rose-500" /> Overdue
                     </p>
-                    <p className="text-[10px] font-bold text-slate-550 mt-1 tracking-wide">Coming Soon</p>
+                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.overdue ?? 0}</p>
                   </div>
                   <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
                     <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
                       <Target className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-indigo-400" /> No Tasks
                     </p>
-                    <p className="text-[10px] font-bold text-slate-550 mt-1 tracking-wide">Coming Soon</p>
+                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.noTasks ?? 0}</p>
                   </div>
                   <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl col-span-2 lg:col-span-1">
                     <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
                       <UserCheck className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-emerald-450" /> Compliance
                     </p>
-                    <p className="text-[10px] font-bold text-slate-550 mt-1 tracking-wide">Coming Soon</p>
+                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.compliance ?? 0}%</p>
                   </div>
                 </div>
 
                 <div className="flex gap-2 lg:gap-3 flex-wrap">
                   <button
-                    onClick={() => toast.info("Direct messaging module coming soon")}
-                    className="p-2.5 lg:p-3 bg-slate-950 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-all border border-slate-800 shadow-lg"
+                    onClick={() => router.push("/admin/messages")}
+                    className="p-2.5 lg:p-3 bg-slate-950 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-all border border-slate-800 shadow-lg cursor-pointer"
                     title="Message Mentor"
                   >
                     <MessageSquare className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => toast.info("Students roster assignments coming soon")}
-                    className="px-3 lg:px-6 py-2.5 lg:py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all border border-slate-800 shadow-lg flex items-center gap-1.5"
+                    onClick={() => router.push("/admin/mentors")}
+                    className="px-3 lg:px-6 py-2.5 lg:py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all border border-slate-800 shadow-lg flex items-center gap-1.5 cursor-pointer"
                   >
                     <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4" /> Students
                   </button>
                   <button
-                    onClick={() => toast.info("Mentor profile details coming soon")}
-                    className="px-3 lg:px-6 py-2.5 lg:py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all border border-slate-800 shadow-lg flex items-center gap-1.5"
+                    onClick={() => router.push("/admin/mentors")}
+                    className="px-3 lg:px-6 py-2.5 lg:py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all border border-slate-800 shadow-lg flex items-center gap-1.5 cursor-pointer"
                   >
                     <User className="w-3.5 h-3.5 lg:w-4 lg:h-4" /> Profile
                   </button>
                   <button
-                    onClick={() => toast.info("Audit dashboard coming soon")}
-                    className="px-3 lg:px-6 py-2.5 lg:py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center gap-1.5"
+                    onClick={() => router.push("/admin/analytics")}
+                    className="px-3 lg:px-6 py-2.5 lg:py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center gap-1.5 cursor-pointer"
                   >
                     <Activity className="w-3.5 h-3.5 lg:w-4 lg:h-4" /> Audit
                   </button>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         ) : (
           <div className="bg-slate-900/40 border border-dashed border-slate-800 p-12 rounded-3xl text-center">

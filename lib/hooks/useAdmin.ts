@@ -6,10 +6,21 @@ import { queryKeys } from "@/lib/api/queryKeys";
 import type { Invitation, ManagedUser, UserRole } from "@/lib/types";
 
 /** Fetch all users (admin only). */
-export function useAdminUsers() {
+export function useAdminUsers(enabled = true) {
   return useQuery<ManagedUser[]>({
     queryKey: queryKeys.admin.users(),
     queryFn: adminApi.listUsers,
+    enabled,
+  });
+}
+
+/** Platform analytics for Global Data page. */
+export function useAdminAnalytics(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.admin.analytics(),
+    queryFn: adminApi.getAnalytics,
+    enabled,
+    staleTime: 60_000,
   });
 }
 

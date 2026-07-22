@@ -15,47 +15,57 @@ export interface EvaluationResponse {
   totalEarned: StudentBadge[];
 }
 
+type RawBadge = Badge & Record<string, unknown>;
+
+export function normalizeBadge(raw: RawBadge): Badge {
+  const benchmarkType = (raw.benchmarkType ??
+    raw.benchmark_type ??
+    "PROGRESS") as Badge["benchmark_type"];
+  const benchmarkValue = Number(raw.benchmarkValue ?? raw.benchmark_value ?? 0);
+
+  return {
+    ...raw,
+    id: raw.id,
+    name: raw.name,
+    description: raw.description,
+    icon: raw.icon,
+    color: raw.color,
+    benchmark_type: benchmarkType,
+    benchmarkType,
+    benchmark_value: benchmarkValue,
+    benchmarkValue,
+    created_at: String(raw.created_at ?? raw.createdAt ?? ""),
+    createdAt: String(raw.createdAt ?? raw.created_at ?? ""),
+    updated_at: String(raw.updated_at ?? raw.updatedAt ?? ""),
+    updatedAt: String(raw.updatedAt ?? raw.updated_at ?? ""),
+  };
+}
+
 export const badgesApi = {
-  /**
-   * Fetch the global catalog of badges and benchmarks.
-   */
   list: async (): Promise<Badge[]> => {
     const response = await apiGet<{ badges: Badge[] }>("/api/badges");
-    return response.badges || [];
+    return (response.badges || []).map((b) => normalizeBadge(b as RawBadge));
   },
 
-  /**
-   * Define a new badge benchmark (Admin only).
-   */
   create: async (payload: CreateBadgePayload): Promise<Badge> => {
-    return await apiPost<Badge>("/api/badges", payload);
+    const badge = await apiPost<Badge>("/api/badges", payload);
+    return normalizeBadge(badge as RawBadge);
   },
 
-  /**
-   * Update badge benchmark thresholds (Admin only).
-   */
   update: async (id: string, updates: Partial<CreateBadgePayload>): Promise<Badge> => {
-    return await apiPut<Badge>(`/api/badges/${id}`, updates);
+    const badge = await apiPut<Badge>(`/api/badges/${id}`, updates);
+    return normalizeBadge(badge as RawBadge);
   },
 
-  /**
-   * Delete a badge template (Admin only).
-   */
   remove: async (id: string): Promise<{ message: string }> => {
     return await apiDelete<{ message: string }>(`/api/badges/${id}`);
   },
 
-  /**
-   * Fetch all achievements earned by a specific student.
-   */
   getEarned: async (studentId: string): Promise<StudentBadge[]> => {
     const response = await apiGet<{ badges: StudentBadge[] }>(`/api/badges/student/${studentId}`);
     return response.badges || [];
   },
 
-  /**
-   * Trigger the reward engine evaluation logic to scan progress metrics and award qualifying badges.
-   */
   evaluate: async (studentId: string): Promise<EvaluationResponse> => {
     return await apiPost<EvaluationResponse>(`/api/badges/evaluate/${studentId}`);
   },

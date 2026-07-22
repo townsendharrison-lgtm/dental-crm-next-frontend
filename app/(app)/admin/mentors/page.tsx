@@ -1,20 +1,14 @@
-﻿"use client";
+"use client";
 
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, CardContent } from "@/components/ui/Card";
+import MentorOpsPage from "@/components/mentor/MentorOpsPage";
 
-export default function Page() {
+export default function AdminMentorsPage() {
   return (
-    <div>
-      <PageHeader
-        title="Placeholder"
-        description="This page is under construction."
-      />
-      <Card>
-        <CardContent className="pt-5">
-          <p className="text-sm text-slate-400">Coming soon.</p>
-        </CardContent>
-      </Card>
-    </div>
+    <MentorOpsPage
+      title="Mentor Ops"
+      subtitle="Comprehensive management of mentors and student assignments."
+      messagesHref="/admin/messages"
+      basePath="/admin/mentors"
+    />
   );
 }

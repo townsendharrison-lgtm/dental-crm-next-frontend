@@ -22,6 +22,11 @@ export interface CreateSchoolPayload {
   minCgpa5th?: number;
 }
 
+export type EnsureSchoolPayload = Partial<CreateSchoolPayload> & {
+  name: string;
+  location?: string;
+};
+
 export const schoolsApi = {
   /**
    * Fetch all dental schools. Supports search by name or location query.
@@ -37,6 +42,13 @@ export const schoolsApi = {
    */
   get: async (id: string): Promise<School> => {
     return await apiGet<School>(`/api/schools/${id}`);
+  },
+
+  /**
+   * Find school by name or create it (any authenticated user).
+   */
+  ensure: async (payload: EnsureSchoolPayload): Promise<School> => {
+    return await apiPost<School>("/api/schools/ensure", payload);
   },
 
   /**

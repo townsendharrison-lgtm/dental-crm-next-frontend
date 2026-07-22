@@ -36,7 +36,15 @@ export const surveysApi = {
    */
   list: async (): Promise<Survey[]> => {
     const response = await apiGet<{ surveys: Survey[] }>("/api/surveys");
-    return response.surveys || [];
+    return (response.surveys || []).map((s) => ({
+      ...s,
+      response_count: s.response_count ?? s.responseCount ?? 0,
+      responseCount: s.responseCount ?? s.response_count ?? 0,
+      last_response_at: s.last_response_at ?? s.lastResponseAt ?? null,
+      lastResponseAt: s.lastResponseAt ?? s.last_response_at ?? null,
+      has_responded: s.has_responded ?? s.hasResponded ?? false,
+      hasResponded: s.hasResponded ?? s.has_responded ?? false,
+    }));
   },
 
   /**

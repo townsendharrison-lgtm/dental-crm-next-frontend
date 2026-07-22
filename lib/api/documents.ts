@@ -3,7 +3,7 @@ import type { StudentDocument, DocumentType } from "@/lib/types";
 
 export interface UpdateDocumentPayload {
   title?: string;
-  status?: "Pending Review" | "Reviewed" | "Needs Revision";
+  status?: "Pending Review" | "Reviewed" | "Needs Revision" | "Cancelled";
   comment?: string;
   privateNote?: string;
 }
@@ -27,11 +27,7 @@ export const documentsApi = {
       formData.append("studentId", studentId);
     }
 
-    const { data } = await apiClient.post<StudentDocument>("/api/documents/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    const { data } = await apiClient.post<StudentDocument>("/api/documents/upload", formData);
     return data;
   },
 
