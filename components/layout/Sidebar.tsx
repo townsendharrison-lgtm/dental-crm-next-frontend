@@ -97,7 +97,7 @@ export function Sidebar() {
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="flex-1 truncate text-left">{item.label}</span>
                 {isInbox && unreadCount > 0 && (
-                  <span className="ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  <span className="ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold leading-none text-white">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
