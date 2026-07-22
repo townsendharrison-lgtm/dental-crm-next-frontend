@@ -10,7 +10,7 @@ export default function HubAnalyticsPage() {
     <AnalyticsTab
       student={student}
       experiences={experiences}
-      optimizationPlan={optimizationPlan}
+      optimizationPlan={optimizationPlan ?? undefined}
     />
   );
 }

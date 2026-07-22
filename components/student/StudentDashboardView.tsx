@@ -168,7 +168,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       { start: 10, end: 12 },
     ];
     const { start: startMonth, end: endMonth } = ranges[phaseNum - 1];
-    const createdAt = student.createdAt || student.created_at;
+    const createdAt = student.createdAt || student.profile?.created_at;
     if (!createdAt) return `${startMonth}-${endMonth} months`;
 
     const createdDate = new Date(createdAt);

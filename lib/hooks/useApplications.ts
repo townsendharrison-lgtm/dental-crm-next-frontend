@@ -37,16 +37,14 @@ export function useCreateApplication() {
     }) => {
       let schoolId = payload.schoolId;
       if (!schoolId) {
-        const ensured = await schoolsApi.ensure({
-          name: payload.schoolName,
-          location: payload.school?.location || "Unknown",
-          ...schoolEnsurePayloadFromHub({
+        const ensured = await schoolsApi.ensure(
+          schoolEnsurePayloadFromHub({
             id: "",
-            name: payload.schoolName,
-            location: payload.school?.location || "Unknown",
             ...(payload.school || {}),
+            name: payload.schoolName || payload.school?.name || "",
+            location: payload.school?.location || "Unknown",
           }),
-        });
+        );
         schoolId = ensured.id;
       }
       const created = await applicationsApi.create({

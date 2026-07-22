@@ -24,8 +24,13 @@ export function useStudent(id: string) {
 export function useUpdateStudent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<StudentProfile & { name?: string; avatar?: string }> }) =>
-      studentsApi.update(id, updates),
+    mutationFn: ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: Partial<Student> | Partial<StudentProfile & { name?: string; avatar?: string }>;
+    }) => studentsApi.update(id, updates),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: queryKeys.students.all() });
       qc.invalidateQueries({ queryKey: queryKeys.students.detail(updated.id) });

@@ -46,7 +46,7 @@ function meetingAudience(m: Meeting): MeetingAudience {
   ) {
     return m.audience;
   }
-  if ((m.audience as string) === "CUSTOM" || m.type === "MANAGER_MEETING") return "STAFF";
+  if (m.type === "MANAGER_MEETING" || String(m.audience ?? "") === "CUSTOM") return "STAFF";
   if (m.type === "GENERAL" && !(m.student_id || m.studentId)) return "MENTORS";
   return "STUDENT";
 }

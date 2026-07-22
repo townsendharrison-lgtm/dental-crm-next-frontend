@@ -58,7 +58,7 @@ export const studentsApi = {
    */
   update: async (
     id: string,
-    updates: Partial<StudentProfile & { name?: string; avatar?: string }>,
+    updates: Partial<Student> | Partial<StudentProfile & { name?: string; avatar?: string }>,
   ): Promise<Student> => {
     return await apiPut<Student>(`/api/students/${id}`, updates);
   },
