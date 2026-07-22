@@ -11,6 +11,7 @@ import {
   X,
   UserPlus,
 } from "lucide-react";
+import { parseLocalDate, isUpcomingMeetingDate } from "@/lib/utils/dateUtils";
 import type { Student, Meeting, StudentAssignment } from "@/lib/types";
 import { ReadinessStatus } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -170,10 +171,12 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
         (m) =>
           (m.studentId || m.student_id) === studentId &&
           !m.completed &&
-          new Date(m.date) > now,
+          isUpcomingMeetingDate(m.date, now),
       )
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
-    return upcoming ? new Date(upcoming.date).toLocaleDateString() : "—";
+      .sort(
+        (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
+      )[0];
+    return upcoming ? parseLocalDate(upcoming.date).toLocaleDateString() : "—";
   };
 
   const filtered = roster.filter((row) => {

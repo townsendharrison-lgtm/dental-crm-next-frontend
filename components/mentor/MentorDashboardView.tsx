@@ -213,7 +213,9 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       s.email?.toLowerCase().includes(studentSearch.toLowerCase()),
   );
 
-  const mentorTasks = staffTasks;
+  const mentorTasks = staffTasks.filter(
+    (t) => (t.assigned_to || t.assignedTo) === mentor.id,
+  );
 
   const assignedStudentIds = useMemo(
     () => new Set(assignedStudents.map((s) => s.id)),

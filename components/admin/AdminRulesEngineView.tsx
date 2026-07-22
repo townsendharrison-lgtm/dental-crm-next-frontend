@@ -408,7 +408,8 @@ export default function AdminRulesEngineView() {
             <div className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/40 px-3.5 py-3">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
               <p className="text-xs text-slate-400 leading-relaxed">
-                Keep it professional and set expectations. Students appreciate knowing their message was received.
+                Sent automatically from the advisor&apos;s account when a student messages and the
+                inactivity / rate-limit rules above are met.
               </p>
             </div>
           </SectionCard>

@@ -114,6 +114,17 @@ export const adminApi = {
     return apiDelete<{ message: string }>(`/api/admin/users/${id}`);
   },
 
+  /** Bulk delete student accounts created more than N years ago. */
+  bulkDeleteOldStudents: async (olderThanYears: number): Promise<{
+    message: string;
+    deleted: number;
+    matched: number;
+    cutoff: string;
+    failed: { id: string; error: string }[];
+  }> => {
+    return apiPost("/api/admin/users/bulk-delete-old-students", { olderThanYears });
+  },
+
   /** Update a user's role (admin only). */
   updateRole: async (id: string, role: string): Promise<{ message: string }> => {
     return apiPut<{ message: string }>(`/api/admin/users/${id}/role`, { role });

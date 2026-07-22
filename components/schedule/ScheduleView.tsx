@@ -315,11 +315,18 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
     let filteredStaffTasks = staffTasks;
 
     if (role === "MENTOR") {
-      filteredMeetings = meetings.filter(
-        (m) => meetingMentorId(m) === currentUserId || isBroadcastMeeting(m),
+      const mentorStudentIds = new Set(
+        mentors.find((m) => m.id === currentUserId)?.studentIds ||
+          students.map((s) => s.id),
       );
-      const mentorStudentIds = mentors.find((m) => m.id === currentUserId)?.studentIds || [];
-      filteredTasks = actionItems.filter((t) => mentorStudentIds.includes(actionStudentId(t)));
+      filteredMeetings = meetings.filter((m) => {
+        if (meetingMentorId(m) === currentUserId) return true;
+        if ((m.attendees || []).includes(currentUserId)) return true;
+        const sid = meetingStudentId(m);
+        if (sid && mentorStudentIds.has(sid)) return true;
+        return isBroadcastMeeting(m);
+      });
+      filteredTasks = actionItems.filter((t) => mentorStudentIds.has(actionStudentId(t)));
       filteredStaffTasks = staffTasks.filter(
         (t) => staffAssignedTo(t) === currentUserId && t.status !== "COMPLETED",
       );

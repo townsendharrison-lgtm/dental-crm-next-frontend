@@ -10,6 +10,7 @@ import {
   useResendInvitation,
   useDeleteUser,
   useUpdateUserRole,
+  useBulkDeleteOldStudents,
 } from "@/lib/hooks/useAdmin";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { Dropdown, DropdownItem } from "@/components/ui/Dropdown";
@@ -34,7 +35,9 @@ import {
   UserCheck,
   RotateCw,
   MoreVertical,
+  Eraser,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const ROLES: { value: UserRole; label: string; color: string }[] = [
   { value: "ADMIN", label: "Admin", color: "bg-rose-600/20 text-rose-400 border-rose-500/20" },
@@ -59,6 +62,7 @@ export default function UserManagement() {
   const resendInviteMutation = useResendInvitation();
   const deleteUserMutation = useDeleteUser();
   const updateRoleMutation = useUpdateUserRole();
+  const bulkDeleteMutation = useBulkDeleteOldStudents();
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState("");
@@ -73,6 +77,8 @@ export default function UserManagement() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editingRoleUserId, setEditingRoleUserId] = useState<string | null>(null);
   const [editingRoleValue, setEditingRoleValue] = useState<string>("");
+  const [bulkYears, setBulkYears] = useState(3);
+  const [bulkConfirm, setBulkConfirm] = useState(false);
 
   // Invitations local state
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
@@ -90,6 +96,37 @@ export default function UserManagement() {
 
   const pendingInvitations = useMemo(() => invitations.filter((i) => i.status === "PENDING"), [invitations]);
   const pastInvitations = useMemo(() => invitations.filter((i) => i.status !== "PENDING"), [invitations]);
+
+  const oldStudentCandidates = useMemo(() => {
+    const years = Math.max(1, Math.min(50, Number(bulkYears) || 1));
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - years);
+    return users.filter(
+      (u) =>
+        u.role === "STUDENT" &&
+        u.id !== currentUser?.id &&
+        u.created_at &&
+        new Date(u.created_at).getTime() < cutoff.getTime(),
+    );
+  }, [users, bulkYears, currentUser?.id]);
+
+  const handleBulkDeleteOldStudents = async () => {
+    const years = Math.max(1, Math.min(50, Number(bulkYears) || 1));
+    if (oldStudentCandidates.length === 0) {
+      toast.error("No matching student profiles for that age cutoff");
+      return;
+    }
+    try {
+      const result = await bulkDeleteMutation.mutateAsync(years);
+      setBulkConfirm(false);
+      toast.success(result.message || `Deleted ${result.deleted} students`);
+      if (result.failed?.length) {
+        toast.error(`${result.failed.length} deletion${result.failed.length === 1 ? "" : "s"} failed`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Bulk delete failed");
+    }
+  };
 
   const getRoleBadge = (role: string) => {
     const r = ROLES.find((rl) => rl.value === role);
@@ -326,6 +363,76 @@ export default function UserManagement() {
       {/* Users Section */}
       {activeSection === "users" && (
         <div className="space-y-4">
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 sm:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="min-w-0">
+                <div className="mb-1 flex items-center gap-2">
+                  <Eraser className="h-4 w-4 text-amber-400" />
+                  <h3 className="text-sm font-semibold text-white">Bulk delete old students</h3>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Remove student accounts created more than a chosen number of years ago. This cannot be undone.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Older than (years)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={bulkYears}
+                    onChange={(e) => setBulkYears(Number(e.target.value) || 1)}
+                    className="w-28 rounded-xl border border-input bg-surface px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+                {!bulkConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setBulkConfirm(true)}
+                    disabled={oldStudentCandidates.length === 0 || bulkDeleteMutation.isPending}
+                    className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Preview ({oldStudentCandidates.length})
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void handleBulkDeleteOldStudents()}
+                      disabled={bulkDeleteMutation.isPending}
+                      className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-500 disabled:opacity-50"
+                    >
+                      {bulkDeleteMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                      Delete {oldStudentCandidates.length}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkConfirm(false)}
+                      disabled={bulkDeleteMutation.isPending}
+                      className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-800"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            {bulkConfirm && (
+              <p className="mt-3 text-xs text-rose-300">
+                Confirm permanent deletion of {oldStudentCandidates.length} student profile
+                {oldStudentCandidates.length === 1 ? "" : "s"} older than {Math.max(1, Number(bulkYears) || 1)} year
+                {Math.max(1, Number(bulkYears) || 1) === 1 ? "" : "s"}.
+              </p>
+            )}
+          </div>
+
           <div className="flex items-center gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />

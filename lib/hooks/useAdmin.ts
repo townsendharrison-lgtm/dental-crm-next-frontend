@@ -94,6 +94,17 @@ export function useDeleteUser() {
   });
 }
 
+/** Bulk delete student accounts older than N years. */
+export function useBulkDeleteOldStudents() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (olderThanYears: number) => adminApi.bulkDeleteOldStudents(olderThanYears),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
+    },
+  });
+}
+
 /** Update a user's role. */
 export function useUpdateUserRole() {
   const qc = useQueryClient();

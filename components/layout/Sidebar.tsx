@@ -141,13 +141,6 @@ export function Sidebar() {
         </button>
         {isAuthenticated && (
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => logout()}
-              className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-800/50 px-4 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-slate-800 hover:text-white"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              Sign Out
-            </button>
             {isAdmin && previewCollapsed && (
               <button
                 onClick={() => setPreviewCollapsed(false)}
@@ -157,6 +150,13 @@ export function Sidebar() {
                 <Eye className="h-4 w-4" />
               </button>
             )}
+            <button
+              onClick={() => logout()}
+              className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-800/50 px-4 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-slate-800 hover:text-white"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              Sign Out
+            </button>
           </div>
         )}
       </div>

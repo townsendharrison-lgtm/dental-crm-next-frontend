@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
-import { useMentors } from "@/lib/hooks/useMentors";
+import { useMentors, useMentorStudents } from "@/lib/hooks/useMentors";
 import {
   useMeetings,
   useCreateMeeting,
@@ -26,11 +26,15 @@ function SchedulePageContent() {
   const { user } = useAuth();
   const { role } = useRole();
   const canListMentors = role === "ADMIN" || role === "MENTOR_MANAGER";
+  const isMentorRole = role === "MENTOR";
 
   const { data: studentsRaw = [], isLoading: isStudentsLoading } = useStudents();
+  const { data: mentorStudentsRaw = [], isLoading: isMentorStudentsLoading } = useMentorStudents(
+    isMentorRole && user?.id ? user.id : "",
+  );
   const { data: mentorsRaw = [], isLoading: isMentorsLoading } = useMentors(canListMentors);
-  const { data: meetings = [], isLoading: isMeetingsLoading } = useMeetings();
-  const { data: actionItems = [], isLoading: isActionItemsLoading } = useActionItems();
+  const { data: meetingsRaw = [], isLoading: isMeetingsLoading } = useMeetings();
+  const { data: actionItemsRaw = [], isLoading: isActionItemsLoading } = useActionItems();
   const { data: staffTasks = [], isLoading: isTasksLoading } = useTasks();
   const { data: inviteDirectory = [] } = useMeetingInviteDirectory(
     role === "ADMIN" || role === "MENTOR_MANAGER" || role === "MENTOR",
@@ -41,7 +45,29 @@ function SchedulePageContent() {
   const deleteMeetingMutation = useDeleteMeeting();
   const attendMeetingMutation = useAttendMeeting();
 
-  const students = useMemo(() => normalizeStudents(studentsRaw), [studentsRaw]);
+  const students = useMemo(() => {
+    const source = isMentorRole ? mentorStudentsRaw : studentsRaw;
+    return normalizeStudents(source);
+  }, [isMentorRole, mentorStudentsRaw, studentsRaw]);
+
+  const meetings = useMemo(
+    () =>
+      meetingsRaw.map((m) => ({
+        ...m,
+        studentId: m.studentId || m.student_id || undefined,
+        mentorId: m.mentorId || m.mentor_id || undefined,
+      })),
+    [meetingsRaw],
+  );
+
+  const actionItems = useMemo(
+    () =>
+      actionItemsRaw.map((item) => ({
+        ...item,
+        studentId: item.studentId || item.student_id || undefined,
+      })),
+    [actionItemsRaw],
+  );
 
   const mentors: Mentor[] = useMemo(() => {
     if (canListMentors) return mentorsRaw;
@@ -60,7 +86,7 @@ function SchedulePageContent() {
   if (
     !user ||
     !role ||
-    isStudentsLoading ||
+    (isMentorRole ? isMentorStudentsLoading : isStudentsLoading) ||
     (canListMentors && isMentorsLoading) ||
     isMeetingsLoading ||
     isActionItemsLoading ||

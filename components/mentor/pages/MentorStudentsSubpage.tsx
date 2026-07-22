@@ -17,6 +17,7 @@ import {
 import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useExperiences } from "@/lib/hooks/useExperiences";
 import { useOptimizationPlan, useUpsertOptimizationPlan, useDeleteOptimizationPlan } from "@/lib/hooks/useOptimizationPlans";
+import { toUpsertPlanPayload } from "@/lib/api/optimizationPlans";
 import { useLorRequests } from "@/lib/hooks/useLor";
 import { useTasks, useUpdateTask, useCreateTask, useDeleteTask } from "@/lib/hooks/useTasks";
 import {
@@ -191,7 +192,7 @@ function MentorStudentsSubpageInner({
         onUpdateImprovementGoal={() => {}}
         onDeleteImprovementGoal={() => {}}
         onUpdateOptimizationPlan={(plan) =>
-          upsertPlanMutation.mutate({ studentId, ...plan } as any)
+          upsertPlanMutation.mutate(toUpsertPlanPayload(studentId, plan))
         }
         onDeleteOptimizationPlan={(planId) => {
           deletePlanMutation.mutate(

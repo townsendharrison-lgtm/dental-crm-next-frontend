@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/mentors";
 import type { Mentor, Student, StudentAssignment } from "@/lib/types";
 import { normalizeMentors, normalizeAssignments } from "@/lib/utils/normalizeMentor";
+import { normalizeStudents } from "@/lib/utils/normalizeStudent";
 
 export function useMentors(enabled = true) {
   return useQuery<Mentor[]>({
@@ -29,7 +30,7 @@ export function useMentor(id: string) {
 export function useMentorStudents(mentorId: string) {
   return useQuery<Student[]>({
     queryKey: ["mentors", "students", mentorId],
-    queryFn: () => mentorsApi.listStudents(mentorId),
+    queryFn: async () => normalizeStudents(await mentorsApi.listStudents(mentorId)),
     enabled: !!mentorId,
   });
 }

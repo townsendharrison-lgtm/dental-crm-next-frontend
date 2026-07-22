@@ -97,7 +97,11 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
       : null,
   );
 
-  const visibleTasks = tasks.filter((t) => role === "ADMIN" || taskAssignedTo(t) === currentUserId);
+  const visibleTasks = tasks.filter((t) => {
+    if (role === "ADMIN") return true;
+    // Mentors / managers: only tasks assigned to them (not ones they created for others)
+    return taskAssignedTo(t) === currentUserId;
+  });
 
   const filteredTasks = visibleTasks
     .filter((t) => {

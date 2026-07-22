@@ -14,6 +14,7 @@ import {
 import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useExperiences } from "@/lib/hooks/useExperiences";
 import { useOptimizationPlan, useUpsertOptimizationPlan, useDeleteOptimizationPlan } from "@/lib/hooks/useOptimizationPlans";
+import { toUpsertPlanPayload } from "@/lib/api/optimizationPlans";
 import { useLorRequests } from "@/lib/hooks/useLor";
 import { useTasks, useUpdateTask, useCreateTask, useDeleteTask } from "@/lib/hooks/useTasks";
 import { useActionItems, useCreateActionItem, useUpdateActionItem, useDeleteActionItem } from "@/lib/hooks/useActionItems";
@@ -46,9 +47,19 @@ function MentorStudentsContent() {
   const { data: mentor } = useMentor(user?.id || "");
   const { data: allStudentsRaw = [], isLoading: isAllStudentsLoading } = useStudents();
   const allStudents = useMemo(() => normalizeStudents(allStudentsRaw), [allStudentsRaw]);
-  const { data: mentorStudents = [], isLoading: isMentorStudentsLoading } = useMentorStudents(user?.id || "");
+  const { data: mentorStudentsRaw = [], isLoading: isMentorStudentsLoading } = useMentorStudents(user?.id || "");
+  const mentorStudents = useMemo(() => normalizeStudents(mentorStudentsRaw), [mentorStudentsRaw]);
   const { data: pendingAssignments = [], isLoading: isPendingLoading } = useMyPendingAssignments(!!user?.id);
-  const { data: meetings = [], isLoading: isMeetingsLoading } = useMeetings();
+  const { data: meetingsRaw = [], isLoading: isMeetingsLoading } = useMeetings();
+  const meetings = useMemo(
+    () =>
+      meetingsRaw.map((m) => ({
+        ...m,
+        studentId: m.studentId || m.student_id || undefined,
+        mentorId: m.mentorId || m.mentor_id || undefined,
+      })),
+    [meetingsRaw],
+  );
   const { data: staffTasks = [], isLoading: isTasksLoading } = useTasks();
 
   const acceptAssignmentMutation = useAcceptAssignment();
@@ -99,9 +110,15 @@ function MentorStudentsContent() {
       );
     }
 
-    const filteredActionItems = actionItems.filter((ai) => ai.student_id === studentId);
-    const filteredMeetings = meetings.filter((m) => m.student_id === studentId);
-    const filteredTasks = staffTasks.filter((t) => t.student_id === studentId);
+    const filteredActionItems = actionItems.filter(
+      (ai) => (ai.student_id || ai.studentId) === studentId,
+    );
+    const filteredMeetings = meetings.filter(
+      (m) => (m.student_id || m.studentId) === studentId,
+    );
+    const filteredTasks = staffTasks.filter(
+      (t) => (t.student_id || t.studentId) === studentId,
+    );
 
     const handleAddActionItem = (
       studId: string,
@@ -171,7 +188,9 @@ function MentorStudentsContent() {
           }}
           onUpdateImprovementGoal={() => {}}
           onDeleteImprovementGoal={() => {}}
-          onUpdateOptimizationPlan={(plan) => upsertPlanMutation.mutate({ studentId, ...plan })}
+          onUpdateOptimizationPlan={(plan) =>
+            upsertPlanMutation.mutate(toUpsertPlanPayload(studentId, plan))
+          }
           onDeleteOptimizationPlan={(planId) => {
             deletePlanMutation.mutate(
               { id: planId, studentId },

@@ -1,5 +1,11 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "./client";
-import type { OptimizationPlan, KPIAssessment, RoadmapPhases, RiskFactor, LeverageAction } from "@/lib/types";
+import type {
+  OptimizationPlan,
+  KPIAssessment,
+  RoadmapPhases,
+  RiskFactor,
+  LeverageAction,
+} from "@/lib/types";
 
 export interface UpsertPlanPayload {
   studentId: string;
@@ -12,6 +18,40 @@ export interface UpsertPlanPayload {
   leverageActions?: LeverageAction[];
   strengths?: string[];
   gaps?: string[];
+}
+
+/** Map a full OptimizationPlan (or partial UI draft) into the upsert API shape. */
+export function toUpsertPlanPayload(
+  studentId: string,
+  plan: Partial<OptimizationPlan> & Record<string, unknown>,
+): UpsertPlanPayload {
+  const snapshot =
+    (typeof plan.snapshot === "string" && plan.snapshot) ||
+    (typeof plan.categories === "object" ? JSON.stringify(plan.categories) : "") ||
+    "";
+
+  return {
+    studentId,
+    snapshot,
+    overallScore:
+      typeof plan.overallScore === "number"
+        ? plan.overallScore
+        : typeof plan.overall_score === "number"
+          ? plan.overall_score
+          : undefined,
+    improvementLeverageScore:
+      typeof plan.improvementLeverageScore === "number"
+        ? plan.improvementLeverageScore
+        : typeof plan.improvement_leverage_score === "number"
+          ? plan.improvement_leverage_score
+          : undefined,
+    kpis: plan.kpis,
+    roadmap: plan.roadmap,
+    riskFactors: plan.riskFactors || plan.risk_factors,
+    leverageActions: plan.leverageActions || plan.leverage_actions,
+    strengths: plan.strengths,
+    gaps: plan.gaps,
+  };
 }
 
 export const optimizationPlansApi = {

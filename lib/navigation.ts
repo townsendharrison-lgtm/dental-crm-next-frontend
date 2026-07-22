@@ -18,6 +18,7 @@ import {
   Megaphone,
   Calendar as CalendarIcon,
   Target,
+  GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
@@ -40,7 +41,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { label: "Tasks", href: "/admin/tasks", icon: CheckSquare },
     { label: "Engagement & Comms", href: "/admin/engagement", icon: Megaphone },
     { label: "Mentor Ops", href: "/admin/mentors", icon: UserCog },
-    { label: "School Selection", href: "/admin/school-selection", icon: Target },
+    { label: "School Selection", href: "/admin/school-selection", icon: GraduationCap },
     { label: "Courses", href: "/admin/courses", icon: FileText },
     { label: "Global Data", href: "/admin/analytics", icon: BarChart3 },
     { label: "Admissions Research", href: "/admin/research", icon: Search },

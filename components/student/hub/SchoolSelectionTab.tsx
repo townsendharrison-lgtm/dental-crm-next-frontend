@@ -379,6 +379,11 @@ export default function SchoolSelectionTab({
         type: 'INTERVIEWED',
         message: platformConfig?.interviewMessage || "You've secured an interview! This is a huge step forward."
       });
+    } else if (status === ApplicationStatus.WAITLISTED) {
+      setShowCelebration({
+        type: 'WAITLISTED',
+        message: platformConfig?.waitlistMessage || "You're still in the running! A waitlist is a 'not yet', not a 'no'. Stay positive!"
+      });
     }
   };
 
