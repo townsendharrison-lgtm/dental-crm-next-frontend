@@ -23,11 +23,11 @@ export interface UpsertPlanPayload {
 /** Map a full OptimizationPlan (or partial UI draft) into the upsert API shape. */
 export function toUpsertPlanPayload(
   studentId: string,
-  plan: Partial<OptimizationPlan> & Record<string, unknown>,
+  plan: Partial<OptimizationPlan>,
 ): UpsertPlanPayload {
   const snapshot =
     (typeof plan.snapshot === "string" && plan.snapshot) ||
-    (typeof plan.categories === "object" ? JSON.stringify(plan.categories) : "") ||
+    (plan.categories ? JSON.stringify(plan.categories) : "") ||
     "";
 
   return {
