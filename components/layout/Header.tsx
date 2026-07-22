@@ -1,9 +1,27 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Clock, Target, Award, Smartphone, Download, AlertCircle, Menu, Check } from "lucide-react";
+import {
+  Bell,
+  Clock,
+  Target,
+  Award,
+  Smartphone,
+  Download,
+  AlertCircle,
+  Menu,
+  Check,
+  CheckCheck,
+  MessageCircle,
+  Calendar,
+  Users,
+  Info,
+  Sparkles,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/stores/uiStore";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -22,9 +40,65 @@ import {
   useClearAllNotifications,
 } from "@/lib/hooks/useNotifications";
 import type { SystemNotification } from "@/lib/types";
+import { cn } from "@/lib/utils/cn";
 
 const LOGO_URL =
   "https://images.squarespace-cdn.com/content/64d0277a0640507c114633ad/b8543df7-ec9e-4d64-912e-e80bb44c8757/Untitled+design-3.png?content-type=image%2Fpng";
+
+function notifCreatedAt(n: SystemNotification) {
+  return n.created_at || (n as { createdAt?: string }).createdAt || "";
+}
+
+function formatNotifTime(raw: string) {
+  if (!raw) return "";
+  const t = new Date(raw).getTime();
+  if (Number.isNaN(t)) return "";
+  const diffMs = Date.now() - t;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(raw).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function cleanNotifTitle(title: string) {
+  return title.replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\s]+/u, "").trim() || title;
+}
+
+function notifVisual(notif: SystemNotification) {
+  const category = (notif.category || "").toUpperCase();
+  const title = `${notif.title || ""} ${notif.message || ""}`.toLowerCase();
+  const type = (notif.type || "").toUpperCase();
+
+  if (category === "NEW_LEAD" || title.includes("lead")) {
+    return { icon: Target, tone: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" };
+  }
+  if (category === "BADGE" || title.includes("badge")) {
+    return { icon: Award, tone: "bg-amber-500/10 text-amber-400 border-amber-500/20" };
+  }
+  if (category.includes("MEETING") || title.includes("meeting")) {
+    return { icon: Calendar, tone: "bg-violet-500/10 text-violet-400 border-violet-500/20" };
+  }
+  if (category.includes("MESSAGE") || title.includes("message")) {
+    return { icon: MessageCircle, tone: "bg-sky-500/10 text-sky-400 border-sky-500/20" };
+  }
+  if (category === "ASSIGNMENT" || title.includes("assign")) {
+    return { icon: Users, tone: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20" };
+  }
+  if (title.includes("welcome")) {
+    return { icon: Sparkles, tone: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" };
+  }
+  if (type === "URGENT") {
+    return { icon: AlertCircle, tone: "bg-rose-500/10 text-rose-400 border-rose-500/20" };
+  }
+  if (type === "WARNING") {
+    return { icon: AlertCircle, tone: "bg-amber-500/10 text-amber-400 border-amber-500/20" };
+  }
+  return { icon: Info, tone: "bg-slate-800 text-slate-300 border-slate-700" };
+}
 
 function NotificationBell() {
   const queryClient = useQueryClient();
@@ -34,47 +108,67 @@ function NotificationBell() {
   const token = getAccessToken();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [filter, setFilter] = useState<"all" | "unread">("all");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported" | "pending">("pending");
+  const [notifPermission, setNotifPermission] = useState<
+    NotificationPermission | "unsupported" | "pending"
+  >("pending");
   const [isStandalone, setIsStandalone] = useState(false);
 
-  // Fetch notifications
-  const { data: notifications = [] } = useNotifications(true, !!user);
+  const { data: notifications = [], isLoading } = useNotifications(false, !!user);
 
-  // Mutations
   const markAsReadMutation = useMarkNotificationAsRead();
   const markAllAsReadMutation = useMarkAllNotificationsAsRead();
   const clearAllMutation = useClearAllNotifications();
 
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.is_read).length,
+    [notifications],
+  );
 
-  // Initialize permission status & standalone detection
+  const visibleNotifications = useMemo(() => {
+    const list = [...notifications].sort((a, b) => {
+      const unreadDelta = Number(!a.is_read) - Number(!b.is_read);
+      if (unreadDelta !== 0) return -unreadDelta;
+      return new Date(notifCreatedAt(b)).getTime() - new Date(notifCreatedAt(a)).getTime();
+    });
+    if (filter === "unread") return list.filter((n) => !n.is_read);
+    return list;
+  }, [notifications, filter]);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setNotifPermission("Notification" in window ? Notification.permission : "unsupported");
-      const standalone = window.matchMedia("(display-mode: standalone)").matches ||
-        (window.navigator as any).standalone === true;
+      setNotifPermission(
+        "Notification" in window ? Notification.permission : "unsupported",
+      );
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (window.navigator as { standalone?: boolean }).standalone === true;
       setIsStandalone(standalone);
     }
   }, []);
 
-  // Listen for click-outside to close the dropdown
   useEffect(() => {
     const clickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
     document.addEventListener("mousedown", clickOutside);
-    return () => document.removeEventListener("mousedown", clickOutside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", clickOutside);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
 
-  // 1. Supabase Realtime subscription
   useEffect(() => {
     if (!user?.id || !token) return;
 
-    // Set auth token for RLS compliance
     supabaseClient.realtime.setAuth(token);
 
     const channel = supabaseClient
@@ -88,13 +182,13 @@ function NotificationBell() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          const newNotif = payload.new as any;
+          const newNotif = payload.new as SystemNotification;
           toast.info(newNotif.title, {
             description: newNotif.message?.substring(0, 120),
             duration: 8000,
           });
           queryClient.invalidateQueries({ queryKey: ["notifications"] });
-        }
+        },
       )
       .subscribe();
 
@@ -103,7 +197,6 @@ function NotificationBell() {
     };
   }, [user?.id, token, queryClient]);
 
-  // 2. Firebase Foreground Listener
   useEffect(() => {
     const initialized = initializeFirebase();
     if (!initialized) return;
@@ -145,14 +238,17 @@ function NotificationBell() {
   };
 
   const handleMarkAllRead = () => {
+    if (unreadCount === 0) return;
     markAllAsReadMutation.mutate(undefined, {
-      onSuccess: () => toast.success("Marked all as read"),
+      onSuccess: () => toast.success("All notifications marked as read"),
     });
   };
 
   const handleClearAll = () => {
+    if (notifications.length === 0) return;
+    if (!window.confirm("Clear all notifications? This cannot be undone.")) return;
     clearAllMutation.mutate(undefined, {
-      onSuccess: () => toast.success("Cleared all notifications"),
+      onSuccess: () => toast.success("Notifications cleared"),
     });
   };
 
@@ -207,21 +303,32 @@ function NotificationBell() {
   };
 
   const isAdmin = role === "ADMIN";
+  const showInstallPrompt =
+    !isStandalone &&
+    typeof window !== "undefined" &&
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`relative rounded-xl border p-2.5 transition-all cursor-pointer ${isOpen
-          ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20"
-          : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
-          }`}
-        aria-label="Notifications"
+        type="button"
+        onClick={() => setIsOpen((o) => !o)}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        className={cn(
+          "relative cursor-pointer rounded-xl border p-2.5 transition-all",
+          isOpen
+            ? "border-indigo-500 bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+            : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white",
+        )}
+        aria-label={
+          unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"
+        }
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 border border-slate-950 px-1">
-            <span className="text-[9px] font-black text-white leading-none">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-slate-950 bg-rose-500 px-1">
+            <span className="text-[9px] font-black leading-none text-white">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           </span>
@@ -229,136 +336,209 @@ function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-[100] mt-3 w-[calc(100vw-2rem)] sm:w-96 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 origin-top-right">
-          <div className="p-4 bg-slate-950/50 border-b border-slate-800 flex justify-between items-center">
-            <h4 className="font-bold text-white">Notifications</h4>
-            <div className="flex gap-3">
-              {unreadCount > 0 && (
+        <div
+          role="dialog"
+          aria-label="Notifications"
+          className="absolute right-0 top-full z-[100] mt-2 w-[min(24rem,calc(100vw-1.5rem))] origin-top-right overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-2xl shadow-black/40 animate-in fade-in slide-in-from-top-2 duration-200"
+        >
+          {/* Header */}
+          <div className="border-b border-slate-800 bg-slate-950/60 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-white">Notifications</h4>
+                  {unreadCount > 0 && (
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-[10px] font-bold text-white">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  {unreadCount > 0
+                    ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"}`
+                    : "You're up to date"}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
                 <button
+                  type="button"
                   onClick={handleMarkAllRead}
-                  className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 uppercase tracking-widest cursor-pointer"
+                  disabled={unreadCount === 0 || markAllAsReadMutation.isPending}
+                  title="Mark all as read"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-indigo-300 transition-colors hover:bg-indigo-500/10 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Read All
+                  {markAllAsReadMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCheck className="h-3.5 w-3.5" />
+                  )}
+                  <span className="hidden sm:inline">Mark read</span>
                 </button>
-              )}
-              {notifications.length > 0 && (
                 <button
+                  type="button"
                   onClick={handleClearAll}
-                  className="text-[10px] font-bold text-slate-500 hover:text-indigo-400 uppercase tracking-widest cursor-pointer"
+                  disabled={notifications.length === 0 || clearAllMutation.isPending}
+                  title="Clear all"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-400 transition-colors hover:bg-rose-500/10 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Clear All
+                  {clearAllMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
                 </button>
-              )}
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="mt-3 flex gap-1 rounded-lg border border-slate-800 bg-slate-900/80 p-0.5">
+              {(["all", "unread"] as const).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setFilter(key)}
+                  className={cn(
+                    "flex-1 rounded-md px-3 py-1.5 text-[11px] font-semibold capitalize transition-colors",
+                    filter === key
+                      ? "bg-slate-800 text-white"
+                      : "text-slate-500 hover:text-slate-300",
+                  )}
+                >
+                  {key === "all" ? "All" : `Unread${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* FCM setup and PWA app installer */}
-          {isAdmin && (
-            <div className="border-b border-slate-800 bg-slate-950/20 divide-y divide-slate-800/50">
+          {/* Admin setup (compact) */}
+          {isAdmin && (notifPermission !== "unsupported" || showInstallPrompt) && (
+            <div className="space-y-2 border-b border-slate-800 bg-slate-950/30 px-3 py-2.5">
               {notifPermission !== "granted" && notifPermission !== "unsupported" && (
                 <button
+                  type="button"
                   onClick={handleEnablePush}
-                  className="w-full p-4 flex items-center gap-3 hover:bg-slate-800/30 transition-colors text-left cursor-pointer"
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border border-emerald-500/15 bg-emerald-500/5 px-3 py-2 text-left transition-colors hover:bg-emerald-500/10"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-emerald-600/20 flex items-center justify-center text-emerald-400 shrink-0 border border-emerald-500/20">
-                    <Bell className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-bold text-white">Enable Push Notifications</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
+                  <Bell className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-semibold text-white">
+                      Enable push alerts
+                    </span>
+                    <span className="block text-[10px] text-slate-500">
                       {notifPermission === "denied"
-                        ? "Blocked — enable in address bar or settings"
-                        : "Tap to get live alerts on incoming leads"}
-                    </p>
-                  </div>
-                  {notifPermission !== "denied" && (
-                    <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse shrink-0" />
-                  )}
+                        ? "Blocked in browser settings"
+                        : "Get live lead notifications"}
+                    </span>
+                  </span>
                 </button>
               )}
               {notifPermission === "granted" && (
-                <div className="p-4 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-600/20 flex items-center justify-center text-emerald-400 shrink-0 border border-emerald-500/20">
-                    <Check className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-bold text-emerald-400">Push Notifications Active</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">You'll receive lead push alerts</p>
-                  </div>
+                <div className="flex items-center gap-2 px-1 text-[11px] text-emerald-400">
+                  <Check className="h-3.5 w-3.5" />
+                  Push notifications active
                 </div>
               )}
-
-              {/* Install App prompt for mobile browser visitors */}
-              {!isStandalone &&
-                typeof window !== "undefined" &&
-                /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) && (
-                  <div className="p-4 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-blue-600/20 flex items-center justify-center text-blue-400 shrink-0 border border-blue-500/20">
-                      <Smartphone className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-bold text-white">Install CRM App</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 leading-normal">
-                        {/iPhone|iPad|iPod/i.test(navigator.userAgent)
-                          ? 'Tap Share ⎋ → "Add to Home Screen" for push alerts'
-                          : 'Tap ⋮ Menu → "Add to Home Screen"'}
-                      </p>
-                    </div>
-                    <Download className="w-4 h-4 text-blue-400 shrink-0" />
+              {showInstallPrompt && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-sky-500/15 bg-sky-500/5 px-3 py-2">
+                  <Smartphone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold text-white">Install CRM app</p>
+                    <p className="text-[10px] leading-relaxed text-slate-500">
+                      {/iPhone|iPad|iPod/i.test(navigator.userAgent)
+                        ? 'Share → "Add to Home Screen"'
+                        : 'Menu → "Add to Home Screen"'}
+                    </p>
                   </div>
-                )}
+                  <Download className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-400" />
+                </div>
+              )}
             </div>
           )}
 
-          <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-800">
-            {notifications.length > 0 ? (
-              notifications.map((notif) => {
-                const isUnread = !notif.is_read;
-                return (
-                  <div
-                    key={notif.id}
-                    onClick={() => handleNotificationClick(notif)}
-                    className={`p-4 hover:bg-slate-800/40 transition-colors flex gap-3 cursor-pointer ${isUnread ? "bg-indigo-950/10 border-l-2 border-l-indigo-500 pl-3.5" : ""
-                      }`}
-                  >
-                    <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${notif.category === "NEW_LEAD"
-                        ? "bg-emerald-600/20 text-emerald-400"
-                        : notif.category === "BADGE"
-                          ? "bg-amber-500/20 text-amber-400"
-                          : "bg-indigo-600/20 text-indigo-400"
-                        }`}
-                    >
-                      {notif.category === "NEW_LEAD" ? (
-                        <Target className="w-4 h-4" />
-                      ) : notif.category === "BADGE" ? (
-                        <Award className="w-4 h-4" />
-                      ) : (
-                        <Bell className="w-4 h-4" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-white">{notif.title}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed whitespace-pre-line">
-                        {notif.message}
-                      </p>
-                      <p className="text-[9px] text-slate-500 mt-2 flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5" />
-                        {new Date(notif.created_at).toLocaleString([], {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
+          {/* List */}
+          <div className="max-h-[min(28rem,60vh)] overflow-y-auto overscroll-contain">
+            {isLoading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading…</span>
+              </div>
+            ) : visibleNotifications.length > 0 ? (
+              <ul className="divide-y divide-slate-800/80">
+                {visibleNotifications.map((notif) => {
+                  const isUnread = !notif.is_read;
+                  const visual = notifVisual(notif);
+                  const Icon = visual.icon;
+                  const when = formatNotifTime(notifCreatedAt(notif));
+                  const title = cleanNotifTitle(notif.title || "Notification");
+                  const message = (notif.message || "").trim();
+
+                  return (
+                    <li key={notif.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleNotificationClick(notif)}
+                        className={cn(
+                          "flex w-full gap-3 px-4 py-3.5 text-left transition-colors",
+                          isUnread
+                            ? "bg-indigo-500/[0.06] hover:bg-indigo-500/10"
+                            : "hover:bg-slate-800/50",
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+                            visual.tone,
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start gap-2">
+                            <p
+                              className={cn(
+                                "min-w-0 flex-1 text-[13px] leading-snug",
+                                isUnread
+                                  ? "font-semibold text-white"
+                                  : "font-medium text-slate-200",
+                              )}
+                            >
+                              {title}
+                            </p>
+                            {isUnread && (
+                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
+                            )}
+                          </div>
+                          {message && (
+                            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
+                              {message}
+                            </p>
+                          )}
+                          {when && (
+                            <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-500">
+                              <Clock className="h-2.5 w-2.5" />
+                              {when}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             ) : (
-              <div className="p-8 text-center text-slate-500">
-                <Bell className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                <p className="text-sm">You're all caught up!</p>
+              <div className="px-6 py-12 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-slate-800 bg-slate-950 text-slate-600">
+                  <Bell className="h-5 w-5" />
+                </div>
+                <p className="text-sm font-medium text-slate-300">
+                  {filter === "unread" ? "No unread notifications" : "You're all caught up"}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {filter === "unread"
+                    ? "Switch to All to see earlier updates."
+                    : "New alerts will show up here."}
+                </p>
               </div>
             )}
           </div>
