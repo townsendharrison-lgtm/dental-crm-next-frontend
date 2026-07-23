@@ -76,7 +76,7 @@ export interface PlatformAnalytics {
 }
 
 export const adminApi = {
-  /** Platform analytics aggregations (admin only). */
+  /** Platform analytics aggregations (Admin + Mentor Manager). */
   getAnalytics: async (): Promise<PlatformAnalytics> => {
     return apiGet<PlatformAnalytics>("/api/admin/analytics");
   },
