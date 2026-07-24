@@ -6,10 +6,11 @@ import { queryKeys } from "@/lib/api/queryKeys";
 import { normalizeStudent, normalizeStudents } from "@/lib/utils/normalizeStudent";
 import type { Student, StudentProfile } from "@/lib/types";
 
-export function useStudents() {
+export function useStudents(enabled = true) {
   return useQuery<Student[]>({
     queryKey: queryKeys.students.all(),
     queryFn: async () => normalizeStudents(await studentsApi.list()),
+    enabled,
   });
 }
 

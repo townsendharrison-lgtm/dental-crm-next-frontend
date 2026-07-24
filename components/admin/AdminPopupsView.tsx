@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import type { PopupAdvertisement } from "@/lib/types";
 import {
   Plus,
@@ -13,12 +13,20 @@ import {
   Link as LinkIcon,
   Palette,
   Rocket,
+  Upload,
+  X,
+  BarChart3,
+  Loader2,
+  MousePointerClick,
+  ImageIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Textarea, FormField } from "@/components/ui/Form";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { SelectMenu } from "@/components/ui/SelectMenu";
+import { usePopupAnalytics, useUploadPopupImage } from "@/lib/hooks/usePopups";
 
 interface AdminPopupsViewProps {
   popups: PopupAdvertisement[];
@@ -105,12 +113,67 @@ function popupCtaUrl(p: PopupAdvertisement) {
 function popupDismissed(p: PopupAdvertisement) {
   return p.dismissedBy ?? p.dismissed_by ?? [];
 }
+function popupClicks(p: PopupAdvertisement) {
+  return p.clickCount ?? p.click_count ?? 0;
+}
 
 function targetLabel(role: string) {
   if (role === "STUDENT") return "Students";
   if (role === "MENTOR") return "Mentors";
   if (role === "BOTH") return "Everyone";
   return role;
+}
+
+function roleLabel(role: string) {
+  if (role === "STUDENT") return "Student";
+  if (role === "MENTOR") return "Mentor";
+  if (role === "MENTOR_MANAGER") return "Manager";
+  if (role === "ADMIN") return "Admin";
+  return role || "User";
+}
+
+function PopupCardPreview({
+  title,
+  message,
+  imageUrl,
+  ctaText,
+  backgroundColor,
+  textColor,
+}: {
+  title: string;
+  message: string;
+  imageUrl?: string;
+  ctaText?: string;
+  backgroundColor: string;
+  textColor: string;
+}) {
+  return (
+    <div
+      className="rounded-xl overflow-hidden border border-white/10 shadow-lg"
+      style={{ backgroundColor, color: textColor }}
+    >
+      {imageUrl ? (
+        <div className="h-40 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+        </div>
+      ) : null}
+      <div className="p-6 text-center space-y-3">
+        <h3 className="text-xl font-bold tracking-tight">{title || "Pop-up title"}</h3>
+        <p className="opacity-90 leading-relaxed text-sm">
+          {message || "Your message will appear here."}
+        </p>
+        {ctaText ? (
+          <span
+            className="inline-block px-6 py-2.5 rounded-xl font-bold text-sm"
+            style={{ backgroundColor: textColor, color: backgroundColor }}
+          >
+            {ctaText}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
@@ -123,7 +186,14 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPopup, setEditingPopup] = useState<PopupAdvertisement | null>(null);
   const [previewPopup, setPreviewPopup] = useState<PopupAdvertisement | null>(null);
+  const [draftPreviewOpen, setDraftPreviewOpen] = useState(false);
+  const [analyticsPopupId, setAnalyticsPopupId] = useState<string | null>(null);
   const [formData, setFormData] = useState<PopupFormState>(defaultForm);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const uploadMutation = useUploadPopupImage();
+  const { data: analytics, isLoading: analyticsLoading } = usePopupAnalytics(analyticsPopupId);
 
   const openCreate = () => {
     setEditingPopup(null);
@@ -147,6 +217,33 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
       isActive: popupActive(popup),
     });
     setIsModalOpen(true);
+  };
+
+  const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be under 5MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const result = await uploadMutation.mutateAsync(file);
+      setFormData((prev) => ({ ...prev, imageUrl: result.url }));
+      toast.success("Image uploaded");
+    } catch (err: any) {
+      toast.error(err?.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -226,6 +323,7 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
             const start = popupStart(popup);
             const end = popupEnd(popup);
             const dismissed = popupDismissed(popup);
+            const clicks = popupClicks(popup);
 
             return (
               <div
@@ -244,7 +342,10 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
                       <Palette className="w-8 h-8 text-white/20" />
                     )}
                     <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-wider line-clamp-1" style={{ color: fg }}>
+                      <p
+                        className="text-[10px] font-bold uppercase tracking-wider line-clamp-1"
+                        style={{ color: fg }}
+                      >
                         {popup.title}
                       </p>
                     </div>
@@ -266,9 +367,19 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
                       <div className="flex gap-1 shrink-0">
                         <button
                           type="button"
+                          onClick={() => setAnalyticsPopupId(popup.id)}
+                          className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-emerald-400 transition-colors cursor-pointer"
+                          aria-label="Analytics"
+                          title="CTA analytics"
+                        >
+                          <BarChart3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setPreviewPopup(popup)}
                           className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors cursor-pointer"
                           aria-label="Preview"
+                          title="Preview"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -282,7 +393,9 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => onDeletePopup(popup.id)}
+                          onClick={() => {
+                            if (confirm("Delete this pop-up campaign?")) onDeletePopup(popup.id);
+                          }}
                           className="p-2 hover:bg-rose-500/10 rounded-lg text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
                           aria-label="Delete"
                         >
@@ -304,6 +417,10 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
                       <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                         <CheckCircle className="w-3.5 h-3.5 text-indigo-400" />
                         {dismissed.length} dismissed
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                        <MousePointerClick className="w-3.5 h-3.5 text-emerald-400" />
+                        {clicks} CTA click{clicks === 1 ? "" : "s"}
                       </div>
                       <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                         <LinkIcon className="w-3.5 h-3.5 text-indigo-400" />
@@ -352,13 +469,72 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
             />
           </FormField>
 
-          <FormField label="Image URL (optional)">
-            <Input
-              type="url"
-              value={formData.imageUrl}
-              onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-              placeholder="https://..."
-            />
+          <FormField
+            label="Image (optional)"
+            hint="Upload to Supabase Storage, or paste a URL. Leave empty for text-only."
+          >
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => void handleImageFile(e)}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={
+                    uploading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4" />
+                    )
+                  }
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? "Uploading…" : "Upload image"}
+                </Button>
+                {formData.imageUrl ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<X className="w-4 h-4" />}
+                    onClick={() => setFormData({ ...formData, imageUrl: "" })}
+                  >
+                    Remove image
+                  </Button>
+                ) : null}
+              </div>
+              <Input
+                type="url"
+                value={formData.imageUrl}
+                onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                placeholder="Or paste image URL (optional)"
+              />
+              {formData.imageUrl ? (
+                <div className="h-28 rounded-lg overflow-hidden border border-slate-800 bg-slate-950">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={formData.imageUrl}
+                    alt="Campaign"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="h-20 rounded-lg border border-dashed border-slate-800 flex items-center justify-center gap-2 text-xs text-slate-600">
+                  <ImageIcon className="w-4 h-4" />
+                  No image — text-only pop-up
+                </div>
+              )}
+            </div>
           </FormField>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -452,7 +628,7 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
             Active and visible
           </label>
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
             <Button
               type="button"
               variant="secondary"
@@ -463,9 +639,44 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
             >
               Cancel
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              leftIcon={<Eye className="w-4 h-4" />}
+              onClick={() => setDraftPreviewOpen(true)}
+            >
+              Preview
+            </Button>
             <Button type="submit">{editingPopup ? "Update Pop-up" : "Create Pop-up"}</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={draftPreviewOpen}
+        onClose={() => setDraftPreviewOpen(false)}
+        size="lg"
+        title="Preview before sending"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">
+            This is how the pop-up will look to{" "}
+            {targetLabel(formData.targetRole).toLowerCase()} once it goes live.
+          </p>
+          <PopupCardPreview
+            title={formData.title}
+            message={formData.message}
+            imageUrl={formData.imageUrl || undefined}
+            ctaText={formData.ctaText || undefined}
+            backgroundColor={formData.backgroundColor}
+            textColor={formData.textColor}
+          />
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => setDraftPreviewOpen(false)}>
+              Looks good
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <Modal
@@ -475,42 +686,89 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
         title="Preview"
       >
         {previewPopup && (
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{
-              backgroundColor: popupBg(previewPopup),
-              color: popupFg(previewPopup),
-            }}
-          >
-            {popupImage(previewPopup) && (
-              <div className="h-48 overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={popupImage(previewPopup)}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
+          <PopupCardPreview
+            title={previewPopup.title}
+            message={previewPopup.message}
+            imageUrl={popupImage(previewPopup) || undefined}
+            ctaText={popupCta(previewPopup) || undefined}
+            backgroundColor={popupBg(previewPopup)}
+            textColor={popupFg(previewPopup)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={!!analyticsPopupId}
+        onClose={() => setAnalyticsPopupId(null)}
+        size="lg"
+        title="CTA analytics"
+      >
+        {analyticsLoading ? (
+          <div className="flex items-center justify-center py-12 text-slate-500 gap-2">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Loading analytics…
+          </div>
+        ) : analytics ? (
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-base font-semibold text-white">{analytics.title}</h4>
+              <p className="text-sm text-slate-500">Engagement for this campaign</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  CTA clicks
+                </p>
+                <p className="text-2xl font-bold text-emerald-400">{analytics.clickCount}</p>
+                <p className="text-xs text-slate-600 mt-1">Unique people</p>
               </div>
-            )}
-            <div className="p-8 text-center space-y-4">
-              <h3 className="text-2xl font-bold tracking-tight">{previewPopup.title}</h3>
-              <p className="opacity-90 leading-relaxed">{previewPopup.message}</p>
-              {popupCta(previewPopup) && (
-                <a
-                  href={popupCtaUrl(previewPopup) || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block px-8 py-3 rounded-xl font-bold hover:scale-105 transition-transform"
-                  style={{
-                    backgroundColor: popupFg(previewPopup),
-                    color: popupBg(previewPopup),
-                  }}
-                >
-                  {popupCta(previewPopup)}
-                </a>
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Dismissed
+                </p>
+                <p className="text-2xl font-bold text-slate-300">{analytics.dismissCount}</p>
+                <p className="text-xs text-slate-600 mt-1">Maybe later / closed</p>
+              </div>
+            </div>
+
+            <div>
+              <h5 className="text-sm font-semibold text-white mb-2">Who clicked the CTA</h5>
+              {analytics.clicks.length === 0 ? (
+                <p className="text-sm text-slate-500 py-6 text-center border border-dashed border-slate-800 rounded-xl">
+                  No CTA clicks yet.
+                </p>
+              ) : (
+                <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-800 divide-y divide-slate-800">
+                  {analytics.clicks.map((c) => (
+                    <div
+                      key={`${c.userId}-${c.clickedAt}`}
+                      className="flex items-center justify-between gap-3 px-3 py-2.5 bg-slate-950/50"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{c.name}</p>
+                        <p className="text-xs text-slate-500 truncate">
+                          {c.email}
+                          {c.role ? ` · ${roleLabel(c.role)}` : ""}
+                        </p>
+                      </div>
+                      <p className="text-[11px] text-slate-500 shrink-0">
+                        {c.clickedAt
+                          ? new Date(c.clickedAt).toLocaleString([], {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
+        ) : (
+          <p className="text-sm text-slate-500 text-center py-8">Could not load analytics.</p>
         )}
       </Modal>
     </div>

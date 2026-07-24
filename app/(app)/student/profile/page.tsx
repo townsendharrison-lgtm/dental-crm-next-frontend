@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/lib/hooks/useAuth";
+import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useStudent, useUpdateStudent } from "@/lib/hooks/useStudentProfile";
 import { StudentProfileDocumentsView } from "@/components/student/StudentProfileDocumentsView";
 import { Loader2 } from "lucide-react";
@@ -8,10 +9,11 @@ import { toast } from "sonner";
 
 export default function StudentProfilePage() {
   const { user } = useAuth();
-  const { data: student, isLoading } = useStudent(user?.id || "");
+  const { subjectId, isLoadingSubjects } = usePreviewSubject("STUDENT");
+  const { data: student, isLoading } = useStudent(subjectId);
   const updateStudentMutation = useUpdateStudent();
 
-  if (isLoading || !user) {
+  if (isLoadingSubjects || isLoading || !user) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />

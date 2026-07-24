@@ -17,6 +17,7 @@ import {
   Pin,
   Users,
   Info,
+  ImagePlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -28,6 +29,10 @@ import { studentsApi } from "@/lib/api/students";
 import { mentorsApi } from "@/lib/api/mentors";
 import { usersApi } from "@/lib/api/users";
 import type { Conversation, Message } from "@/lib/types";
+import {
+  MessageBubbleBody,
+  conversationPreviewText,
+} from "@/components/messages/MessageBubbleBody";
 
 export type InboxVariant = "admin" | "mentor" | "student";
 
@@ -125,6 +130,9 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   const [hydratedConversation, setHydratedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [replyText, setReplyText] = useState("");
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [loadingConv, setLoadingConv] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
@@ -334,6 +342,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
       const list = await messagesApi.listMessages(convId);
       setMessages(list);
       await messagesApi.markAsRead(convId).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     } catch (err) {
       console.error("Failed to load messages:", err);
       if (!silent) toast.error("Failed to fetch messages.");
@@ -343,6 +352,14 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   };
 
   useEffect(() => {
+    setReplyText("");
+    setPendingImage(null);
+    setPendingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    if (imageInputRef.current) imageInputRef.current.value = "";
+
     if (selectedConversationId) {
       loadMessages(selectedConversationId);
       const msgInterval = setInterval(() => {
@@ -443,19 +460,53 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     }
   };
 
+  const clearPendingImage = () => {
+    setPendingImage(null);
+    if (pendingImagePreview) URL.revokeObjectURL(pendingImagePreview);
+    setPendingImagePreview(null);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  const handlePickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image must be under 10MB.");
+      e.target.value = "";
+      return;
+    }
+    if (pendingImagePreview) URL.revokeObjectURL(pendingImagePreview);
+    setPendingImage(file);
+    setPendingImagePreview(URL.createObjectURL(file));
+  };
+
   const handleSendMessage = async () => {
-    if (!replyText.trim() || !selectedConversationId || sending) return;
+    if ((!replyText.trim() && !pendingImage) || !selectedConversationId || sending) return;
     setSending(true);
     const textToSend = replyText;
+    const imageToSend = pendingImage;
     setReplyText("");
+    clearPendingImage();
     try {
-      const response = await messagesApi.sendMessage(selectedConversationId, textToSend);
+      const response = await messagesApi.sendMessage(selectedConversationId, {
+        text: textToSend,
+        file: imageToSend || undefined,
+      });
       setMessages((prev) => [...prev, response]);
       loadConversations(true);
     } catch (err) {
       console.error("Send message error:", err);
       toast.error("Failed to dispatch message.");
       setReplyText(textToSend);
+      if (imageToSend) {
+        setPendingImage(imageToSend);
+        setPendingImagePreview(URL.createObjectURL(imageToSend));
+      }
     } finally {
       setSending(false);
     }
@@ -708,7 +759,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                         {isGroupChat ? (
                           <span className="text-slate-400">Group · </span>
                         ) : null}
-                        {c.lastMessage?.text || "No messages yet"}
+                        {conversationPreviewText(c.lastMessage)}
                       </p>
                     </div>
 
@@ -858,7 +909,13 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                                   : "bg-slate-800 text-slate-100 rounded-2xl rounded-bl-md"
                               }`}
                             >
-                              <div className="whitespace-pre-wrap break-words">{msg.text}</div>
+                              <MessageBubbleBody
+                                text={msg.text}
+                                attachmentUrl={msg.attachment_url}
+                                attachmentName={msg.attachment_name}
+                                linkPreview={msg.link_preview}
+                                isMe={isMe}
+                              />
                             </div>
                             <p
                               className={`text-[10px] text-slate-600 ${
@@ -876,21 +933,66 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
               </div>
 
               <div className="px-4 py-3 border-t border-slate-800/80 bg-slate-950/80 shrink-0">
+                {pendingImagePreview && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="relative h-16 w-16 rounded-lg overflow-hidden border border-slate-700">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={pendingImagePreview}
+                        alt="Selected"
+                        className="h-full w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={clearPendingImage}
+                        className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black cursor-pointer"
+                        aria-label="Remove image"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 truncate max-w-[180px]">
+                      {pendingImage?.name}
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                    className="hidden"
+                    onChange={handlePickImage}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={sending}
+                    className="h-10 w-10 rounded-xl flex items-center justify-center bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-600 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                    aria-label="Attach image"
+                    title="Attach image"
+                  >
+                    <ImagePlus className="w-4 h-4" />
+                  </button>
                   <input
                     type="text"
                     placeholder="Write a message…"
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
                     className="flex-1 bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-slate-600 transition-colors text-white placeholder:text-slate-500"
                   />
                   <button
                     type="button"
                     onClick={handleSendMessage}
-                    disabled={!replyText.trim() || sending}
+                    disabled={(!replyText.trim() && !pendingImage) || sending}
                     className={`h-10 w-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
-                      replyText.trim() && !sending
+                      (replyText.trim() || pendingImage) && !sending
                         ? "bg-indigo-600 text-white hover:bg-indigo-500"
                         : "bg-slate-800 text-slate-600"
                     }`}

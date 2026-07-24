@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useStudent, useStudentStrengthPercentile } from "@/lib/hooks/useStudentProfile";
 import { useBadges, useEarnedBadges, useEvaluateBadges } from "@/lib/hooks/useBadges";
 import { useActionItems, useUpdateActionItem } from "@/lib/hooks/useActionItems";
@@ -35,13 +36,14 @@ function surveyIsActive(s: Survey) {
 export default function StudentMomentumPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { subjectId, isLoadingSubjects } = usePreviewSubject("STUDENT");
   const platformConfig = usePlatformConfig();
-  const { data: student, isLoading: isStudentLoading } = useStudent(user?.id || "");
-  const { data: strengthPercentile } = useStudentStrengthPercentile(user?.id || "");
+  const { data: student, isLoading: isStudentLoading } = useStudent(subjectId);
+  const { data: strengthPercentile } = useStudentStrengthPercentile(subjectId);
   const { data: badges = [] } = useBadges();
-  const { data: earnedBadgeRows = [] } = useEarnedBadges(user?.id || "");
+  const { data: earnedBadgeRows = [] } = useEarnedBadges(subjectId);
   const evaluateBadges = useEvaluateBadges();
-  const { data: actionItems = [] } = useActionItems(user?.id || "");
+  const { data: actionItems = [] } = useActionItems(subjectId);
   const { data: notifications = [] } = useNotifications();
   const { data: surveys = [] } = useSurveys();
   const { data: meetings = [] } = useMeetings();
@@ -61,10 +63,10 @@ export default function StudentMomentumPage() {
   }, []);
 
   useEffect(() => {
-    if (!user?.id) return;
-    evaluateBadges.mutate(user.id);
+    if (!subjectId) return;
+    evaluateBadges.mutate(subjectId);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- evaluate once per student session open
-  }, [user?.id]);
+  }, [subjectId]);
 
   const studentWithBadges = useMemo(() => {
     if (!student) return null;
@@ -93,7 +95,7 @@ export default function StudentMomentumPage() {
     [surveys, justCompletedIds],
   );
 
-  if (isStudentLoading || !user) {
+  if (isLoadingSubjects || isStudentLoading || !user) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />

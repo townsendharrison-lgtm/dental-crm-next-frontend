@@ -30,6 +30,13 @@ interface UIState {
   previewRole: UserRole | null;
   setPreviewRole: (role: UserRole | null) => void;
 
+  /**
+   * When admin previews STUDENT/MENTOR, which real account to load data for.
+   * Cleared when leaving preview or switching role.
+   */
+  previewSubjectId: string | null;
+  setPreviewSubjectId: (id: string | null) => void;
+
   /** Previews bar collapsed state. */
   previewCollapsed: boolean;
   setPreviewCollapsed: (collapsed: boolean) => void;
@@ -55,7 +62,15 @@ export const useUIStore = create<UIState>()(
       closeMobileSidebar: () => set({ mobileSidebarOpen: false }),
 
       previewRole: null,
-      setPreviewRole: (previewRole) => set({ previewRole }),
+      setPreviewRole: (previewRole) =>
+        set({
+          previewRole,
+          // Reset subject when switching / exiting preview
+          previewSubjectId: null,
+        }),
+
+      previewSubjectId: null,
+      setPreviewSubjectId: (previewSubjectId) => set({ previewSubjectId }),
 
       previewCollapsed: false,
       setPreviewCollapsed: (previewCollapsed) => set({ previewCollapsed }),
@@ -68,6 +83,7 @@ export const useUIStore = create<UIState>()(
       partialize: (s) => ({
         sidebarCollapsed: s.sidebarCollapsed,
         previewCollapsed: s.previewCollapsed,
+        // Only persist role preview — subject is re-resolved on load
         previewRole: s.previewRole,
       }),
     },

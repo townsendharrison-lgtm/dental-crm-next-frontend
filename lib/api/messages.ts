@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete } from "./client";
+import { apiGet, apiPost, apiPut, apiDelete, apiClient } from "./client";
 import type { Conversation, Message } from "@/lib/types";
 
 export interface CreateConversationPayload {
@@ -8,7 +8,8 @@ export interface CreateConversationPayload {
 }
 
 export interface SendMessagePayload {
-  text: string;
+  text?: string;
+  file?: File;
 }
 
 export const messagesApi = {
@@ -55,10 +56,32 @@ export const messagesApi = {
   },
 
   /**
-   * Send a text message inside a conversation thread.
+   * Send a text and/or image message inside a conversation thread.
    */
-  sendMessage: async (conversationId: string, text: string): Promise<Message> => {
-    return await apiPost<Message>(`/api/conversations/${conversationId}/messages`, { text });
+  sendMessage: async (
+    conversationId: string,
+    textOrPayload: string | SendMessagePayload,
+    file?: File,
+  ): Promise<Message> => {
+    const payload: SendMessagePayload =
+      typeof textOrPayload === "string"
+        ? { text: textOrPayload, file }
+        : textOrPayload;
+
+    if (payload.file) {
+      const formData = new FormData();
+      if (payload.text?.trim()) formData.append("text", payload.text.trim());
+      formData.append("file", payload.file);
+      const { data } = await apiClient.post<Message>(
+        `/api/conversations/${conversationId}/messages`,
+        formData,
+      );
+      return data;
+    }
+
+    return await apiPost<Message>(`/api/conversations/${conversationId}/messages`, {
+      text: payload.text ?? "",
+    });
   },
 
   /**

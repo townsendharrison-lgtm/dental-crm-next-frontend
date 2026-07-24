@@ -4,6 +4,7 @@ import React, { createContext, useContext } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useStudent } from "@/lib/hooks/useStudentProfile";
+import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useExperiences } from "@/lib/hooks/useExperiences";
 import { useOptimizationPlan } from "@/lib/hooks/useOptimizationPlans";
 import { usePlatformConfig } from "@/lib/hooks/usePlatformConfig";
@@ -30,12 +31,14 @@ export function useHubData() {
 
 export default function HubDataProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { subjectId, isLoadingSubjects } = usePreviewSubject("STUDENT");
   const platformConfig = usePlatformConfig();
-  const { data: student, isLoading: isStudentLoading } = useStudent(user?.id || "");
-  const { data: experiences = [], isLoading: isExperiencesLoading } = useExperiences(user?.id || "");
-  const { data: optimizationPlan = null, isLoading: isPlanLoading } = useOptimizationPlan(user?.id || "");
+  const { data: student, isLoading: isStudentLoading } = useStudent(subjectId);
+  const { data: experiences = [], isLoading: isExperiencesLoading } = useExperiences(subjectId);
+  const { data: optimizationPlan = null, isLoading: isPlanLoading } = useOptimizationPlan(subjectId);
 
-  const isLoading = isStudentLoading || isExperiencesLoading || isPlanLoading || !user;
+  const isLoading =
+    isLoadingSubjects || isStudentLoading || isExperiencesLoading || isPlanLoading || !user;
 
   if (isLoading) {
     return (

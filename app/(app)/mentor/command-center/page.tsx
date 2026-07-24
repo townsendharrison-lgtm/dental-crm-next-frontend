@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import {
   useMentor,
   useMentorStudents,
@@ -11,12 +12,12 @@ import {
   useDeclineAssignment,
 } from "@/lib/hooks/useMentors";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
-import { useTasks, useUpdateTask, useCreateTask } from "@/lib/hooks/useTasks";
+import { useTasks, useUpdateTask, useCreateTask, useDeleteTask } from "@/lib/hooks/useTasks";
 import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useActionItems } from "@/lib/hooks/useActionItems";
 import {
   useNotifications,
-  useMarkNotificationAsRead,
+  useDeleteNotification,
 } from "@/lib/hooks/useNotifications";
 import { useSurveys, useSubmitSurveyResponse } from "@/lib/hooks/useSurveys";
 import MentorDashboard from "@/components/mentor/MentorDashboardView";
@@ -37,9 +38,10 @@ Best,
 export default function MentorCommandCenterPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { data: mentor, isLoading: isMentorLoading } = useMentor(user?.id || "");
+  const { subjectId: mentorId, isLoadingSubjects } = usePreviewSubject("MENTOR");
+  const { data: mentor, isLoading: isMentorLoading } = useMentor(mentorId);
   const { data: mentorStudentsRaw = [], isLoading: isMentorStudentsLoading } = useMentorStudents(
-    user?.id || "",
+    mentorId,
   );
   const { data: allStudentsRaw = [] } = useStudents();
   const { data: staffTasks = [] } = useTasks();
@@ -48,13 +50,14 @@ export default function MentorCommandCenterPage() {
   const { data: notifications = [] } = useNotifications();
   const { data: surveys = [] } = useSurveys();
   const { data: pendingAssignments = [], isLoading: isPendingLoading } =
-    useMyPendingAssignments(!!user?.id);
+    useMyPendingAssignments(!!user?.id && mentorId === user.id);
 
   const updateTaskMutation = useUpdateTask();
   const createTaskMutation = useCreateTask();
+  const deleteTaskMutation = useDeleteTask();
   const acceptAssignmentMutation = useAcceptAssignment();
   const declineAssignmentMutation = useDeclineAssignment();
-  const markReadMutation = useMarkNotificationAsRead();
+  const deleteNotificationMutation = useDeleteNotification();
   const submitSurveyMutation = useSubmitSurveyResponse();
 
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
@@ -79,7 +82,7 @@ export default function MentorCommandCenterPage() {
     [surveys],
   );
 
-  if (isMentorLoading || isMentorStudentsLoading || isPendingLoading || !user) {
+  if (isLoadingSubjects || isMentorLoading || isMentorStudentsLoading || isPendingLoading || !user) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
@@ -171,6 +174,12 @@ export default function MentorCommandCenterPage() {
             },
           );
         }}
+        onDeleteTask={(id) => {
+          deleteTaskMutation.mutate(id, {
+            onSuccess: () => toast.success("Task deleted"),
+            onError: (err: any) => toast.error(err?.message || "Failed to delete task"),
+          });
+        }}
         onTakeSurvey={(id) => {
           const survey = surveys.find((s) => s.id === id) || null;
           if (!survey) {
@@ -180,7 +189,7 @@ export default function MentorCommandCenterPage() {
           setActiveSurvey(survey);
         }}
         onMarkNotificationRead={(id) => {
-          markReadMutation.mutate(id);
+          deleteNotificationMutation.mutate(id);
         }}
         onAcceptAssignment={(assignmentId, availableTimes, _timezone, customMessage) => {
           acceptAssignmentMutation.mutate(

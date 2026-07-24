@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils/cn";
 import { Sidebar } from "./Sidebar";
 import { MobileHeader, GlobalHeader } from "./Header";
 import { RoleSwitcher } from "./RoleSwitcher";
+import { RolePreviewBanner } from "./RolePreviewBanner";
 import { PopupOverlay } from "./PopupOverlay";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -116,6 +117,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           isAdmin ? "pb-24" : "pb-6",
         )}
       >
+        {/* Mobile: preview strip sits under the fixed top bar */}
+        {isAdmin && isPreviewing && (
+          <div className="sticky top-[calc(max(env(safe-area-inset-top),0.75rem)+3.75rem)] z-30 -mx-4 mb-3 bg-slate-950/95 px-4 backdrop-blur-md lg:hidden">
+            <RolePreviewBanner />
+          </div>
+        )}
         <GlobalHeader />
         <div key={role || "default"} className="mx-auto max-w-7xl duration-300 animate-in fade-in">
           {children}

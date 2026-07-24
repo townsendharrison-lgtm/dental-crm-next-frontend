@@ -145,9 +145,9 @@ export default function AdminEngagementPage() {
       createPopupMutation.mutateAsync({
         title: popup.title || "Untitled",
         message: popup.message || "",
-        imageUrl: popup.imageUrl || undefined,
-        ctaText: popup.ctaText || undefined,
-        ctaUrl: popup.ctaUrl || undefined,
+        imageUrl: popup.imageUrl?.trim() ? popup.imageUrl : null,
+        ctaText: popup.ctaText?.trim() ? popup.ctaText : null,
+        ctaUrl: popup.ctaUrl?.trim() ? popup.ctaUrl : null,
         backgroundColor: popup.backgroundColor || undefined,
         textColor: popup.textColor || undefined,
         targetRole: (popup.targetRole || "STUDENT") as
@@ -175,9 +175,9 @@ export default function AdminEngagementPage() {
         updates: {
           title: popup.title,
           message: popup.message,
-          imageUrl: popup.imageUrl || undefined,
-          ctaText: popup.ctaText || undefined,
-          ctaUrl: popup.ctaUrl || undefined,
+          imageUrl: popup.imageUrl?.trim() ? popup.imageUrl : null,
+          ctaText: popup.ctaText?.trim() ? popup.ctaText : null,
+          ctaUrl: popup.ctaUrl?.trim() ? popup.ctaUrl : null,
           backgroundColor: popup.backgroundColor || undefined,
           textColor: popup.textColor || undefined,
           targetRole: (popup.targetRole || popup.target_role) as

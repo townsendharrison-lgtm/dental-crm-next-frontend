@@ -1,12 +1,12 @@
-import { apiGet, apiPost, apiPut, apiDelete } from "./client";
-import type { PopupAdvertisement } from "@/lib/types";
+import { apiGet, apiPost, apiPut, apiDelete, apiClient } from "./client";
+import type { PopupAdvertisement, PopupAnalytics } from "@/lib/types";
 
 export interface CreatePopupPayload {
   title: string;
   message: string;
-  imageUrl?: string;
-  ctaText?: string;
-  ctaUrl?: string;
+  imageUrl?: string | null;
+  ctaText?: string | null;
+  ctaUrl?: string | null;
   backgroundColor?: string;
   textColor?: string;
   targetRole?: "STUDENT" | "MENTOR" | "ADMIN" | "MENTOR_MANAGER" | "BOTH";
@@ -37,6 +37,9 @@ export function normalizePopup(raw: RawPopup): PopupAdvertisement {
   const createdBy = (raw.createdBy ?? raw.created_by ?? null) as string | null;
   const dismissedBy = (raw.dismissedBy ?? raw.dismissed_by ?? []) as string[];
   const createdAt = String(raw.createdAt ?? raw.created_at ?? "");
+  const clickCount = Number(raw.clickCount ?? raw.click_count ?? 0) || 0;
+  const dismissCount =
+    Number(raw.dismissCount ?? raw.dismiss_count ?? dismissedBy.length) || dismissedBy.length;
 
   return {
     ...raw,
@@ -68,53 +71,57 @@ export function normalizePopup(raw: RawPopup): PopupAdvertisement {
     created_at: createdAt || raw.created_at,
     createdAt: createdAt || undefined,
     updated_at: raw.updated_at,
+    click_count: clickCount,
+    clickCount,
+    dismiss_count: dismissCount,
+    dismissCount,
   };
 }
 
 export const popupsApi = {
-  /**
-   * Fetch all popup advertisement campaigns (Admin / Manager only).
-   */
   list: async (): Promise<PopupAdvertisement[]> => {
     const response = await apiGet<{ popups: PopupAdvertisement[] }>("/api/popups");
     return (response.popups || []).map((p) => normalizePopup(p as RawPopup));
   },
 
-  /**
-   * Fetch currently active, non-dismissed popups targeting the current user's role.
-   */
   active: async (): Promise<PopupAdvertisement[]> => {
     const response = await apiGet<{ popups: PopupAdvertisement[] }>("/api/popups/active");
     return (response.popups || []).map((p) => normalizePopup(p as RawPopup));
   },
 
-  /**
-   * Dismiss a popup so it is not shown to the current user again.
-   */
   dismiss: async (id: string): Promise<PopupAdvertisement> => {
     const popup = await apiPost<PopupAdvertisement>(`/api/popups/${id}/dismiss`);
     return normalizePopup(popup as RawPopup);
   },
 
-  /**
-   * Create a new popup campaign (Admin only).
-   */
+  recordClick: async (id: string): Promise<{ success: boolean }> => {
+    return await apiPost<{ success: boolean }>(`/api/popups/${id}/click`);
+  },
+
+  analytics: async (id: string): Promise<PopupAnalytics> => {
+    return await apiGet<PopupAnalytics>(`/api/popups/${id}/analytics`);
+  },
+
+  uploadImage: async (file: File): Promise<{ url: string; path: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await apiClient.post<{ url: string; path: string }>(
+      "/api/popups/upload",
+      formData,
+    );
+    return data;
+  },
+
   create: async (payload: CreatePopupPayload): Promise<PopupAdvertisement> => {
     const popup = await apiPost<PopupAdvertisement>("/api/popups", payload);
     return normalizePopup(popup as RawPopup);
   },
 
-  /**
-   * Update advertisement campaign parameters (Admin only).
-   */
   update: async (id: string, updates: Partial<CreatePopupPayload>): Promise<PopupAdvertisement> => {
     const popup = await apiPut<PopupAdvertisement>(`/api/popups/${id}`, updates);
     return normalizePopup(popup as RawPopup);
   },
 
-  /**
-   * Delete an advertisement campaign (Admin only).
-   */
   remove: async (id: string): Promise<{ message: string }> => {
     return await apiDelete<{ message: string }>(`/api/popups/${id}`);
   },

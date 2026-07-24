@@ -73,6 +73,7 @@ export function useUpdateLead() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }
@@ -94,6 +95,7 @@ export function useDeleteLead() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }

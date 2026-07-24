@@ -74,6 +74,17 @@ export function useMarkNotificationAsRead() {
   });
 }
 
+/** Hook to delete / dismiss a single notification */
+export function useDeleteNotification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => notificationsApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
 /** Hook to mark all notifications as read */
 export function useMarkAllNotificationsAsRead() {
   const qc = useQueryClient();

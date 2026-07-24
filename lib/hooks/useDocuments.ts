@@ -48,6 +48,7 @@ export function useUpdateDocument() {
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: queryKeys.documents.all(updated.student_id) });
       qc.invalidateQueries({ queryKey: queryKeys.documents.detail(updated.id) });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }

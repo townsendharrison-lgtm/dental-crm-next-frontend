@@ -8,7 +8,11 @@ import { useRole } from "@/lib/hooks/useRole";
 import { useMentors } from "@/lib/hooks/useMentors";
 import { useAdminUsers } from "@/lib/hooks/useAdmin";
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from "@/lib/hooks/useTasks";
-import StaffTasksView from "@/components/tasks/StaffTasksView";
+import StaffTasksView, {
+  ASSIGN_SELF,
+  ASSIGN_ALL_MENTORS,
+  ASSIGN_ALL_MANAGERS,
+} from "@/components/tasks/StaffTasksView";
 import { toastAction } from "@/lib/utils/toastAction";
 import type { StaffTask } from "@/lib/types";
 
@@ -26,9 +30,30 @@ export default function TasksPage() {
   const deleteTaskMutation = useDeleteTask();
 
   const assignees = useMemo(() => {
-    if (!isAdmin) return mentors;
-    return allUsers.filter((u) => u.role === "MENTOR" || u.role === "MENTOR_MANAGER");
-  }, [isAdmin, allUsers, mentors]);
+    if (!isAdmin || !user) return mentors;
+    const staff = allUsers.filter(
+      (u) => u.role === "MENTOR" || u.role === "MENTOR_MANAGER" || u.role === "ADMIN",
+    );
+    if (!staff.some((u) => u.id === user.id)) {
+      return [
+        { id: user.id, name: user.name || user.email || "Me", role: user.role },
+        ...staff,
+      ];
+    }
+    return staff;
+  }, [isAdmin, allUsers, mentors, user]);
+
+  const resolveAssigneeIds = (target: string): string[] => {
+    if (!user) return [];
+    if (target === ASSIGN_SELF) return [user.id];
+    if (target === ASSIGN_ALL_MENTORS) {
+      return assignees.filter((u) => u.role === "MENTOR").map((u) => u.id);
+    }
+    if (target === ASSIGN_ALL_MANAGERS) {
+      return assignees.filter((u) => u.role === "MENTOR_MANAGER").map((u) => u.id);
+    }
+    return target ? [target] : [];
+  };
 
   if (
     !user ||
@@ -49,24 +74,61 @@ export default function TasksPage() {
       toast.error("Assignee, title, and due date are required");
       return;
     }
+
+    const assigneeIds = resolveAssigneeIds(task.assignedTo);
+    if (assigneeIds.length === 0) {
+      toast.error("No matching people found for that assignment");
+      return;
+    }
+
+    const payloadBase = {
+      task: task.task,
+      dueDate: task.dueDate,
+      priority: task.priority || ("MEDIUM" as const),
+      description: task.description || undefined,
+      studentId: task.studentId || task.student_id || undefined,
+    };
+
+    if (assigneeIds.length === 1) {
+      void toastAction(
+        createTaskMutation.mutateAsync({
+          ...payloadBase,
+          assignedTo: assigneeIds[0],
+        }),
+        {
+          loading: "Assigning task…",
+          success: "Task assigned",
+          error: "Failed to create task",
+        },
+      );
+      return;
+    }
+
     void toastAction(
-      createTaskMutation.mutateAsync({
-        assignedTo: task.assignedTo,
-        task: task.task,
-        dueDate: task.dueDate,
-        priority: task.priority || "MEDIUM",
-        description: task.description || undefined,
-        studentId: task.studentId || task.student_id || undefined,
-      }),
+      Promise.all(
+        assigneeIds.map((assignedTo) =>
+          createTaskMutation.mutateAsync({ ...payloadBase, assignedTo }),
+        ),
+      ),
       {
-        loading: "Assigning task…",
-        success: "Task assigned",
-        error: "Failed to create task",
+        loading: `Assigning to ${assigneeIds.length} people…`,
+        success: `Assigned to ${assigneeIds.length} people`,
+        error: "Failed to create tasks",
       },
     );
   };
 
   const handleUpdateTask = (task: StaffTask) => {
+    const assignedTo = task.assignedTo || task.assigned_to;
+    if (
+      assignedTo === ASSIGN_SELF ||
+      assignedTo === ASSIGN_ALL_MENTORS ||
+      assignedTo === ASSIGN_ALL_MANAGERS
+    ) {
+      toast.error("Pick a specific person when editing a task");
+      return;
+    }
+
     void toastAction(
       updateTaskMutation.mutateAsync({
         id: task.id,
@@ -75,7 +137,7 @@ export default function TasksPage() {
           description: task.description || undefined,
           dueDate: task.dueDate || task.due_date,
           priority: task.priority,
-          assignedTo: task.assignedTo || task.assigned_to,
+          assignedTo,
           status: task.status,
         },
       }),
@@ -110,6 +172,7 @@ export default function TasksPage() {
     <StaffTasksView
       role={role}
       currentUserId={user.id}
+      currentUserName={user.name || user.email || undefined}
       tasks={tasks}
       mentors={mentors}
       assignees={assignees}

@@ -41,6 +41,12 @@ export function useAuth() {
     } catch {
       // ignore — clear local state regardless
     }
+    try {
+      const { useUIStore } = await import("@/lib/stores/uiStore");
+      useUIStore.getState().setPreviewRole(null);
+    } catch {
+      // ignore
+    }
     clearAuthStorage();
     reset();
     router.replace("/login");

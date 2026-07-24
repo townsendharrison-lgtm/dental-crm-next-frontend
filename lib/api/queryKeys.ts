@@ -61,6 +61,7 @@ export const queryKeys = {
   },
   popups: {
     all: () => ["popups"] as const,
+    analytics: (id: string) => ["popups", "analytics", id] as const,
   },
   badges: {
     all: () => ["badges", "all"] as const,

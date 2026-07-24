@@ -26,12 +26,20 @@ import { DatePicker } from "@/components/ui/DatePicker";
 function taskAssignedTo(t: StaffTask) {
   return t.assigned_to || t.assignedTo || "";
 }
+function taskAssignedBy(t: StaffTask) {
+  return t.assigned_by || t.assignedBy || "";
+}
 function taskDueDate(t: StaffTask) {
   return t.due_date || t.dueDate || "";
 }
 function taskStudentName(t: StaffTask) {
   return t.studentName || t.studentUser?.name || "";
 }
+
+/** Special Assign To targets (resolved to one or many users on create). */
+export const ASSIGN_SELF = "__self__";
+export const ASSIGN_ALL_MENTORS = "__all_mentors__";
+export const ASSIGN_ALL_MANAGERS = "__all_managers__";
 
 const emptyTask = (): Partial<StaffTask> => ({
   task: "",
@@ -41,12 +49,20 @@ const emptyTask = (): Partial<StaffTask> => ({
   assignedTo: "",
 });
 
+function roleLabel(role?: string) {
+  if (role === "MENTOR_MANAGER") return "Manager";
+  if (role === "ADMIN") return "Admin";
+  if (role === "MENTOR") return "Mentor";
+  return role || "Staff";
+}
+
 interface StaffTasksViewProps {
   role: UserRole;
   currentUserId: string;
+  currentUserName?: string;
   tasks: StaffTask[];
   mentors: Mentor[];
-  /** Optional extra assignees (e.g. mentor managers) for the Assign To dropdown */
+  /** Optional extra assignees (e.g. mentor managers / admins) for the Assign To dropdown */
   assignees?: Array<Pick<AuthUser, "id" | "name" | "role"> | Mentor>;
   onAddTask: (task: Partial<StaffTask>) => void;
   onUpdateTask: (task: StaffTask) => void;
@@ -57,6 +73,7 @@ interface StaffTasksViewProps {
 const StaffTasksView: React.FC<StaffTasksViewProps> = ({
   role,
   currentUserId,
+  currentUserName,
   tasks,
   mentors,
   assignees,
@@ -79,7 +96,67 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
   const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "COMPLETED">("ALL");
   const [newTask, setNewTask] = useState<Partial<StaffTask>>(emptyTask);
 
+  const mentorCount = React.useMemo(
+    () => assignableStaff.filter((m) => m.role === "MENTOR").length,
+    [assignableStaff],
+  );
+  const managerCount = React.useMemo(
+    () => assignableStaff.filter((m) => m.role === "MENTOR_MANAGER").length,
+    [assignableStaff],
+  );
+
+  const assignOptions = React.useMemo(() => {
+    const people = [...assignableStaff].sort((a, b) => {
+      const order = (r?: string) =>
+        r === "ADMIN" ? 0 : r === "MENTOR_MANAGER" ? 1 : r === "MENTOR" ? 2 : 3;
+      const byRole = order(a.role) - order(b.role);
+      if (byRole !== 0) return byRole;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+
+    if (editingTask) {
+      return [
+        { value: "", label: "Select Staff Member" },
+        ...people.map((m) => ({
+          value: m.id,
+          label: `${m.name}${m.id === currentUserId ? " (You)" : ""} (${roleLabel(m.role)})`,
+        })),
+      ];
+    }
+
+    return [
+      { value: "", label: "Select assignee…" },
+      { value: ASSIGN_SELF, label: `Myself${currentUserName ? ` — ${currentUserName}` : ""}` },
+      {
+        value: ASSIGN_ALL_MENTORS,
+        label: `All Mentors (${mentorCount})`,
+        disabled: mentorCount === 0,
+      },
+      {
+        value: ASSIGN_ALL_MANAGERS,
+        label: `All Mentor Managers (${managerCount})`,
+        disabled: managerCount === 0,
+      },
+      { value: "__people__", label: "—— Specific people ——", disabled: true },
+      ...people.map((m) => ({
+        value: m.id,
+        label: `${m.name}${m.id === currentUserId ? " (You)" : ""} (${roleLabel(m.role)})`,
+      })),
+    ];
+  }, [
+    assignableStaff,
+    currentUserId,
+    currentUserName,
+    editingTask,
+    mentorCount,
+    managerCount,
+  ]);
+
   const canManageTasks = role === "ADMIN";
+  const canDeleteTask = (task: StaffTask) =>
+    canManageTasks || taskAssignedBy(task) === currentUserId;
+  const canEditTask = (task: StaffTask) =>
+    canManageTasks || taskAssignedBy(task) === currentUserId;
 
   const openCreateModal = () => {
     setEditingTask(null);
@@ -321,25 +398,33 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
                   </div>
                 </div>
 
-                {canManageTasks && (
+                {(canEditTask(task) || canDeleteTask(task)) && (
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleEdit(task)}
-                      title="Edit task"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="hover:text-rose-400"
-                      onClick={() => onDeleteTask(task.id)}
-                      title="Delete task"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    {canEditTask(task) && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleEdit(task)}
+                        title="Edit task"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canDeleteTask(task) && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="hover:text-rose-400"
+                        onClick={() => {
+                          if (confirm("Delete this task? This cannot be undone.")) {
+                            onDeleteTask(task.id);
+                          }
+                        }}
+                        title="Delete task"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -427,18 +512,22 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
           </div>
 
           {role === "ADMIN" && (
-            <FormField label="Assign To" required>
+            <FormField
+              label="Assign To"
+              required
+              hint={
+                !editingTask && newTask.assignedTo === ASSIGN_ALL_MENTORS
+                  ? `Creates a separate task for each of the ${mentorCount} mentors.`
+                  : !editingTask && newTask.assignedTo === ASSIGN_ALL_MANAGERS
+                    ? `Creates a separate task for each of the ${managerCount} mentor managers.`
+                    : undefined
+              }
+            >
               <SelectMenu
                 value={newTask.assignedTo || ""}
-                placeholder="Select Staff Member"
+                placeholder="Select assignee…"
                 onChange={(assignedTo) => setNewTask({ ...newTask, assignedTo })}
-                options={[
-                  { value: "", label: "Select Staff Member" },
-                  ...assignableStaff.map((m) => ({
-                    value: m.id,
-                    label: `${m.name}${m.role ? ` (${m.role === "MENTOR_MANAGER" ? "Manager" : "Mentor"})` : ""}`,
-                  })),
-                ]}
+                options={assignOptions}
               />
             </FormField>
           )}

@@ -66,7 +66,8 @@ export function RoleSwitcher() {
     [actualRole, setPreviewRole, router],
   );
 
-  if (!isAdmin) return null;
+  // Only ADMIN can use the preview switcher — hard gate
+  if (!isAdmin || actualRole !== "ADMIN") return null;
 
   // The active button reflects the current effective role.
   const active: UserRole = previewRole ?? actualRole ?? "ADMIN";

@@ -16,6 +16,10 @@ import {
 } from "@/lib/hooks/useMentors";
 import { useMeetings, useCreateMeeting, useUpdateMeeting } from "@/lib/hooks/useMeetings";
 import { useActionItems } from "@/lib/hooks/useActionItems";
+import {
+  useNotifications,
+  useDeleteNotification,
+} from "@/lib/hooks/useNotifications";
 import MentorManagerDashboard from "@/components/mentor/MentorManagerDashboard";
 import { normalizeStudents } from "@/lib/utils/normalizeStudent";
 import type { Mentor, Meeting, ActionItem } from "@/lib/types";
@@ -58,6 +62,8 @@ export default function MentorOpsPage({
   const { data: assignments = [], isLoading: isAssignmentsLoading } = useMentorAssignments();
   const { data: meetingsRaw = [], isLoading: isMeetingsLoading } = useMeetings();
   const { data: actionItemsRaw = [], isLoading: isActionItemsLoading } = useActionItems();
+  const { data: notifications = [] } = useNotifications();
+  const deleteNotificationMutation = useDeleteNotification();
 
   const assignMentorMutation = useAssignMentor();
   const transferMentorMutation = useTransferMentor();
@@ -109,6 +115,8 @@ export default function MentorOpsPage({
       meetings={meetings}
       actionItems={actionItems}
       studentAssignments={assignments}
+      notifications={notifications}
+      onDismissNotification={(id) => deleteNotificationMutation.mutate(id)}
       onSelectMentor={(id) => router.push(`${basePath}/${id}/students`)}
       onOpenChat={(id) => {
         void openChatWithMentor(id);

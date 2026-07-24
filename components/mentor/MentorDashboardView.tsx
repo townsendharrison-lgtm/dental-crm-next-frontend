@@ -14,6 +14,7 @@ import {
   Circle,
   Users,
   Edit2,
+  Trash2,
   Search,
   Info,
   ChevronRight,
@@ -62,6 +63,7 @@ interface MentorDashboardProps {
   onUpdateTaskStatus: (id: string, status: "PENDING" | "COMPLETED" | "OVERDUE") => void;
   onUpdateTask: (task: StaffTask) => void;
   onAddTask: (task: Partial<StaffTask> & { task: string; dueDate?: string; due_date?: string }) => void;
+  onDeleteTask?: (taskId: string) => void;
   notifications: SystemNotification[];
   surveys: Survey[];
   onTakeSurvey: (id: string) => void;
@@ -138,6 +140,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
   onUpdateTaskStatus,
   onUpdateTask,
   onAddTask,
+  onDeleteTask,
   notifications,
   surveys,
   onTakeSurvey,
@@ -1423,13 +1426,31 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-medium text-white truncate">{task.task}</p>
-                          <button
-                            type="button"
-                            className="text-slate-600 hover:text-indigo-400 shrink-0"
-                            onClick={() => startEditing(task)}
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              className="text-slate-600 hover:text-indigo-400"
+                              onClick={() => startEditing(task)}
+                              title="Edit task"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            {onDeleteTask &&
+                              (task.assigned_by || task.assignedBy) === mentor.id && (
+                              <button
+                                type="button"
+                                className="text-slate-600 hover:text-rose-400"
+                                onClick={() => {
+                                  if (confirm("Delete this task? This cannot be undone.")) {
+                                    onDeleteTask(task.id);
+                                  }
+                                }}
+                                title="Delete task"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center justify-between mt-2 gap-2">
                           <Badge

@@ -5,7 +5,7 @@ import { X, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
-import { useActivePopups, useDismissPopup } from "@/lib/hooks/usePopups";
+import { useActivePopups, useDismissPopup, useRecordPopupClick } from "@/lib/hooks/usePopups";
 import type { PopupAdvertisement } from "@/lib/types";
 
 function fieldImage(p: PopupAdvertisement) {
@@ -32,6 +32,7 @@ export function PopupOverlay() {
   const { role } = useRole();
   const { data: activePopups = [] } = useActivePopups(!!user);
   const dismissMutation = useDismissPopup();
+  const clickMutation = useRecordPopupClick();
   const [activePopup, setActivePopup] = useState<PopupAdvertisement | null>(null);
 
   const eligiblePopups = useMemo(() => {
@@ -66,6 +67,23 @@ export function PopupOverlay() {
     const id = activePopup.id;
     setActivePopup(null);
     dismissMutation.mutate(id);
+  };
+
+  const handleCtaClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!activePopup) return;
+    e.preventDefault();
+    const url = fieldCtaUrl(activePopup);
+    const id = activePopup.id;
+    try {
+      await clickMutation.mutateAsync(id);
+    } catch {
+      // Still open the link even if tracking fails
+    }
+    setActivePopup(null);
+    dismissMutation.mutate(id);
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   };
 
   if (!activePopup) return null;
@@ -115,6 +133,7 @@ export function PopupOverlay() {
                   href={ctaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => void handleCtaClick(e)}
                   className="inline-flex items-center gap-2 px-10 py-4 rounded-2xl font-bold text-lg hover:scale-105 transition-transform shadow-xl cursor-pointer"
                   style={{
                     backgroundColor: fg,

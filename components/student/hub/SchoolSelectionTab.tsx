@@ -64,6 +64,13 @@ const EMPTY_APPLICATIONS: Application[] = [];
 interface SchoolSelectionTabProps {
   student: Student;
   isMentorView?: boolean;
+  /**
+   * When true, schools/categories stay in-memory (no student account APIs).
+   * Used for admin name-only school selection plans.
+   */
+  localOnly?: boolean;
+  /** Seed schools when `localOnly` (e.g. restoring a draft). */
+  initialSchools?: School[];
   onUpdateSchools?: (schools: School[]) => void;
   onUpdateStudent?: (updates: Partial<Student>) => void;
   onUpdateApplications?: (applications: Application[]) => void;
@@ -73,27 +80,35 @@ interface SchoolSelectionTabProps {
 export default function SchoolSelectionTab({
   student,
   isMentorView = false,
+  localOnly = false,
+  initialSchools,
   onUpdateSchools,
   onUpdateStudent,
   onUpdateApplications,
   platformConfig,
 }: SchoolSelectionTabProps) {
-  const studentId = student.id;
+  const studentId = localOnly ? "" : student.id;
   const queryClient = useQueryClient();
-  const { data: schoolsQueryData, isLoading: schoolsLoading } = useStudentSchools(studentId);
+  const { data: schoolsQueryData, isLoading: schoolsLoading } = useStudentSchools(
+    localOnly ? undefined : studentId,
+  );
   const loadedSchools = schoolsQueryData ?? EMPTY_SCHOOLS;
   const addSchoolMutation = useAddStudentSchool();
   const updateSchoolMutation = useUpdateStudentSchool();
   const removeSchoolMutation = useRemoveStudentSchool();
-  const { data: applicationsQueryData } = useApplications(studentId);
+  const { data: applicationsQueryData } = useApplications(localOnly ? undefined : studentId);
   const loadedApplications = applicationsQueryData ?? EMPTY_APPLICATIONS;
   const createAppMutation = useCreateApplication();
   const updateAppMutation = useUpdateApplication();
   const deleteAppMutation = useDeleteApplication();
-  const { data: categoriesQueryData, isLoading: categoriesLoading } = useSchoolCategories(studentId);
+  const { data: categoriesQueryData, isLoading: categoriesLoading } = useSchoolCategories(
+    localOnly ? undefined : studentId,
+  );
   const replaceCategoriesMutation = useReplaceSchoolCategories();
 
-  const [schools, setLocalSchools] = useState<School[]>(EMPTY_SCHOOLS);
+  const [schools, setLocalSchools] = useState<School[]>(() =>
+    localOnly ? initialSchools ?? EMPTY_SCHOOLS : EMPTY_SCHOOLS,
+  );
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletedSelectionIds, setDeletedSelectionIds] = useState<string[]>([]);
@@ -122,17 +137,24 @@ export default function SchoolSelectionTab({
 
   // Sync from server only when there are no unsaved local edits
   useEffect(() => {
+    if (localOnly) return;
     if (!dirty) {
       setLocalSchools(loadedSchools);
       setDeletedSelectionIds([]);
     }
-  }, [loadedSchools, dirty]);
+  }, [loadedSchools, dirty, localOnly]);
 
   const markDirty = () => setDirty(true);
 
   const setSchools = (newSchools: School[] | ((prev: School[]) => School[])) => {
     markDirty();
-    setLocalSchools(newSchools);
+    setLocalSchools((prev) => {
+      const next = typeof newSchools === "function" ? newSchools(prev) : newSchools;
+      if (localOnly) {
+        queueMicrotask(() => onUpdateSchools?.(next));
+      }
+      return next;
+    });
   };
 
   const normalizeCategories = (categories: any[] | undefined): SchoolCategory[] => {
@@ -159,6 +181,7 @@ export default function SchoolSelectionTab({
 
   // Prefer dedicated categories API; fall back to student profile field
   useEffect(() => {
+    if (localOnly) return;
     if (dirty || savingCategories) return;
     const serverCats = normalizeCategories(categoriesQueryData ?? student.schoolCategories);
     const local = schoolCategoriesRef.current;
@@ -166,7 +189,7 @@ export default function SchoolSelectionTab({
     const hasUnsyncedLocal = local.some((c) => !serverIds.has(c.id));
     if (hasUnsyncedLocal) return;
     setSchoolCategories(serverCats);
-  }, [student.id, categoriesKey, categoriesQueryData, dirty, savingCategories]);
+  }, [student.id, categoriesKey, categoriesQueryData, dirty, savingCategories, localOnly]);
 
   const scrollCategoryIntoView = (categoryId: string) => {
     const board = categoryBoardRef.current;
@@ -190,6 +213,11 @@ export default function SchoolSelectionTab({
 
   const persistCategories = async (newCategories: SchoolCategory[]) => {
     setSchoolCategories(newCategories);
+    if (localOnly) {
+      onUpdateStudent?.({ schoolCategories: newCategories });
+      markDirty();
+      return;
+    }
     setSavingCategories(true);
     try {
       const saved = await replaceCategoriesMutation.mutateAsync({
@@ -222,7 +250,11 @@ export default function SchoolSelectionTab({
         selectionId: undefined,
       },
     ]);
-    toast.message(`${school.name} added — click Save to persist`);
+    toast.message(
+      localOnly
+        ? `${school.name} added to this plan`
+        : `${school.name} added — click Save to persist`,
+    );
   };
 
   const openAddSchoolForCategory = (categoryId: string) => {
@@ -261,6 +293,14 @@ export default function SchoolSelectionTab({
       document.activeElement.blur();
     }
     await new Promise((resolve) => setTimeout(resolve, 0));
+
+    if (localOnly) {
+      onUpdateSchools?.(schools);
+      onUpdateStudent?.({ schoolCategories });
+      setDirty(false);
+      toast.success('School selection updated for this plan');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -315,6 +355,11 @@ export default function SchoolSelectionTab({
   };
 
   const handleUpdateSchoolStatus = async (schoolId: string, status: ApplicationStatus | '') => {
+    if (localOnly) {
+      toast.message('Application status is available when a dashboard student is linked');
+      return;
+    }
+
     const school = schools.find((s) => s.id === schoolId);
     const existing = loadedApplications.find(
       (a) => a.schoolId === schoolId || a.school_id === schoolId,
@@ -423,18 +468,24 @@ export default function SchoolSelectionTab({
     try {
       await persistCategories(nextCategories);
 
-      const selectionIds = toRemove
-        .map((s) => s.selectionId)
-        .filter((id): id is string => Boolean(id));
-      if (selectionIds.length > 0) {
-        await Promise.all(
-          selectionIds.map((id) => removeSchoolMutation.mutateAsync({ id, studentId })),
-        );
-        await queryClient.invalidateQueries({ queryKey: queryKeys.studentSchools.all(studentId) });
+      if (!localOnly) {
+        const selectionIds = toRemove
+          .map((s) => s.selectionId)
+          .filter((id): id is string => Boolean(id));
+        if (selectionIds.length > 0) {
+          await Promise.all(
+            selectionIds.map((id) => removeSchoolMutation.mutateAsync({ id, studentId })),
+          );
+          await queryClient.invalidateQueries({ queryKey: queryKeys.studentSchools.all(studentId) });
+        }
+        setDeletedSelectionIds((prev) => prev.filter((id) => !selectionIds.includes(id)));
       }
 
-      setDeletedSelectionIds((prev) => prev.filter((id) => !selectionIds.includes(id)));
-      setLocalSchools((prev) => prev.filter((s) => s.type !== category));
+      setLocalSchools((prev) => {
+        const next = prev.filter((s) => s.type !== category);
+        if (localOnly) queueMicrotask(() => onUpdateSchools?.(next));
+        return next;
+      });
       toast.success('Category removed');
     } catch {
       // Error toast handled in persistCategories / mutations
@@ -549,7 +600,12 @@ export default function SchoolSelectionTab({
             <h2 className="text-lg font-semibold text-white">Strategic School Selection</h2>
             <p className="text-sm text-slate-500 mt-1">
               Curate your list based on fit, stats, and strategy.
-              {(schoolsLoading || categoriesLoading) && <span className="ml-2 text-indigo-400">Loading…</span>}
+              {localOnly && (
+                <span className="ml-2 text-slate-400">Included in plan preview / PDF.</span>
+              )}
+              {!localOnly && (schoolsLoading || categoriesLoading) && (
+                <span className="ml-2 text-indigo-400">Loading…</span>
+              )}
               {dirty && !saving && <span className="ml-2 text-amber-400">Unsaved changes</span>}
               {saving && <span className="ml-2 text-indigo-400">Saving…</span>}
             </p>
@@ -563,7 +619,7 @@ export default function SchoolSelectionTab({
               onClick={() => void handleSaveSelection()}
               disabled={!dirty || saving}
             >
-              {saving ? 'Saving…' : 'Save selection'}
+              {saving ? 'Saving…' : localOnly ? 'Confirm list' : 'Save selection'}
             </Button>
           </div>
         </div>

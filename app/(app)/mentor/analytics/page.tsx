@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueries } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useMentor, useMentorStudents } from "@/lib/hooks/useMentors";
 import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useActionItems } from "@/lib/hooks/useActionItems";
@@ -16,7 +17,7 @@ import { normalizeStudents } from "@/lib/utils/normalizeStudent";
 export default function MentorAnalyticsPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const mentorId = user?.id || "";
+  const { subjectId: mentorId, isLoadingSubjects } = usePreviewSubject("MENTOR");
 
   const { data: mentor, isLoading: mentorLoading } = useMentor(mentorId);
   const { data: studentsRaw = [], isLoading: studentsLoading } = useMentorStudents(mentorId);
@@ -66,7 +67,7 @@ export default function MentorAnalyticsPage() {
 
   const historiesLoading = strengthQueries.some((q) => q.isLoading);
 
-  if (mentorLoading || studentsLoading || meetingsLoading || actionsLoading || !user) {
+  if (isLoadingSubjects || mentorLoading || studentsLoading || meetingsLoading || actionsLoading || !user) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />

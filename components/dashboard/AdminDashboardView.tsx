@@ -20,7 +20,6 @@ import {
   Mail,
   Phone,
   Info,
-  Calendar,
   MessageSquare,
   ArrowUpRight,
   User,
@@ -28,11 +27,10 @@ import {
   CalendarX,
   X,
   Plus,
-  Globe,
-  MapPin,
   TrendingUp,
   ShieldAlert,
   Zap,
+  Search,
 } from "lucide-react";
 import {
   AreaChart,
@@ -49,88 +47,17 @@ import { toast } from "sonner";
 import { useAdminUsers } from "@/lib/hooks/useAdmin";
 import { useLeads, useUpdateLead } from "@/lib/hooks/useLeads";
 import { useLorRequests } from "@/lib/hooks/useLor";
-import { useNotifications, useMarkNotificationAsRead } from "@/lib/hooks/useNotifications";
-import { useAuth } from "@/lib/hooks/useAuth";
+import { useNotifications, useDeleteNotification } from "@/lib/hooks/useNotifications";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
 import { useMentors } from "@/lib/hooks/useMentors";
 import { useMeetings } from "@/lib/hooks/useMeetings";
-import { useTasks } from "@/lib/hooks/useTasks";
 import { useActionItems } from "@/lib/hooks/useActionItems";
 import { useCourseSubmissions } from "@/lib/hooks/useCourses";
-import { useExperiences } from "@/lib/hooks/useExperiences";
 import { normalizeStudents } from "@/lib/utils/normalizeStudent";
 import { parseLocalDate } from "@/lib/utils/dateUtils";
 import type { Lead } from "@/lib/types";
 
 const MENTOR_CHART_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
-
-const US_REGION_BY_STATE: Record<string, string> = {
-  CT: "Northeast",
-  ME: "Northeast",
-  MA: "Northeast",
-  NH: "Northeast",
-  RI: "Northeast",
-  VT: "Northeast",
-  NJ: "Northeast",
-  NY: "Northeast",
-  PA: "Northeast",
-  AL: "Southeast",
-  AR: "Southeast",
-  FL: "Southeast",
-  GA: "Southeast",
-  KY: "Southeast",
-  LA: "Southeast",
-  MS: "Southeast",
-  NC: "Southeast",
-  SC: "Southeast",
-  TN: "Southeast",
-  VA: "Southeast",
-  WV: "Southeast",
-  DC: "Southeast",
-  DE: "Southeast",
-  MD: "Southeast",
-  CA: "West Coast",
-  OR: "West Coast",
-  WA: "West Coast",
-  AK: "West Coast",
-  HI: "West Coast",
-  IL: "Midwest",
-  IN: "Midwest",
-  IA: "Midwest",
-  KS: "Midwest",
-  MI: "Midwest",
-  MN: "Midwest",
-  MO: "Midwest",
-  NE: "Midwest",
-  ND: "Midwest",
-  OH: "Midwest",
-  SD: "Midwest",
-  WI: "Midwest",
-  AZ: "Southwest",
-  NM: "Southwest",
-  OK: "Southwest",
-  TX: "Southwest",
-  CO: "West",
-  ID: "West",
-  MT: "West",
-  NV: "West",
-  UT: "West",
-  WY: "West",
-};
-
-function regionForState(raw?: string | null): string {
-  if (!raw) return "Unspecified";
-  const cleaned = raw.trim().toUpperCase();
-  if (US_REGION_BY_STATE[cleaned]) return US_REGION_BY_STATE[cleaned];
-  const nameMap: Record<string, string> = {
-    CALIFORNIA: "CA",
-    "NEW YORK": "NY",
-    TEXAS: "TX",
-    FLORIDA: "FL",
-  };
-  const abbr = nameMap[cleaned] || cleaned.slice(0, 2);
-  return US_REGION_BY_STATE[abbr] || "Other";
-}
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -141,11 +68,26 @@ function monthLabel(key: string) {
   return new Date(y, m - 1, 1).toLocaleString("en-US", { month: "short" });
 }
 
+type MentorBand = "all" | "critical" | "at_risk" | "compliant";
+
+function mentorBand(score: number): Exclude<MentorBand, "all"> {
+  if (score < 80) return "critical";
+  if (score < 90) return "at_risk";
+  return "compliant";
+}
+
+function latencyHours(raw: string | number | null | undefined): number | null {
+  if (raw == null || raw === "—") return null;
+  const n = parseFloat(String(raw).replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
 export function AdminDashboardView() {
   const router = useRouter();
-  const { user } = useAuth();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [mentorSearch, setMentorSearch] = useState("");
+  const [mentorBandFilter, setMentorBandFilter] = useState<MentorBand>("all");
+  const [openingChat, setOpeningChat] = useState(false);
   const [performanceTab, setPerformanceTab] = useState<"COMPLIANCE" | "STRENGTH">("COMPLIANCE");
 
   const { data: users = [], isLoading: usersLoading } = useAdminUsers();
@@ -155,12 +97,10 @@ export function AdminDashboardView() {
   const { data: studentProfiles = [], isLoading: studentsLoading } = useStudents();
   const { data: mentorProfiles = [], isLoading: mentorsLoading } = useMentors();
   const { data: meetings = [] } = useMeetings();
-  const { data: staffTasks = [] } = useTasks();
   const { data: actionItems = [] } = useActionItems();
   const { data: courseSubmissions = [], isLoading: submissionsLoading } = useCourseSubmissions("PENDING");
-  const { data: experiences = [], isLoading: experiencesLoading } = useExperiences();
 
-  const markNotificationRead = useMarkNotificationAsRead();
+  const deleteNotification = useDeleteNotification();
   const updateLead = useUpdateLead();
 
   const students = useMemo(() => normalizeStudents(studentProfiles), [studentProfiles]);
@@ -287,59 +227,80 @@ export function AdminDashboardView() {
   }, [students, userStudents, leads, mentors, meetings]);
 
   const mentorMetrics = useMemo(() => {
-    const now = Date.now();
+    const now = new Date();
+    const nowMs = now.getTime();
+    const fortyFiveDaysFromNow = new Date(now);
+    fortyFiveDaysFromNow.setDate(now.getDate() + 45);
     const map = new Map<
       string,
       { latency: string; noMtg: number; overdue: number; noTasks: number; compliance: number }
     >();
 
     for (const mentor of mentors) {
-      const studentIds = mentor.studentIds || students.filter((s) => s.mentorId === mentor.id).map((s) => s.id);
+      const studentIds =
+        mentor.studentIds || students.filter((s) => s.mentorId === mentor.id).map((s) => s.id);
       const mentorMeetings = meetings.filter((m) => (m.mentor_id || m.mentorId) === mentor.id);
       const studentsWithoutMeeting = studentIds.filter((sid) => {
         const hasUpcoming = mentorMeetings.some(
-          (m) => (m.student_id || m.studentId) === sid && !m.completed && new Date(m.date).getTime() >= now,
+          (m) =>
+            (m.student_id || m.studentId) === sid &&
+            !m.completed &&
+            new Date(m.date).getTime() >= nowMs,
         );
         return !hasUpcoming;
       }).length;
 
-      const overdue = [
-        ...actionItems.filter(
-          (a) =>
-            studentIds.includes(a.student_id || a.studentId || "") &&
-            a.status !== "COMPLETED" &&
-            new Date(a.due_date || a.dueDate || 0).getTime() < now,
-        ),
-        ...staffTasks.filter(
-          (t) =>
-            (t.assigned_to || t.assignedTo) === mentor.id &&
-            t.status !== "COMPLETED" &&
-            new Date(t.due_date || t.dueDate || 0).getTime() < now,
-        ),
-      ].length;
-
-      const pendingStaff = staffTasks.filter(
-        (t) => (t.assigned_to || t.assignedTo) === mentor.id && t.status !== "COMPLETED",
+      const overdue = actionItems.filter(
+        (a) =>
+          studentIds.includes(a.student_id || a.studentId || "") &&
+          (a.status === "OVERDUE" ||
+            (a.status !== "COMPLETED" && new Date(a.due_date || a.dueDate || 0).getTime() < nowMs)),
       ).length;
+
+      const noTasks = studentIds.filter((sid) => {
+        const hasTasksSoon = actionItems.some((item) => {
+          if ((item.student_id || item.studentId || "") !== sid) return false;
+          const due = new Date(item.due_date || item.dueDate || 0);
+          return due >= now && due <= fortyFiveDaysFromNow;
+        });
+        return !hasTasksSoon;
+      }).length;
 
       map.set(mentor.id, {
         latency: String(mentor.avgResponseTime ?? mentor.profile?.avg_response_time ?? "—"),
         noMtg: studentsWithoutMeeting,
         overdue,
-        noTasks: pendingStaff === 0 ? studentIds.length : 0,
+        noTasks,
         compliance: mentor.complianceScore ?? mentor.profile?.compliance_score ?? 0,
       });
     }
     return map;
-  }, [mentors, students, meetings, actionItems, staffTasks]);
+  }, [mentors, students, meetings, actionItems]);
 
-  const filteredMentors = useMemo(() => {
+  const searchFilteredMentors = useMemo(() => {
+    const q = mentorSearch.trim().toLowerCase();
+    if (!q) return mentors;
     return mentors.filter(
-      (m) =>
-        m.name.toLowerCase().includes(mentorSearch.toLowerCase()) ||
-        m.email.toLowerCase().includes(mentorSearch.toLowerCase()),
+      (m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q),
     );
   }, [mentors, mentorSearch]);
+
+  const mentorBandCounts = useMemo(() => {
+    const counts = { critical: 0, at_risk: 0, compliant: 0 };
+    for (const m of searchFilteredMentors) {
+      const score = mentorMetrics.get(m.id)?.compliance ?? m.complianceScore ?? m.profile?.compliance_score ?? 0;
+      counts[mentorBand(score)] += 1;
+    }
+    return counts;
+  }, [searchFilteredMentors, mentorMetrics]);
+
+  const filteredMentors = useMemo(() => {
+    if (mentorBandFilter === "all") return searchFilteredMentors;
+    return searchFilteredMentors.filter((m) => {
+      const score = mentorMetrics.get(m.id)?.compliance ?? m.complianceScore ?? m.profile?.compliance_score ?? 0;
+      return mentorBand(score) === mentorBandFilter;
+    });
+  }, [searchFilteredMentors, mentorBandFilter, mentorMetrics]);
 
   const chartMentors = useMemo(() => filteredMentors.slice(0, 6), [filteredMentors]);
 
@@ -429,72 +390,24 @@ export function AdminDashboardView() {
     return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
   }, [mentorPerformanceData]);
 
-  const regionalDensity = useMemo(() => {
-    const shadowing = experiences.filter((e) => e.category === "Shadowing");
-    const byRegion = new Map<
-      string,
-      { students: Set<string>; orgs: Set<string>; hours: number }
-    >();
-
-    const ensure = (region: string) => {
-      if (!byRegion.has(region)) {
-        byRegion.set(region, { students: new Set(), orgs: new Set(), hours: 0 });
-      }
-      return byRegion.get(region)!;
-    };
-
-    // Seed primary display regions so cards always render
-    ["Northeast", "Southeast", "West Coast"].forEach((r) => ensure(r));
-
-    students.forEach((s) => {
-      const region = regionForState(s.state || s.profile?.state);
-      const bucket = ensure(region);
-      const hasShadowing = shadowing.some(
-        (e) => (e.student_id || e.studentId) === s.id,
-      );
-      if (hasShadowing || s.state || s.profile?.state) {
-        bucket.students.add(s.id);
-      }
-    });
-
-    shadowing.forEach((exp) => {
-      const sid = exp.student_id || exp.studentId || "";
-      const student = students.find((s) => s.id === sid);
-      const region = regionForState(student?.state || student?.profile?.state);
-      const bucket = ensure(region);
-      if (sid) bucket.students.add(sid);
-      if (exp.organization) bucket.orgs.add(exp.organization.trim().toLowerCase());
-      const hours = (exp.sessions || []).reduce((sum, sess) => sum + (sess.duration || 0), 0);
-      bucket.hours += hours;
-    });
-
-    const preferred = ["Northeast", "Southeast", "West Coast", "Midwest", "Southwest", "West", "Other"];
-    return preferred
-      .filter((r) => byRegion.has(r))
-      .map((region) => {
-        const bucket = byRegion.get(region)!;
-        const studentsCount = bucket.students.size;
-        const dentists = bucket.orgs.size;
-        const load = studentsCount === 0 ? 0 : dentists === 0 ? studentsCount : studentsCount / Math.max(1, dentists);
-        let density: "Low" | "Medium" | "High" | "Critical" = "Low";
-        if (load >= 3 || bucket.hours > 400) density = "Critical";
-        else if (load >= 1.5 || bucket.hours > 200) density = "High";
-        else if (studentsCount > 0 || dentists > 0) density = "Medium";
-        return {
-          region,
-          students: studentsCount,
-          dentists,
-          hours: Math.round(bucket.hours),
-          density,
-        };
-      })
-      .filter((r) => ["Northeast", "Southeast", "West Coast"].includes(r.region) || r.students > 0 || r.dentists > 0)
-      .slice(0, 3);
-  }, [students, experiences]);
-
   const selectedLead = useMemo(() => {
     return leads.find((l) => l.id === selectedLeadId);
   }, [leads, selectedLeadId]);
+
+  const openChatWithMentor = async (mentorId: string) => {
+    if (openingChat) return;
+    setOpeningChat(true);
+    try {
+      const { openDmWithUser } = await import("@/lib/messages/openDm");
+      await openDmWithUser(mentorId, "/admin/messages", router.push.bind(router));
+    } catch (err: unknown) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Could not open chat");
+      router.push("/admin/messages");
+    } finally {
+      setOpeningChat(false);
+    }
+  };
 
   return (
     <div className="space-y-6 lg:space-y-8 pb-12">
@@ -684,8 +597,8 @@ export function AdminDashboardView() {
                     } else if (notification.actionType === "LEAD" && notification.relatedId) {
                       setSelectedLeadId(notification.relatedId);
                     }
-                    // Always mark it read in the database when action is taken
-                    markNotificationRead.mutate(notification.id);
+                    // Dismiss so it leaves the urgent strip once acted on
+                    deleteNotification.mutate(notification.id);
                   }}
                   className="flex-1 sm:flex-none px-4 lg:px-6 py-2.5 lg:py-3 bg-rose-600 hover:bg-rose-500 text-white text-[10px] lg:text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-rose-600/20"
                 >
@@ -693,8 +606,7 @@ export function AdminDashboardView() {
                 </button>
                 <button
                   onClick={() => {
-                    // Instantly mark read/dismiss from database
-                    markNotificationRead.mutate(notification.id);
+                    deleteNotification.mutate(notification.id);
                   }}
                   className="p-2.5 lg:p-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-500 hover:text-rose-450 transition-all"
                   title="Dismiss Notification"
@@ -985,39 +897,68 @@ export function AdminDashboardView() {
             <div>
               <h3 className="text-lg lg:text-2xl font-bold text-white tracking-tight">Mentor Roster</h3>
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
-                Total: <span className="text-white">{usersLoading ? "..." : mentors.length}</span>
+                Total:{" "}
+                <span className="text-white">
+                  {usersLoading || mentorsLoading ? "..." : mentors.length}
+                </span>
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl">
-                <div
-                  className={`w-2 h-2 rounded-full ${
-                    (stats.avgCompliance ?? 0) >= 80
-                      ? "bg-emerald-500"
-                      : (stats.avgCompliance ?? 0) >= 50
-                        ? "bg-amber-500"
-                        : "bg-rose-500"
-                  }`}
-                />
-                <span className="text-xs font-bold text-slate-200">
-                  {stats.avgCompliance !== null ? `${stats.avgCompliance}%` : "—"}
-                </span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                  Avg Compliance
-                </span>
-              </div>
+          <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar pb-0.5 -mx-1 px-1">
+              {(
+                [
+                  {
+                    id: "critical" as const,
+                    label: "Critical",
+                    color: "bg-rose-500",
+                    count: mentorBandCounts.critical,
+                  },
+                  {
+                    id: "at_risk" as const,
+                    label: "At Risk",
+                    color: "bg-amber-500",
+                    count: mentorBandCounts.at_risk,
+                  },
+                  {
+                    id: "compliant" as const,
+                    label: "Compliant",
+                    color: "bg-emerald-500",
+                    count: mentorBandCounts.compliant,
+                  },
+                ] as const
+              ).map((cat) => {
+                const active = mentorBandFilter === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setMentorBandFilter(active ? "all" : cat.id)}
+                    className={`flex shrink-0 items-center gap-2 px-3 sm:px-4 py-2 bg-slate-900 border rounded-xl transition-all cursor-pointer ${
+                      active
+                        ? "border-indigo-500/50 bg-slate-800"
+                        : "border-slate-800 hover:bg-slate-800"
+                    }`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${cat.color}`} />
+                    <span className="text-xs font-bold text-white">{cat.count}</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      {cat.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="relative w-full md:w-[280px]">
+            <div className="relative w-full md:w-[280px] md:ml-auto">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input
                 type="text"
                 placeholder="Search mentors..."
                 value={mentorSearch}
                 onChange={(e) => setMentorSearch(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-600 transition-all shadow-xl"
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-600 transition-all shadow-xl"
               />
             </div>
           </div>
@@ -1029,154 +970,181 @@ export function AdminDashboardView() {
           <div className="grid grid-cols-1 gap-4">
             {filteredMentors.map((mentor) => {
               const metrics = mentorMetrics.get(mentor.id);
+              const latency = metrics?.latency ?? "—";
+              const latencyHrs = latencyHours(latency);
+              const noMtg = metrics?.noMtg ?? 0;
+              const overdue = metrics?.overdue ?? 0;
+              const noTasks = metrics?.noTasks ?? 0;
+              const compliance = metrics?.compliance ?? 0;
+              const activeStudents = (
+                mentor.studentIds ||
+                students.filter((s) => s.mentorId === mentor.id).map((s) => s.id)
+              ).length;
+
               return (
-              <div
-                key={mentor.id}
-                className="bg-slate-900 border border-slate-800 p-4 lg:p-6 rounded-2xl lg:rounded-3xl group hover:border-indigo-500/30 transition-all shadow-xl space-y-3 lg:space-y-0 lg:flex lg:flex-wrap lg:items-center lg:gap-8"
-              >
-                <div className="flex items-center gap-3 lg:gap-4 lg:min-w-[200px]">
-                  <div className="relative shrink-0">
-                    {mentor.avatar ? (
-                      <img src={mentor.avatar} className="w-11 h-11 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl object-cover border border-slate-800 group-hover:border-indigo-500/50 transition-all shadow-lg" alt="" />
-                    ) : (
-                      <div className="w-11 h-11 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl bg-slate-950 flex items-center justify-center font-bold text-indigo-400 border border-slate-800 shadow-md">
-                        {mentor.name ? mentor.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "M"}
+                <div
+                  key={mentor.id}
+                  className="bg-slate-900 border border-slate-800 p-4 lg:p-6 rounded-2xl lg:rounded-3xl group hover:border-indigo-500/30 transition-all shadow-xl space-y-3 lg:space-y-0 lg:flex lg:flex-wrap lg:items-center lg:gap-8"
+                >
+                  <div className="flex items-center gap-3 lg:gap-4 lg:min-w-[200px]">
+                    <div className="relative shrink-0">
+                      {mentor.avatar ? (
+                        <img
+                          src={mentor.avatar}
+                          className="w-11 h-11 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl object-cover border border-slate-800 group-hover:border-indigo-500/50 transition-all shadow-lg"
+                          alt=""
+                        />
+                      ) : (
+                        <div className="w-11 h-11 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl bg-slate-950 flex items-center justify-center font-bold text-indigo-400 border border-slate-800 shadow-md text-sm">
+                          {mentor.name
+                            ? mentor.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()
+                                .slice(0, 2)
+                            : "M"}
+                        </div>
+                      )}
+                      <div className="absolute -top-1 -right-1 w-5 h-5 lg:w-6 lg:h-6 bg-indigo-600 rounded-lg flex items-center justify-center border-2 border-slate-950 shadow-lg">
+                        <Zap className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-white" />
                       </div>
-                    )}
-                    <div className="absolute -top-1 -right-1 w-5 h-5 lg:w-6 lg:h-6 bg-indigo-600 rounded-lg flex items-center justify-center border-2 border-slate-950 shadow-lg">
-                      <Zap className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-base lg:text-lg font-bold text-white tracking-tight group-hover:text-indigo-400 transition-colors truncate">
+                        {mentor.name}
+                      </h4>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
+                        {activeStudents} Active Students
+                      </p>
                     </div>
                   </div>
-                  <div className="min-w-0">
-                    <h4 className="text-base lg:text-lg font-bold text-white tracking-tight group-hover:text-indigo-400 transition-colors truncate">{mentor.name}</h4>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
-                      {(mentor.studentIds || []).length} students
-                    </p>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-3 lg:flex lg:flex-1 gap-1.5 lg:gap-6 lg:justify-around">
-                  <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
-                    <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                      <Clock className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-indigo-400" /> Latency
-                    </p>
-                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.latency ?? "—"}</p>
+                  <div className="grid grid-cols-3 lg:flex lg:flex-1 gap-1.5 lg:gap-6 lg:justify-around">
+                    <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
+                      <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
+                        <Clock className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-indigo-400" /> Latency
+                      </p>
+                      <p
+                        className={`text-sm lg:text-xl font-black tabular-nums mt-0.5 ${
+                          latencyHrs != null && latencyHrs > 12 ? "text-rose-500" : "text-white"
+                        }`}
+                      >
+                        {latency}
+                      </p>
+                    </div>
+                    <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
+                      <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
+                        <CalendarX className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-amber-400" /> No Mtg
+                      </p>
+                      <p
+                        className={`text-sm lg:text-xl font-black tabular-nums mt-0.5 ${
+                          noMtg === 0 ? "text-white" : "text-rose-400"
+                        }`}
+                      >
+                        {noMtg}
+                      </p>
+                    </div>
+                    <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
+                      <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
+                        <AlertTriangle className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-rose-500" /> Overdue
+                      </p>
+                      <p
+                        className={`text-sm lg:text-xl font-black tabular-nums mt-0.5 ${
+                          overdue === 0 ? "text-white" : "text-rose-400"
+                        }`}
+                      >
+                        {overdue}
+                      </p>
+                    </div>
+                    <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
+                      <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
+                        <Target className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-indigo-400" /> No Tasks
+                      </p>
+                      <p
+                        className={`text-sm lg:text-xl font-black tabular-nums mt-0.5 ${
+                          noTasks === 0 ? "text-white" : "text-amber-400"
+                        }`}
+                      >
+                        {noTasks}
+                      </p>
+                    </div>
+                    <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl col-span-2 lg:col-span-1">
+                      <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
+                        <UserCheck className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-emerald-400" /> Compliance
+                      </p>
+                      <div className="flex flex-col items-center">
+                        <p
+                          className={`text-sm lg:text-xl font-black tabular-nums mt-0.5 ${
+                            compliance < 80
+                              ? "text-rose-500"
+                              : compliance >= 90
+                                ? "text-emerald-400"
+                                : "text-white"
+                          }`}
+                        >
+                          {compliance}%
+                        </p>
+                        <div className="w-16 lg:w-20 h-1.5 bg-slate-950 rounded-full mt-1 overflow-hidden border border-slate-800">
+                          <div
+                            className={`h-full ${
+                              compliance < 80
+                                ? "bg-rose-500"
+                                : compliance >= 90
+                                  ? "bg-emerald-500"
+                                  : "bg-amber-500"
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(0, compliance))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
-                    <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                      <CalendarX className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-amber-400" /> No Mtg
-                    </p>
-                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.noMtg ?? 0}</p>
-                  </div>
-                  <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
-                    <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                      <AlertTriangle className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-rose-500" /> Overdue
-                    </p>
-                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.overdue ?? 0}</p>
-                  </div>
-                  <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl">
-                    <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                      <Target className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-indigo-400" /> No Tasks
-                    </p>
-                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.noTasks ?? 0}</p>
-                  </div>
-                  <div className="text-center p-2 bg-slate-950/50 lg:bg-transparent rounded-xl col-span-2 lg:col-span-1">
-                    <p className="text-[9px] lg:text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                      <UserCheck className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-emerald-450" /> Compliance
-                    </p>
-                    <p className="text-[10px] font-bold text-white mt-1 tracking-wide">{metrics?.compliance ?? 0}%</p>
-                  </div>
-                </div>
 
-                <div className="flex gap-2 lg:gap-3 flex-wrap">
-                  <button
-                    onClick={() => router.push("/admin/messages")}
-                    className="p-2.5 lg:p-3 bg-slate-950 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-all border border-slate-800 shadow-lg cursor-pointer"
-                    title="Message Mentor"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => router.push("/admin/mentors")}
-                    className="px-3 lg:px-6 py-2.5 lg:py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all border border-slate-800 shadow-lg flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4" /> Students
-                  </button>
-                  <button
-                    onClick={() => router.push("/admin/mentors")}
-                    className="px-3 lg:px-6 py-2.5 lg:py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all border border-slate-800 shadow-lg flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <User className="w-3.5 h-3.5 lg:w-4 lg:h-4" /> Profile
-                  </button>
-                  <button
-                    onClick={() => router.push("/admin/analytics")}
-                    className="px-3 lg:px-6 py-2.5 lg:py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Activity className="w-3.5 h-3.5 lg:w-4 lg:h-4" /> Audit
-                  </button>
+                  <div className="flex gap-2 lg:gap-3 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => void openChatWithMentor(mentor.id)}
+                      disabled={openingChat}
+                      className="p-2.5 lg:p-3 bg-slate-950 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-all border border-slate-800 shadow-lg cursor-pointer disabled:opacity-50"
+                      title="Message Mentor"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/admin/mentors/${mentor.id}/students`)}
+                      className="px-3 lg:px-6 py-2.5 lg:py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all border border-slate-800 shadow-lg flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4" /> Students
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/admin/mentors/${mentor.id}/profile`)}
+                      className="px-3 lg:px-6 py-2.5 lg:py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all border border-slate-800 shadow-lg flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5 lg:w-4 lg:h-4" /> Profile
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/admin/mentors/${mentor.id}/audit`)}
+                      className="px-3 lg:px-6 py-2.5 lg:py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] lg:text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Activity className="w-3.5 h-3.5 lg:w-4 lg:h-4" /> Audit
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
+              );
             })}
           </div>
         ) : (
-          <div className="bg-slate-900/40 border border-dashed border-slate-800 p-12 rounded-3xl text-center">
-            <Users className="w-12 h-12 text-slate-700 mx-auto mb-4" />
-            <p className="text-slate-500">No mentors matching "{mentorSearch}" found.</p>
-          </div>
-        )}
-      </section>
-
-      {/* Regional Density */}
-      <section className="bg-slate-900 border border-slate-800 rounded-2xl lg:rounded-3xl p-5 lg:p-8">
-        <div className="flex items-center gap-2 lg:gap-3 mb-4 lg:mb-8">
-          <MapPin className="w-5 h-5 lg:w-6 lg:h-6 text-rose-400 shrink-0" />
-          <div>
-            <h3 className="text-base lg:text-xl font-bold text-white">Shadowing Network Density</h3>
-            <p className="text-xs text-slate-500">From student states and shadowing experiences</p>
-          </div>
-        </div>
-        {experiencesLoading ? (
-          <div className="py-10 text-center text-sm text-slate-500">Loading shadowing network…</div>
-        ) : (
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3 lg:gap-6">
-            {regionalDensity.map((r) => (
-              <div key={r.region} className="p-6 bg-slate-950/50 border border-slate-800 rounded-2xl">
-                <p className="text-sm font-bold text-white mb-4">{r.region}</p>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Active Students</span>
-                    <span className="text-white font-bold">{r.students}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Dentist Partners</span>
-                    <span className="text-white font-bold">{r.dentists}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Shadowing Hours</span>
-                    <span className="text-white font-bold">{r.hours}h</span>
-                  </div>
-                  <div className="pt-3 border-t border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase">Shadowing Load</span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${
-                          r.density === "Critical"
-                            ? "bg-rose-500/10 text-rose-400"
-                            : r.density === "High"
-                              ? "bg-amber-500/10 text-amber-400"
-                              : r.density === "Medium"
-                                ? "bg-emerald-500/10 text-emerald-400"
-                                : "bg-slate-800 text-slate-400"
-                        }`}
-                      >
-                        {r.density}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="bg-slate-900/40 border border-dashed border-slate-800 p-8 lg:p-12 rounded-2xl lg:rounded-3xl text-center">
+            <Users className="w-10 h-10 lg:w-12 lg:h-12 text-slate-700 mx-auto mb-4" />
+            <p className="text-slate-500 text-sm lg:text-base">
+              {mentorSearch || mentorBandFilter !== "all"
+                ? "No mentors match the current filters."
+                : "No mentors found."}
+            </p>
           </div>
         )}
       </section>

@@ -37,6 +37,7 @@ export function useUpdateLorStatus() {
     }) => lorApi.updateStatus(id, status, declineReason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lor"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }

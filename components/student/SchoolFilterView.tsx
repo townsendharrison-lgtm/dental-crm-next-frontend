@@ -845,33 +845,50 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
                             <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Residency & Acceptance</p>
                             <div className="space-y-3">
                               <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-400">In-State Enrollment</span>
-                                <span className="text-sm font-semibold text-white">{selectedSchool.inStateEnrollment ? `${selectedSchool.inStateEnrollment}%` : 'N/A'}</span>
+                                <span className="text-sm text-slate-400">In-State Acceptance Rate</span>
+                                <span className="text-sm font-semibold text-emerald-400">
+                                  {selectedSchool.isAcceptanceRate
+                                    ? `${selectedSchool.isAcceptanceRate}%`
+                                    : "N/A"}
+                                </span>
                               </div>
                               <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden flex">
-                                <div 
-                                  className="bg-emerald-500 h-full transition-all duration-1000" 
-                                  style={{ width: `${(selectedSchool.inStateEnrollment / (selectedSchool.inStateEnrollment + selectedSchool.outOfStateEnrollment || 1)) * 100}%` }} 
+                                <div
+                                  className="bg-emerald-500 h-full transition-all duration-1000"
+                                  style={{
+                                    width: `${
+                                      ((selectedSchool.isAcceptanceRate || 0) /
+                                        Math.max(
+                                          1,
+                                          (selectedSchool.isAcceptanceRate || 0) +
+                                            (selectedSchool.oosAcceptanceRate || 0),
+                                        )) *
+                                      100
+                                    }%`,
+                                  }}
                                 />
-                                <div 
-                                  className="bg-amber-500 h-full transition-all duration-1000" 
-                                  style={{ width: `${(selectedSchool.outOfStateEnrollment / (selectedSchool.inStateEnrollment + selectedSchool.outOfStateEnrollment || 1)) * 100}%` }} 
+                                <div
+                                  className="bg-amber-500 h-full transition-all duration-1000"
+                                  style={{
+                                    width: `${
+                                      ((selectedSchool.oosAcceptanceRate || 0) /
+                                        Math.max(
+                                          1,
+                                          (selectedSchool.isAcceptanceRate || 0) +
+                                            (selectedSchool.oosAcceptanceRate || 0),
+                                        )) *
+                                      100
+                                    }%`,
+                                  }}
                                 />
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-400">Out-of-State Enrollment</span>
-                                <span className="text-sm font-semibold text-white">{selectedSchool.outOfStateEnrollment ? `${selectedSchool.outOfStateEnrollment}%` : 'N/A'}</span>
-                              </div>
-                              
-                              <div className="pt-2 flex flex-col gap-2">
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-slate-500">IS Acceptance Rate</span>
-                                  <span className="font-semibold text-emerald-400">{selectedSchool.isAcceptanceRate ? `${selectedSchool.isAcceptanceRate}%` : 'N/A'}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-slate-500">OOS Acceptance Rate</span>
-                                  <span className="font-semibold text-amber-400">{selectedSchool.oosAcceptanceRate ? `${selectedSchool.oosAcceptanceRate}%` : 'N/A'}</span>
-                                </div>
+                                <span className="text-sm text-slate-400">Out-of-State Acceptance Rate</span>
+                                <span className="text-sm font-semibold text-amber-400">
+                                  {selectedSchool.oosAcceptanceRate
+                                    ? `${selectedSchool.oosAcceptanceRate}%`
+                                    : "N/A"}
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -880,24 +897,51 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
                           <div className="space-y-3">
                             <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Gender</p>
                             <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-400">Male</span>
-                                <span className="text-sm font-semibold text-white">{selectedSchool.maleEnrollment || 'N/A'}</span>
-                              </div>
-                              <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden flex">
-                                <div 
-                                  className="bg-blue-500 h-full transition-all duration-1000" 
-                                  style={{ width: `${(selectedSchool.maleEnrollment / (selectedSchool.maleEnrollment + selectedSchool.femaleEnrollment || 1)) * 100}%` }} 
-                                />
-                                <div 
-                                  className="bg-pink-500 h-full transition-all duration-1000" 
-                                  style={{ width: `${(selectedSchool.femaleEnrollment / (selectedSchool.maleEnrollment + selectedSchool.femaleEnrollment || 1)) * 100}%` }} 
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-400">Female</span>
-                                <span className="text-sm font-semibold text-white">{selectedSchool.femaleEnrollment || 'N/A'}</span>
-                              </div>
+                              {(() => {
+                                const male = Number(selectedSchool.maleEnrollment) || 0;
+                                const female = Number(selectedSchool.femaleEnrollment) || 0;
+                                const total = male + female;
+                                const malePct = total > 0 ? Math.round((male / total) * 100) : null;
+                                const femalePct = total > 0 ? Math.round((female / total) * 100) : null;
+                                return (
+                                  <>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm text-slate-400">Male</span>
+                                      <span className="text-sm font-semibold text-blue-500">
+                                        {selectedSchool.maleEnrollment != null
+                                          ? malePct != null
+                                            ? `${male} (${malePct}%)`
+                                            : `${male}`
+                                          : "N/A"}
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden flex">
+                                      <div
+                                        className="bg-blue-500 h-full transition-all duration-1000"
+                                        style={{
+                                          width: `${total > 0 ? (male / total) * 100 : 0}%`,
+                                        }}
+                                      />
+                                      <div
+                                        className="bg-pink-500 h-full transition-all duration-1000"
+                                        style={{
+                                          width: `${total > 0 ? (female / total) * 100 : 0}%`,
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm text-slate-400">Female</span>
+                                      <span className="text-sm font-semibold text-pink-500">
+                                        {selectedSchool.femaleEnrollment != null
+                                          ? femalePct != null
+                                            ? `${female} (${femalePct}%)`
+                                            : `${female}`
+                                          : "N/A"}
+                                      </span>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>

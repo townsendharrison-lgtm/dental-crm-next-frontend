@@ -37,7 +37,7 @@ function isActive(pathname: string, href: string) {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout, isAuthenticated } = useAuth();
-  const { role, isAdmin } = useRole();
+  const { role, isAdmin, actualRole } = useRole();
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const closeMobile = useUIStore((s) => s.closeMobileSidebar);
   const { previewCollapsed, setPreviewCollapsed } = useUIStore();
@@ -149,7 +149,7 @@ export function Sidebar() {
         </button>
         {isAuthenticated && (
           <div className="flex items-center gap-2">
-            {isAdmin && previewCollapsed && (
+            {isAdmin && actualRole === "ADMIN" && previewCollapsed && (
               <button
                 onClick={() => setPreviewCollapsed(false)}
                 className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-800/50 text-slate-400 transition-all hover:bg-slate-800 hover:text-amber-400"

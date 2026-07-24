@@ -35,12 +35,13 @@ import {
 } from "@/lib/utils/firebase";
 import {
   useNotifications,
-  useMarkNotificationAsRead,
   useMarkAllNotificationsAsRead,
   useClearAllNotifications,
+  useDeleteNotification,
 } from "@/lib/hooks/useNotifications";
 import type { SystemNotification } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
+import { RolePreviewBanner } from "./RolePreviewBanner";
 
 const LOGO_URL =
   "https://images.squarespace-cdn.com/content/64d0277a0640507c114633ad/b8543df7-ec9e-4d64-912e-e80bb44c8757/Untitled+design-3.png?content-type=image%2Fpng";
@@ -118,7 +119,7 @@ function NotificationBell() {
 
   const { data: notifications = [], isLoading } = useNotifications(false, !!user);
 
-  const markAsReadMutation = useMarkNotificationAsRead();
+  const deleteNotificationMutation = useDeleteNotification();
   const markAllAsReadMutation = useMarkAllNotificationsAsRead();
   const clearAllMutation = useClearAllNotifications();
 
@@ -253,9 +254,8 @@ function NotificationBell() {
   };
 
   const handleNotificationClick = (notif: SystemNotification) => {
-    if (!notif.is_read) {
-      markAsReadMutation.mutate(notif.id);
-    }
+    // Dismiss once opened / acted on so it leaves dashboards & the bell
+    deleteNotificationMutation.mutate(notif.id);
 
     const category = (notif.category || "").toUpperCase();
     setIsOpen(false);
@@ -917,17 +917,22 @@ export function GlobalHeader() {
   const details = getHeaderDetails(pathname);
 
   return (
-    <div className="hidden lg:block sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md pt-2">
-      <div className="mx-auto max-w-7xl flex items-center justify-between gap-4 py-2.5 border-b border-slate-800/80 mb-4">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold text-white leading-tight">{details.title}</h1>
-          {details.description && (
-            <p className="text-sm text-slate-400 font-medium leading-normal mt-0.5">{details.description}</p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <HeaderActionButton />
-          <NotificationBell />
+    <div className="sticky top-0 z-30 mb-4 hidden bg-slate-950/95 pt-2 backdrop-blur-md lg:block">
+      <div className="mx-auto max-w-7xl space-y-3">
+        <RolePreviewBanner />
+        <div className="flex items-center justify-between gap-4 border-b border-slate-800/80 pb-2.5">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold leading-tight text-white">{details.title}</h1>
+            {details.description && (
+              <p className="mt-0.5 text-sm font-medium leading-normal text-slate-400">
+                {details.description}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <HeaderActionButton />
+            <NotificationBell />
+          </div>
         </div>
       </div>
     </div>

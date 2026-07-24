@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { popupsApi, type CreatePopupPayload } from "@/lib/api/popups";
 import { queryKeys } from "@/lib/api/queryKeys";
-import type { PopupAdvertisement } from "@/lib/types";
+import type { PopupAdvertisement, PopupAnalytics } from "@/lib/types";
 
 export function usePopups() {
   return useQuery<PopupAdvertisement[]>({
@@ -17,6 +17,14 @@ export function useActivePopups(enabled = true) {
     queryKey: ["popups", "active"],
     queryFn: popupsApi.active,
     enabled,
+  });
+}
+
+export function usePopupAnalytics(popupId: string | null) {
+  return useQuery<PopupAnalytics>({
+    queryKey: ["popups", "analytics", popupId],
+    queryFn: () => popupsApi.analytics(popupId!),
+    enabled: !!popupId,
   });
 }
 
@@ -61,5 +69,17 @@ export function useDismissPopup() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["popups", "active"] });
     },
+  });
+}
+
+export function useRecordPopupClick() {
+  return useMutation({
+    mutationFn: (id: string) => popupsApi.recordClick(id),
+  });
+}
+
+export function useUploadPopupImage() {
+  return useMutation({
+    mutationFn: (file: File) => popupsApi.uploadImage(file),
   });
 }

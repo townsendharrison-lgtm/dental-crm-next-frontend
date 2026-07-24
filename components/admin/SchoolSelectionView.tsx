@@ -15,8 +15,11 @@ import {
   Wand2,
   Eye,
   CheckCircle2,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import {
   Button,
   FormField,
@@ -25,7 +28,6 @@ import {
   SelectMenu,
   EmptyState,
   Modal,
-  Badge,
 } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
@@ -39,7 +41,12 @@ import { useStudentSchools } from "@/lib/hooks/useStudentSchools";
 import { useSchoolCategories } from "@/lib/hooks/useSchoolCategories";
 import SchoolSelectionTab from "@/components/student/hub/SchoolSelectionTab";
 import { DEFAULT_CATEGORIES } from "@/components/student/hub/hubShared";
-import type { OptimizationPlan, School as HubSchool, SchoolCategory } from "@/lib/types";
+import type {
+  OptimizationPlan,
+  School as HubSchool,
+  SchoolCategory,
+  Student,
+} from "@/lib/types";
 
 type Tab = "manual" | "ai";
 type KpiLevel = "Strong" | "Moderate" | "Developing" | "Weak";
@@ -248,26 +255,18 @@ function StringListEditor({
 
 function StrengthDonut({ score }: { score: number }) {
   const clamped = Math.max(0, Math.min(100, score));
-  const r = 54;
+  const r = 42;
   const c = 2 * Math.PI * r;
   const offset = c - (c * clamped) / 100;
   const tone = clamped >= 80 ? "#34d399" : clamped >= 60 ? "#818cf8" : "#f59e0b";
 
   return (
-    <div className="relative h-28 w-28 shrink-0">
-      <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90">
+    <div className="relative h-24 w-24 shrink-0">
+      <svg viewBox="0 0 112 112" className="h-full w-full -rotate-90">
+        <circle cx="56" cy="56" r={r} fill="transparent" stroke="#1e293b" strokeWidth="8" />
         <circle
-          cx="64"
-          cy="64"
-          r={r}
-          fill="transparent"
-          stroke="currentColor"
-          strokeWidth="8"
-          className="text-slate-800"
-        />
-        <circle
-          cx="64"
-          cy="64"
+          cx="56"
+          cy="56"
           r={r}
           fill="transparent"
           stroke={tone}
@@ -278,8 +277,8 @@ function StrengthDonut({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-semibold tabular-nums text-white">{clamped}</span>
-        <span className="text-[10px] text-slate-500">/ 100</span>
+        <span className="text-2xl font-bold tabular-nums leading-none text-white">{clamped}</span>
+        <span className="mt-0.5 text-[10px] text-slate-500">/ 100</span>
       </div>
     </div>
   );
@@ -287,6 +286,29 @@ function StrengthDonut({ score }: { score: number }) {
 
 function schoolCategoryKey(school: HubSchool): string {
   return school.type || "Target";
+}
+
+function kpiLabel(key: string) {
+  const labels: Record<string, string> = {
+    academics: "Academics",
+    experienceDepth: "Experience",
+    leadership: "Leadership",
+    shadowing: "Shadowing",
+  };
+  return labels[key] || key.replace(/([A-Z])/g, " $1").trim();
+}
+
+function kpiTone(value: KpiLevel) {
+  switch (value) {
+    case "Strong":
+      return { bar: "bg-emerald-500", text: "text-emerald-400", width: "w-full" };
+    case "Moderate":
+      return { bar: "bg-indigo-500", text: "text-indigo-300", width: "w-3/4" };
+    case "Developing":
+      return { bar: "bg-amber-500", text: "text-amber-300", width: "w-1/2" };
+    default:
+      return { bar: "bg-rose-500", text: "text-rose-400", width: "w-1/4" };
+  }
 }
 
 function PlanPreviewBody({
@@ -327,239 +349,289 @@ function PlanPreviewBody({
     }))
     .filter((p) => p.tasks.length > 0);
 
+  const schoolGroups = cats
+    .map((cat) => ({
+      cat,
+      schools: schools.filter((s) => schoolCategoryKey(s) === cat.id),
+    }))
+    .filter((g) => g.schools.length > 0);
+
+  const initial = (studentName.trim()[0] || "S").toUpperCase();
+
   return (
-    <div className="space-y-4 pb-2">
-      <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Strategic Selection Plan
-            </p>
-            <h3 className="mt-1 truncate text-xl font-semibold text-white">{studentName}</h3>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-400">
-              {draft.snapshot.trim() || "No strategic snapshot has been written yet."}
-            </p>
-            <p className="mt-3 text-xs text-slate-500">
-              Improvement leverage{" "}
-              <span className="font-semibold text-indigo-300">
-                {draft.improvementLeverageScore}%
-              </span>
-            </p>
+    <div id="school-selection-pdf" className="rounded-xl border border-slate-800 bg-slate-950 text-slate-200">
+      <header className="border-b border-slate-800 bg-slate-900/80 px-5 py-5 sm:px-6 sm:py-6">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-lg font-bold text-white">
+              {initial}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-indigo-400">
+                Strategic Selection Plan
+              </p>
+              <h3 className="mt-1 truncate text-2xl font-bold tracking-tight text-white">
+                {studentName}
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Prepared by Dental School Guide ·{" "}
+                {new Date().toLocaleDateString(undefined, {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3">
             <StrengthDonut score={draft.overallScore} />
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Overall strength
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {kpiEntries.map(([key, value]) => (
-          <div key={key} className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              {key.replace(/([A-Z])/g, " $1").trim()}
-            </p>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-slate-200">{value}</span>
-              <span
-                className={cn(
-                  "h-2 w-2 rounded-full",
-                  value === "Strong" && "bg-emerald-400",
-                  value === "Moderate" && "bg-indigo-400",
-                  value === "Developing" && "bg-amber-400",
-                  value === "Weak" && "bg-rose-400",
-                )}
-              />
-            </div>
-            <div className="mt-3 h-1 overflow-hidden rounded-full bg-slate-800">
-              <div
-                className={cn(
-                  "h-full rounded-full",
-                  value === "Strong" && "w-full bg-emerald-500",
-                  value === "Moderate" && "w-3/4 bg-indigo-500",
-                  value === "Developing" && "w-1/2 bg-amber-500",
-                  value === "Weak" && "w-1/4 bg-rose-500",
-                )}
-              />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Overall strength
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-400">
+                Leverage{" "}
+                <span className="font-bold text-indigo-300">
+                  {draft.improvementLeverageScore}%
+                </span>
+              </p>
             </div>
           </div>
-        ))}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <Brain className="h-4 w-4 text-emerald-400" />
-            <h4 className="text-sm font-semibold text-white">Strengths to leverage</h4>
-          </div>
-          <ul className="space-y-2">
-            {strengths.map((s, i) => (
-              <li key={i} className="flex gap-2 text-sm text-slate-300">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                <span>{s}</span>
-              </li>
-            ))}
-            {strengths.length === 0 && (
-              <li className="text-sm italic text-slate-600">None listed</li>
-            )}
-          </ul>
-        </section>
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-rose-400" />
-            <h4 className="text-sm font-semibold text-white">Critical gaps</h4>
-          </div>
-          <ul className="space-y-2">
-            {gaps.map((g, i) => (
-              <li key={i} className="flex gap-2 text-sm text-slate-300">
-                <span className="mt-0.5 text-rose-400">•</span>
-                <span>{g}</span>
-              </li>
-            ))}
-            {gaps.length === 0 && (
-              <li className="text-sm italic text-slate-600">None listed</li>
-            )}
-          </ul>
-        </section>
-      </div>
-
-      <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <School className="h-4 w-4 text-sky-400" />
-          <div>
-            <h4 className="text-sm font-semibold text-white">School selection</h4>
-            <p className="text-xs text-slate-500">{schools.length} schools across categories</p>
-          </div>
         </div>
-        {schools.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-800 py-8 text-center text-sm italic text-slate-500">
-            No schools on this student’s list yet.
+      </header>
+
+      <div className="space-y-8 px-5 py-6 sm:px-6 sm:py-7">
+        <section>
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Strategic snapshot
+          </h4>
+          <p className="text-[15px] leading-relaxed text-slate-300">
+            {draft.snapshot.trim() || "No strategic snapshot has been written yet."}
           </p>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {cats.map((cat) => {
-              const inCat = schools.filter((s) => schoolCategoryKey(s) === cat.id);
+        </section>
+
+        <section>
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Profile KPIs
+          </h4>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {kpiEntries.map(([key, value]) => {
+              const tone = kpiTone(value);
               return (
-                <div key={cat.id} className="rounded-lg border border-slate-800 bg-slate-950/40">
-                  <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2.5">
-                    <p
-                      className="text-xs font-semibold"
-                      style={{ color: cat.color || "#818cf8" }}
-                    >
-                      {cat.name}
-                    </p>
-                    <span className="text-[10px] font-bold tabular-nums text-slate-500">
-                      {inCat.length}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 p-2.5">
-                    {inCat.map((s) => (
-                      <div
-                        key={s.selectionId || s.id}
-                        className="rounded-md bg-slate-900/80 px-3 py-2"
-                      >
-                        <p className="text-sm font-medium text-white">{s.name}</p>
-                        {s.notes && (
-                          <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{s.notes}</p>
-                        )}
-                      </div>
-                    ))}
-                    {inCat.length === 0 && (
-                      <p className="py-4 text-center text-[11px] italic text-slate-600">
-                        No schools
-                      </p>
-                    )}
+                <div
+                  key={key}
+                  className="rounded-xl border border-slate-800 bg-slate-900/50 px-3.5 py-3"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    {kpiLabel(key)}
+                  </p>
+                  <p className={cn("mt-1.5 text-sm font-bold", tone.text)}>{value}</p>
+                  <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                    <div className={cn("h-full rounded-full", tone.bar, tone.width)} />
                   </div>
                 </div>
               );
             })}
           </div>
-        )}
-      </section>
+        </section>
 
-      {roadmapPhases.length > 0 && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-indigo-400" />
-            <h4 className="text-sm font-semibold text-white">Strategic flow roadmap</h4>
+        <section className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+            <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-400">
+              <Brain className="h-3.5 w-3.5" />
+              Strengths to leverage
+            </h4>
+            <ul className="space-y-2">
+              {strengths.map((s, i) => (
+                <li key={i} className="flex gap-2.5 text-sm leading-relaxed text-slate-300">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                  <span>{s}</span>
+                </li>
+              ))}
+              {strengths.length === 0 && (
+                <li className="text-sm italic text-slate-600">None listed</li>
+              )}
+            </ul>
           </div>
-          <div className="space-y-3">
-            {roadmapPhases.map(({ phase, idx, tasks }) => (
-              <div key={phase} className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Phase {idx + 1}
-                </p>
-                <ul className="space-y-1.5">
-                  {tasks.map((t, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-slate-300">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
-                      <span>{t}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+          <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
+            <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-400">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Critical gaps
+            </h4>
+            <ul className="space-y-2">
+              {gaps.map((g, i) => (
+                <li key={i} className="flex gap-2.5 text-sm leading-relaxed text-slate-300">
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center text-rose-400">
+                    !
+                  </span>
+                  <span>{g}</span>
+                </li>
+              ))}
+              {gaps.length === 0 && (
+                <li className="text-sm italic text-slate-600">None listed</li>
+              )}
+            </ul>
           </div>
         </section>
-      )}
 
-      {leverage.length > 0 && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-violet-400" />
-            <h4 className="text-sm font-semibold text-white">Improvement leverage actions</h4>
+        <section>
+          <div className="mb-4">
+            <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              School selection
+            </h4>
+            <p className="mt-1 text-sm text-slate-500">
+              {schools.length > 0
+                ? `${schools.length} school${schools.length === 1 ? "" : "s"} across ${schoolGroups.length} categor${schoolGroups.length === 1 ? "y" : "ies"}`
+                : "No schools linked yet"}
+            </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {leverage.map((action, idx) => (
-              <div key={idx} className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-                <Badge
-                  variant={
-                    action.impact === "High"
-                      ? "success"
-                      : action.impact === "Moderate"
-                        ? "primary"
-                        : "default"
-                  }
+          {schoolGroups.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-800 py-10 text-center text-sm text-slate-600">
+              No schools on this list yet.
+            </p>
+          ) : (
+            <div
+              className={cn(
+                "grid gap-3",
+                schoolGroups.length === 1 && "grid-cols-1",
+                schoolGroups.length === 2 && "md:grid-cols-2",
+                schoolGroups.length >= 3 && "md:grid-cols-2 xl:grid-cols-3",
+              )}
+            >
+              {schoolGroups.map(({ cat, schools: inCat }) => (
+                <div
+                  key={cat.id}
+                  className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40"
                 >
-                  {action.impact} impact
-                </Badge>
-                <h5 className="mt-2 text-sm font-semibold text-white">{action.title}</h5>
-                <p className="mt-1 text-xs leading-relaxed text-slate-400">{action.description}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {risks.length > 0 && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-rose-400" />
-            <h4 className="text-sm font-semibold text-white">Risk factors</h4>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {risks.map((risk, idx) => (
-              <div key={idx} className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <h5 className="text-sm font-semibold text-white">{risk.factor}</h5>
-                  <Badge variant={risk.severity === "High" ? "danger" : "warning"}>
-                    {risk.severity}
-                  </Badge>
+                  <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/80 px-3.5 py-2.5">
+                    <p
+                      className="text-xs font-bold uppercase tracking-wider"
+                      style={{ color: cat.color || "#818cf8" }}
+                    >
+                      {cat.name}
+                    </p>
+                    <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold tabular-nums text-slate-400">
+                      {inCat.length}
+                    </span>
+                  </div>
+                  <ul className="divide-y divide-slate-800/80">
+                    {inCat.map((s) => (
+                      <li key={s.selectionId || s.id} className="px-3.5 py-3">
+                        <p className="text-sm font-semibold text-white">{s.name}</p>
+                        {s.notes && (
+                          <p className="mt-1 text-xs leading-relaxed text-slate-500">{s.notes}</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <p className="text-xs leading-relaxed text-slate-400">{risk.description}</p>
-                {risk.mitigation && (
-                  <p className="mt-2 border-t border-slate-800 pt-2 text-xs text-slate-400">
-                    <span className="font-semibold text-emerald-400">Mitigation: </span>
-                    {risk.mitigation}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
-      )}
+
+        {roadmapPhases.length > 0 && (
+          <section>
+            <h4 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Strategic roadmap
+            </h4>
+            <div className="space-y-3">
+              {roadmapPhases.map(({ phase, idx, tasks }) => (
+                <div
+                  key={phase}
+                  className="rounded-xl border border-slate-800 bg-slate-900/40 p-4"
+                >
+                  <p className="mb-2.5 text-xs font-bold uppercase tracking-wider text-indigo-400">
+                    Phase {idx + 1}
+                  </p>
+                  <ol className="space-y-2">
+                    {tasks.map((t, i) => (
+                      <li key={i} className="flex gap-3 text-sm leading-relaxed text-slate-300">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500/15 text-[10px] font-bold text-indigo-300">
+                          {i + 1}
+                        </span>
+                        <span>{t}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {leverage.length > 0 && (
+          <section>
+            <h4 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Leverage actions
+            </h4>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {leverage.map((action, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-xl border border-slate-800 bg-slate-900/40 p-4"
+                >
+                  <span
+                    className={cn(
+                      "inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                      action.impact === "High" && "bg-emerald-500/10 text-emerald-400",
+                      action.impact === "Moderate" && "bg-indigo-500/10 text-indigo-300",
+                      action.impact === "Lower" && "bg-slate-800 text-slate-400",
+                    )}
+                  >
+                    {action.impact} impact
+                  </span>
+                  <h5 className="mt-2 text-sm font-bold text-white">{action.title}</h5>
+                  {action.description && (
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
+                      {action.description}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {risks.length > 0 && (
+          <section>
+            <h4 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Risk factors
+            </h4>
+            <div className="space-y-3">
+              {risks.map((risk, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-xl border border-slate-800 bg-slate-900/40 p-4"
+                >
+                  <div className="mb-1.5 flex items-start justify-between gap-3">
+                    <h5 className="text-sm font-bold text-white">{risk.factor}</h5>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                        risk.severity === "High" && "bg-rose-500/10 text-rose-400",
+                        risk.severity === "Medium" && "bg-amber-500/10 text-amber-300",
+                        risk.severity === "Low" && "bg-slate-800 text-slate-400",
+                      )}
+                    >
+                      {risk.severity}
+                    </span>
+                  </div>
+                  {risk.description && (
+                    <p className="text-sm leading-relaxed text-slate-400">{risk.description}</p>
+                  )}
+                  {risk.mitigation && (
+                    <p className="mt-2 border-t border-slate-800 pt-2 text-sm text-slate-400">
+                      <span className="font-semibold text-emerald-400">Mitigation: </span>
+                      {risk.mitigation}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }
@@ -568,37 +640,62 @@ function PlanPreviewBody({
 export default function SchoolSelectionView() {
   const [tab, setTab] = useState<Tab>("manual");
   const [studentId, setStudentId] = useState("");
+  const [studentName, setStudentName] = useState("");
   const [draft, setDraft] = useState<PlanDraft>(EMPTY_DRAFT);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [manualSchools, setManualSchools] = useState<HubSchool[]>([]);
+  const [manualCategories, setManualCategories] =
+    useState<SchoolCategory[]>(DEFAULT_CATEGORIES);
 
   const platformConfig = usePlatformConfig();
   const { data: students = [], isLoading: studentsLoading } = useStudents();
   const { data: existingPlan, isLoading: planLoading } = useOptimizationPlan(studentId || undefined);
   const upsertPlan = useUpsertOptimizationPlan();
-  const { data: previewSchools = [] } = useStudentSchools(studentId || undefined);
-  const { data: previewCategories = [] } = useSchoolCategories(studentId || undefined);
+  const { data: accountSchools = [] } = useStudentSchools(studentId || undefined);
+  const { data: accountCategories = [] } = useSchoolCategories(studentId || undefined);
 
   const studentOptions = useMemo(
-    () =>
-      [...students]
+    () => [
+      { value: "", label: "None — name only (no dashboard login)" },
+      ...[...students]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((s) => ({
           value: s.id,
           label: s.email ? `${s.name} · ${s.email}` : s.name,
         })),
+    ],
     [students],
   );
 
   const selectedStudent = students.find((s) => s.id === studentId);
+  const displayName = studentName.trim() || selectedStudent?.name || "";
+  const canEditPlan = displayName.length > 0;
+  const previewSchools = selectedStudent ? accountSchools : manualSchools;
+  const previewCategories = selectedStudent ? accountCategories : manualCategories;
+
+  const boardStudent = useMemo<Student>(() => {
+    if (selectedStudent) return selectedStudent;
+    return {
+      id: "__manual__",
+      name: displayName || "Customer",
+      email: "",
+      schoolCategories: manualCategories,
+    };
+  }, [selectedStudent, displayName, manualCategories]);
 
   useEffect(() => {
-    if (!studentId) {
-      setDraft(EMPTY_DRAFT());
-      return;
-    }
+    if (!studentId) return;
     if (planLoading) return;
     setDraft(planToDraft(existingPlan));
   }, [studentId, existingPlan, planLoading]);
+
+  const handleStudentSelect = (id: string) => {
+    setStudentId(id);
+    if (!id) return;
+    const match = students.find((s) => s.id === id);
+    if (match?.name) setStudentName(match.name);
+  };
 
   const patch = <K extends keyof PlanDraft>(key: K, value: PlanDraft[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -606,7 +703,7 @@ export default function SchoolSelectionView() {
 
   const handleSave = async () => {
     if (!studentId) {
-      toast.error("Select a student first");
+      toast.error("Link a dashboard student to save. For name-only customers, use Preview → Download PDF.");
       return;
     }
     if (!draft.snapshot.trim()) {
@@ -639,6 +736,50 @@ export default function SchoolSelectionView() {
       );
     } catch (err: any) {
       toast.error(err?.message || "Failed to save plan");
+    }
+  };
+
+  const handleExportPdf = async () => {
+    const element = document.getElementById("school-selection-pdf");
+    if (!element) {
+      toast.error("Preview content not found");
+      return;
+    }
+    setExportingPdf(true);
+    toast.info("Generating PDF…");
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#020617",
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      let heightLeft = pdfHeight;
+      let position = 0;
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const safeName = (displayName || "School_Selection").replace(/[^\w\-]+/g, "_");
+      pdf.save(`${safeName}_School_Selection.pdf`);
+      toast.success("PDF downloaded");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate PDF");
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -703,9 +844,9 @@ export default function SchoolSelectionView() {
             icon={Target}
             iconClass="bg-indigo-500/10 text-indigo-400"
             title="Student"
-            subtitle="Required — the plan and school list are saved to this student’s profile"
+            subtitle="Enter a name for any customer. Optionally link a dashboard student to save and manage their school list."
             actions={
-              studentId ? (
+              canEditPlan ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -718,30 +859,49 @@ export default function SchoolSelectionView() {
               ) : null
             }
           >
-            <SelectMenu
-              value={studentId}
-              onChange={setStudentId}
-              options={studentOptions}
-              placeholder={studentsLoading ? "Loading students…" : "Select a student…"}
-              className="w-full max-w-xl"
-              disabled={studentsLoading}
-            />
-            {selectedStudent && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                label="Student name"
+                required
+                hint="Shown on the plan and PDF — works for customers without a login"
+              >
+                <Input
+                  value={studentName}
+                  onChange={(e) => setStudentName(e.target.value)}
+                  placeholder="e.g. Jane Doe"
+                  className="w-full"
+                />
+              </FormField>
+              <FormField
+                label="Link dashboard student"
+                hint="Optional — loads/saves their plan and school list"
+              >
+                <SelectMenu
+                  value={studentId}
+                  onChange={handleStudentSelect}
+                  options={studentOptions}
+                  placeholder={studentsLoading ? "Loading students…" : "Optional…"}
+                  className="w-full"
+                  disabled={studentsLoading}
+                />
+              </FormField>
+            </div>
+            {selectedStudent ? (
               <p className="text-xs text-slate-500">
                 {existingPlan
                   ? "Existing plan loaded — edits will overwrite on save."
-                  : "No plan yet — fill in the sections below and create one."}
+                  : "No saved plan yet — fill in the sections below and create one."}
               </p>
-            )}
+            ) : null}
           </SectionCard>
 
-          {!studentId ? (
+          {!canEditPlan ? (
             <EmptyState
               icon={<School className="h-6 w-6" />}
-              title="Select a student"
-              description="Choose a student above to create or edit their strategic selection plan and school list."
+              title="Enter a student name"
+              description="Type the customer’s name above to build their strategic selection plan. Link a dashboard student only if they already have an account."
             />
-          ) : planLoading ? (
+          ) : studentId && planLoading ? (
             <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/40 py-16 text-sm text-slate-400">
               <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
               Loading plan…
@@ -830,17 +990,30 @@ export default function SchoolSelectionView() {
                 icon={School}
                 iconClass="bg-sky-500/10 text-sky-400"
                 title="School list"
-                subtitle="Same board as the student’s Plan → Schools tab (categories, drag & drop, add schools)"
+                subtitle={
+                  selectedStudent
+                    ? "Same board as the student’s Plan → Schools tab (saved to their account)"
+                    : "Same school board — included in preview / PDF for this customer"
+                }
               >
-                {selectedStudent && (
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 sm:p-4">
-                    <SchoolSelectionTab
-                      student={selectedStudent}
-                      isMentorView
-                      platformConfig={platformConfig}
-                    />
-                  </div>
-                )}
+                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 sm:p-4">
+                  <SchoolSelectionTab
+                    key={selectedStudent?.id || `manual:${displayName}`}
+                    student={boardStudent}
+                    isMentorView
+                    localOnly={!selectedStudent}
+                    initialSchools={selectedStudent ? undefined : manualSchools}
+                    platformConfig={platformConfig}
+                    onUpdateSchools={(schools) => {
+                      if (!selectedStudent) setManualSchools(schools);
+                    }}
+                    onUpdateStudent={(updates) => {
+                      if (!selectedStudent && updates.schoolCategories) {
+                        setManualCategories(updates.schoolCategories);
+                      }
+                    }}
+                  />
+                </div>
               </SectionCard>
 
               <SectionCard
@@ -1024,20 +1197,37 @@ export default function SchoolSelectionView() {
       )}
 
       <Modal
-        open={previewOpen && !!selectedStudent}
+        open={previewOpen && canEditPlan}
         onClose={() => setPreviewOpen(false)}
         title="Plan preview"
-        description={
-          selectedStudent
-            ? `Strategic selection plan for ${selectedStudent.name}`
-            : undefined
-        }
+        description={`Strategic selection plan for ${displayName}`}
         size="2xl"
         fullHeight
+        footer={
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setPreviewOpen(false)}>
+              Close
+            </Button>
+            <Button
+              type="button"
+              leftIcon={
+                exportingPdf ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )
+              }
+              disabled={exportingPdf}
+              onClick={() => void handleExportPdf()}
+            >
+              Download PDF
+            </Button>
+          </div>
+        }
       >
-        {selectedStudent && (
+        {canEditPlan && (
           <PlanPreviewBody
-            studentName={selectedStudent.name}
+            studentName={displayName}
             draft={draft}
             schools={previewSchools}
             categories={previewCategories}

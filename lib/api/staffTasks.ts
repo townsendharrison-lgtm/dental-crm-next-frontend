@@ -46,7 +46,7 @@ export const staffTasksApi = {
   },
 
   /**
-   * Delete a staff task (Admin only).
+   * Delete a staff task you created (admins can delete any).
    */
   remove: async (id: string): Promise<{ message: string }> => {
     return await apiDelete<{ message: string }>(`/api/staff-tasks/${id}`);

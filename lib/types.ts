@@ -376,6 +376,15 @@ export interface Conversation {
   deleted_by?: string[];
 }
 
+export interface MessageLinkPreview {
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  siteName?: string;
+  favicon?: string;
+}
+
 export interface Message {
   id: string;
   conversation_id: string;
@@ -387,6 +396,10 @@ export interface Message {
   senderId?: string;
   timestamp?: string;
   receiverId?: string;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
+  attachment_name?: string | null;
+  link_preview?: MessageLinkPreview | null;
 }
 
 export type MeetingAudience =
@@ -758,6 +771,27 @@ export interface PopupAdvertisement {
   createdBy?: string | null;
   dismissedBy?: string[];
   createdAt?: string;
+  /** Analytics (list enrichment) */
+  click_count?: number;
+  clickCount?: number;
+  dismiss_count?: number;
+  dismissCount?: number;
+}
+
+export interface PopupCtaClick {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  clickedAt: string;
+}
+
+export interface PopupAnalytics {
+  popupId: string;
+  title: string;
+  dismissCount: number;
+  clickCount: number;
+  clicks: PopupCtaClick[];
 }
 
 export interface KPIAssessment {

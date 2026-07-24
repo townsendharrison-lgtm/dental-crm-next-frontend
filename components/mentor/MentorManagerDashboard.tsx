@@ -49,6 +49,7 @@ interface MentorManagerDashboardProps {
   onUnassignStudent?: (studentId: string) => void;
   activeTab?: string;
   notifications?: SystemNotification[];
+  onDismissNotification?: (id: string) => void;
   title?: string;
   subtitle?: string;
 }
@@ -94,6 +95,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
   onTransferStudent,
   onUnassignStudent,
   notifications = [],
+  onDismissNotification,
 }) => {
   const filteredMentors = useMemo(
     () => mentors.filter((m) => m.role !== "ADMIN"),
@@ -182,7 +184,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
     );
   };
 
-  const urgentNotifs = notifications.filter((n) => n.type === "URGENT");
+  const urgentNotifs = notifications.filter((n) => n.type === "URGENT" && !n.is_read);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
@@ -270,7 +272,14 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
                 <p className="text-sm font-semibold text-white">{n.title}</p>
                 <p className="text-xs text-slate-400">{n.message}</p>
               </div>
-              <Button size="sm" variant="secondary" onClick={() => setActiveView("assignments")}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  onDismissNotification?.(n.id);
+                  setActiveView("assignments");
+                }}
+              >
                 Fix
               </Button>
             </div>

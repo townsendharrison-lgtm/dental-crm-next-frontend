@@ -39,6 +39,7 @@ export function useUpdateMeeting() {
       qc.invalidateQueries({ queryKey: queryKeys.meetings.all() });
       qc.invalidateQueries({ queryKey: queryKeys.meetings.detail(updated.id) });
       qc.invalidateQueries({ queryKey: ["meetings", "calendar"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }
@@ -50,6 +51,7 @@ export function useDeleteMeeting() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.meetings.all() });
       qc.invalidateQueries({ queryKey: ["meetings", "calendar"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }

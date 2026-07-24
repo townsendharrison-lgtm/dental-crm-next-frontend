@@ -49,6 +49,11 @@ export const notificationsApi = {
     return apiPatch<{ success: boolean }>(`/api/notifications/${id}/read`);
   },
 
+  /** Delete a single notification (dismiss after action). */
+  delete: async (id: string): Promise<{ success: boolean }> => {
+    return apiDelete<{ success: boolean }>(`/api/notifications/${id}`);
+  },
+
   /** Mark all notifications as read. */
   markAllAsRead: async (): Promise<{ success: boolean }> => {
     return apiPatch<{ success: boolean }>("/api/notifications/read-all");

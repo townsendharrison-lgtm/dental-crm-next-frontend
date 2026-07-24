@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useMemo } from "react";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useStudents, useStudent, useUpdateStudent } from "@/lib/hooks/useStudentProfile";
 import {
   useMentor,
@@ -44,12 +45,15 @@ function MentorStudentsContent() {
   const queryClient = useQueryClient();
 
   const { user } = useAuth();
-  const { data: mentor } = useMentor(user?.id || "");
+  const { subjectId: mentorId, isLoadingSubjects } = usePreviewSubject("MENTOR");
+  const { data: mentor } = useMentor(mentorId);
   const { data: allStudentsRaw = [], isLoading: isAllStudentsLoading } = useStudents();
   const allStudents = useMemo(() => normalizeStudents(allStudentsRaw), [allStudentsRaw]);
-  const { data: mentorStudentsRaw = [], isLoading: isMentorStudentsLoading } = useMentorStudents(user?.id || "");
+  const { data: mentorStudentsRaw = [], isLoading: isMentorStudentsLoading } = useMentorStudents(mentorId);
   const mentorStudents = useMemo(() => normalizeStudents(mentorStudentsRaw), [mentorStudentsRaw]);
-  const { data: pendingAssignments = [], isLoading: isPendingLoading } = useMyPendingAssignments(!!user?.id);
+  const { data: pendingAssignments = [], isLoading: isPendingLoading } = useMyPendingAssignments(
+    !!user?.id && mentorId === user.id,
+  );
   const { data: meetingsRaw = [], isLoading: isMeetingsLoading } = useMeetings();
   const meetings = useMemo(
     () =>
@@ -84,7 +88,7 @@ function MentorStudentsContent() {
   const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
 
-  if (isAllStudentsLoading || isMentorStudentsLoading || isMeetingsLoading || isTasksLoading || isPendingLoading || !user) {
+  if (isLoadingSubjects || isAllStudentsLoading || isMentorStudentsLoading || isMeetingsLoading || isTasksLoading || isPendingLoading || !user) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
