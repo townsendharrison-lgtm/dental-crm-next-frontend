@@ -155,7 +155,25 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   const [threadFilter, setThreadFilter] = useState<ThreadFilter>("all");
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const stickToBottomRef = useRef(true);
   const invalidRedirected = useRef<string | null>(null);
+
+  const isNearBottom = (el: HTMLDivElement, threshold = 120) =>
+    el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+
+  const scrollMessagesToBottom = (force = false) => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    if (!force && !stickToBottomRef.current && !isNearBottom(el)) return;
+    el.scrollTop = el.scrollHeight;
+    stickToBottomRef.current = true;
+  };
+
+  const handleMessagesScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    stickToBottomRef.current = isNearBottom(el);
+  };
 
   const openConversation = (id: string) => {
     router.push(`${basePath}/${id}`);
@@ -359,6 +377,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
       return null;
     });
     if (imageInputRef.current) imageInputRef.current.value = "";
+    stickToBottomRef.current = true;
 
     if (selectedConversationId) {
       loadMessages(selectedConversationId);
@@ -371,12 +390,6 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     setIsDetailsOpen(false);
     setIsAddMembersOpen(false);
   }, [selectedConversationId]);
-
-  useEffect(() => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   const handlePin = async (convId: string) => {
     try {
@@ -497,7 +510,15 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
         text: textToSend,
         file: imageToSend || undefined,
       });
-      setMessages((prev) => [...prev, response]);
+      // Polling may already have pulled this message in (esp. slow image uploads).
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === response.id)) {
+          return prev.map((m) => (m.id === response.id ? response : m));
+        }
+        return [...prev, response];
+      });
+      stickToBottomRef.current = true;
+      requestAnimationFrame(() => scrollMessagesToBottom(true));
       loadConversations(true);
     } catch (err) {
       console.error("Send message error:", err);
@@ -568,6 +589,22 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
         !selectedRecipients.some((r) => r.id === u.id)
     );
   }, [directoryUsers, userSearchQuery, selectedRecipients]);
+
+  /** Guard against race where poll + send both add the same message. */
+  const uniqueMessages = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.filter((m) => {
+      if (!m.id || seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
+  }, [messages]);
+
+  useEffect(() => {
+    // Only pin to bottom when the user is already near the latest messages
+    // (or after send / conversation switch). Polling must not yank scroll up.
+    scrollMessagesToBottom();
+  }, [uniqueMessages.length, selectedConversationId]);
 
   const activeConversation =
     conversations.find((c) => c.id === selectedConversationId) ||
@@ -842,23 +879,24 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
 
               <div
                 ref={messagesContainerRef}
+                onScroll={handleMessagesScroll}
                 className="flex-1 px-5 py-5 overflow-y-auto custom-scrollbar flex flex-col gap-2.5"
               >
                 {loadingMsgs ? (
                   <div className="flex-1 flex items-center justify-center">
                     <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
                   </div>
-                ) : messages.length === 0 ? (
+                ) : uniqueMessages.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
                     <p className="text-sm">No messages yet. Say hello.</p>
                   </div>
                 ) : (
-                  messages.map((msg, idx) => {
+                  uniqueMessages.map((msg, idx) => {
                     const isMe = msg.sender_id === currentUserId;
                     const sender = (activeConversation.participants || []).find(
                       (p) => p.id === msg.sender_id
                     );
-                    const prevMsg = messages[idx - 1];
+                    const prevMsg = uniqueMessages[idx - 1];
                     const isFirstInBlock = !prevMsg || prevMsg.sender_id !== msg.sender_id;
                     const showDaySeparator = !prevMsg || !isSameChatDay(prevMsg.created_at, msg.created_at);
                     const dayLabel = showDaySeparator ? formatChatDayLabel(msg.created_at) : "";
