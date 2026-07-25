@@ -36,7 +36,10 @@ import {
   Loader2,
   Pencil,
   XCircle,
+  ExternalLink,
+  Minus,
 } from "lucide-react";
+import Link from "next/link";
 import type { Student, StudentDocument, StudentNote } from "@/lib/types";
 import {
   calculateStrengthScore,
@@ -82,6 +85,8 @@ import { toast } from "sonner";
 import { studentsApi } from "@/lib/api/students";
 import { documentsApi } from "@/lib/api/documents";
 import { usersApi } from "@/lib/api/users";
+import { ProfileDetailsEditModal } from "@/components/student/ProfileDetailsEditModal";
+import { DAT_TYPES, isUnitedStates } from "@/lib/profile/profileOptions";
 
 type NoteTag = StudentNote["tags"][number];
 
@@ -118,18 +123,12 @@ export function StudentProfileDocumentsView({
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [openingDocId, setOpeningDocId] = useState<string | null>(null);
   const [snapshotEditOpen, setSnapshotEditOpen] = useState(false);
-  const [snapshotSaving, setSnapshotSaving] = useState(false);
-  const [snapshotForm, setSnapshotForm] = useState({
-    name: "",
-    state: "",
-    country: "",
-    ethnicity: "",
-    gender: "",
-    age: "",
-    gpa: "",
-    dat_aa: "",
-    dat_ts: "",
-  });
+  const [lorExternalEnabled, setLorExternalEnabled] = useState(
+    student.profile?.lor_external_service || false,
+  );
+  const [externalCollected, setExternalCollectedState] = useState(() =>
+    Math.max(0, Number(student.profile?.lor_external_collected ?? 0) || 0),
+  );
 
   const [activeSection, setActiveSection] = useState("snapshot");
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -140,12 +139,48 @@ export function StudentProfileDocumentsView({
   const { data: documents = [] } = useDocuments(student.id);
   const { data: applicationsForStrength = [] } = useApplications(student.id);
   const { data: schoolsForStrength = [] } = useStudentSchools(student.id);
-  const { data: rawLorRequests = [] } = useLorRequests(undefined, student.name);
+  const { data: rawLorRequests = [], isLoading: lorLoading } = useLorRequests(
+    undefined,
+    // Students are scoped server-side; staff search by student name then we filter by id
+    user?.role === "STUDENT" ? undefined : student.name,
+  );
   const { data: notes = [] } = useStudentNotes(student.id);
   const { data: manualDexterity = [] } = useStudentDexterity(student.id);
 
+  useEffect(() => {
+    setLorExternalEnabled(student.profile?.lor_external_service || false);
+    setExternalCollectedState(
+      Math.max(0, Number(student.profile?.lor_external_collected ?? 0) || 0),
+    );
+  }, [
+    student.id,
+    student.profile?.lor_external_service,
+    student.profile?.lor_external_collected,
+  ]);
+
+  const lorRequests = useMemo(
+    () => rawLorRequests.filter((r) => r.studentId === student.id),
+    [rawLorRequests, student.id],
+  );
+
+  const lorRequired = useMemo(() => {
+    const raw = Number(student.lorRequired ?? student.profile?.lor_required ?? 0);
+    return raw > 0 ? raw : 4;
+  }, [student.lorRequired, student.profile?.lor_required]);
+
+  const vaultReviewedCount = useMemo(
+    () => lorRequests.filter((r) => r.status === "REVIEWED").length,
+    [lorRequests],
+  );
+
+  const lorReceived = useMemo(() => {
+    if (lorExternalEnabled) {
+      return Math.min(externalCollected, lorRequired);
+    }
+    return Math.min(vaultReviewedCount, lorRequired);
+  }, [lorExternalEnabled, externalCollected, vaultReviewedCount, lorRequired]);
+
   const computedStrength = useMemo(() => {
-    const lorDocs = documents.filter((d) => d.type === "Letter of Recommendation").length;
     return calculateStrengthScore({
       gpa: student.gpa ?? student.profile?.gpa,
       gpaVerified: student.gpaVerified ?? student.profile?.gpa_verified,
@@ -154,13 +189,21 @@ export function StudentProfileDocumentsView({
       datVerified: student.datVerified ?? student.profile?.dat_verified,
       hoursByCategory: hoursByCategoryFromExperiences(experiences),
       documentTypes: documents.map((d) => d.type),
-      lorRequired: student.lorRequired ?? student.profile?.lor_required,
-      lorReceivedApprox: lorDocs,
+      lorRequired,
+      lorReceivedApprox: lorReceived,
       applicationCount: applicationsForStrength.length,
       schoolCount: schoolsForStrength.length,
       isReapplicant: student.isReapplicant ?? student.profile?.is_reapplicant,
     }).total;
-  }, [student, experiences, documents, applicationsForStrength, schoolsForStrength]);
+  }, [
+    student,
+    experiences,
+    documents,
+    applicationsForStrength,
+    schoolsForStrength,
+    lorRequired,
+    lorReceived,
+  ]);
 
   const storedStrength = Math.round(
     Number(student.strengthScore ?? student.profile?.strength_score ?? NaN),
@@ -172,11 +215,6 @@ export function StudentProfileDocumentsView({
       : Number.isFinite(storedStrength)
         ? storedStrength
         : computedStrength;
-
-  const lorRequests = useMemo(
-    () => rawLorRequests.filter((r) => r.studentId === student.id),
-    [rawLorRequests, student.id],
-  );
 
   const [docSearch, setDocSearch] = useState("");
   const [docTypeFilter, setDocTypeFilter] = useState("All Types");
@@ -190,28 +228,6 @@ export function StudentProfileDocumentsView({
   const createDexterityMutation = useCreateStudentDexterity(student.id);
   const deleteDexterityMutation = useDeleteStudentDexterity(student.id);
 
-  // Toggles / Modal States
-  const [postBacEnabled, setPostBacEnabled] = useState(
-    student.profile?.post_bac?.enabled || false
-  );
-  const [mastersEnabled, setMastersEnabled] = useState(
-    student.profile?.masters?.enabled || false
-  );
-  const [lorExternalEnabled, setLorExternalEnabled] = useState(
-    student.profile?.lor_external_service || false
-  );
-
-  useEffect(() => {
-    setPostBacEnabled(student.profile?.post_bac?.enabled || false);
-    setMastersEnabled(student.profile?.masters?.enabled || false);
-    setLorExternalEnabled(student.profile?.lor_external_service || false);
-  }, [
-    student.id,
-    student.profile?.post_bac?.enabled,
-    student.profile?.masters?.enabled,
-    student.profile?.lor_external_service,
-  ]);
-
   const persistProfile = (updates: Record<string, unknown>, opts?: { silent?: boolean }) => {
     if (!onUpdateStudent) {
       toast.message("Profile editing isn’t available here");
@@ -221,94 +237,7 @@ export function StudentProfileDocumentsView({
     if (!opts?.silent) toast.success("Profile updated");
   };
 
-  const openSnapshotEditor = () => {
-    setSnapshotForm({
-      name: student.name || "",
-      state: String(student.profile?.state ?? student.state ?? ""),
-      country: String(student.profile?.country ?? student.country ?? ""),
-      ethnicity: String(student.profile?.ethnicity ?? student.ethnicity ?? ""),
-      gender: String(student.profile?.gender ?? student.gender ?? ""),
-      age:
-        student.profile?.age != null || student.age != null
-          ? String(student.profile?.age ?? student.age)
-          : "",
-      gpa:
-        student.profile?.gpa != null || student.gpa != null
-          ? String(student.profile?.gpa ?? student.gpa)
-          : "",
-      dat_aa:
-        student.profile?.dat_aa != null || student.datAA != null
-          ? String(student.profile?.dat_aa ?? student.datAA)
-          : "",
-      dat_ts:
-        student.profile?.dat_ts != null || student.datTS != null
-          ? String(student.profile?.dat_ts ?? student.datTS)
-          : "",
-    });
-    setSnapshotEditOpen(true);
-  };
-
-  const saveSnapshotEditor = async () => {
-    if (!canEditOwnProfile || !onUpdateStudent) return;
-    const name = snapshotForm.name.trim();
-    if (!name) {
-      toast.error("Name is required");
-      return;
-    }
-
-    const ageRaw = snapshotForm.age.trim();
-    const gpaRaw = snapshotForm.gpa.trim();
-    const datAaRaw = snapshotForm.dat_aa.trim();
-    const datTsRaw = snapshotForm.dat_ts.trim();
-    const age = ageRaw === "" ? null : Number(ageRaw);
-    const gpa = gpaRaw === "" ? null : Number(gpaRaw);
-    const dat_aa = datAaRaw === "" ? null : Number(datAaRaw);
-    const dat_ts = datTsRaw === "" ? null : Number(datTsRaw);
-
-    if (ageRaw && (!Number.isFinite(age) || (age as number) < 0 || (age as number) > 120)) {
-      toast.error("Enter a valid age");
-      return;
-    }
-    if (gpaRaw && (!Number.isFinite(gpa) || (gpa as number) < 0 || (gpa as number) > 4.5)) {
-      toast.error("GPA should be between 0 and 4.5");
-      return;
-    }
-    if (datAaRaw && (!Number.isFinite(dat_aa) || (dat_aa as number) < 0 || (dat_aa as number) > 30)) {
-      toast.error("DAT AA should be between 0 and 30");
-      return;
-    }
-    if (datTsRaw && (!Number.isFinite(dat_ts) || (dat_ts as number) < 0 || (dat_ts as number) > 30)) {
-      toast.error("DAT TS should be between 0 and 30");
-      return;
-    }
-
-    setSnapshotSaving(true);
-    try {
-      // GPA/DAT changes clear verification on the server — no student-facing pending copy.
-      await studentsApi.update(student.id, {
-        name,
-        state: snapshotForm.state.trim() || null,
-        country: snapshotForm.country.trim() || null,
-        ethnicity: snapshotForm.ethnicity.trim() || null,
-        gender: snapshotForm.gender.trim() || null,
-        age: age as number | null,
-        gpa: gpa as number | null,
-        dat_aa: dat_aa as number | null,
-        dat_ts: dat_ts as number | null,
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.students.detail(student.id) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.students.strengthHistory(student.id) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.students.datHistory(student.id) }),
-      ]);
-      toast.success("Profile updated");
-      setSnapshotEditOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update profile");
-    } finally {
-      setSnapshotSaving(false);
-    }
-  };
+  const openSnapshotEditor = () => setSnapshotEditOpen(true);
 
   const journeyProgress = Math.max(
     0,
@@ -316,17 +245,22 @@ export function StudentProfileDocumentsView({
   );
 
   const profileCompleteness = useMemo(() => {
+    const p = student.profile;
+    const country = p?.country || student.country;
     const checks = [
       Boolean(student.name?.trim()),
-      Boolean(student.profile?.state || student.state || student.profile?.country || student.country),
-      Boolean(
-        (student.profile?.ethnicity || student.ethnicity) &&
-          (student.profile?.gender || student.gender) &&
-          (student.profile?.age != null || student.age != null),
-      ),
-      (student.profile?.gpa != null || student.gpa != null) &&
-        (student.profile?.dat_aa != null || student.datAA != null),
-      Boolean(student.profile?.undergrad_institution),
+      Boolean(country),
+      !isUnitedStates(country) || Boolean(p?.state || student.state),
+      Boolean(p?.ethnicity || student.ethnicity),
+      Boolean(p?.gender || student.gender),
+      p?.age != null || student.age != null,
+      p?.gpa != null || student.gpa != null,
+      p?.sgpa != null,
+      Boolean(p?.major?.trim()),
+      Boolean(p?.applicant_type),
+      Boolean(p?.dat_type),
+      p?.dat_type === "NOT_TAKEN" || p?.dat_aa != null || student.datAA != null,
+      Array.isArray(p?.considering_schools) && p!.considering_schools!.length > 0,
       documents.length > 0,
       experiences.length > 0,
     ];
@@ -380,43 +314,33 @@ export function StudentProfileDocumentsView({
     );
   };
 
-  const togglePostBac = () => {
-    if (!canEditOwnProfile) return;
-    const next = !postBacEnabled;
-    setPostBacEnabled(next);
-    const existing = student.profile?.post_bac;
-    persistProfile({
-      post_bac: {
-        enabled: next,
-        institution: existing?.institution || "",
-        strengthScore: existing?.strengthScore || 0,
-        degreeType: existing?.degreeType || "",
-        year: existing?.year || "",
-      },
-    });
-  };
-
-  const toggleMasters = () => {
-    if (!canEditOwnProfile) return;
-    const next = !mastersEnabled;
-    setMastersEnabled(next);
-    const existing = student.profile?.masters;
-    persistProfile({
-      masters: {
-        enabled: next,
-        institution: existing?.institution || "",
-        strengthScore: existing?.strengthScore || 0,
-        degreeType: existing?.degreeType || "",
-        year: existing?.year || "",
-      },
-    });
-  };
-
   const toggleLorExternal = () => {
     if (!canEditOwnProfile) return;
     const next = !lorExternalEnabled;
     setLorExternalEnabled(next);
-    persistProfile({ lor_external_service: next });
+    if (next) {
+      // Keep progress when switching to external; student can adjust manually
+      const seeded = Math.max(externalCollected, vaultReviewedCount);
+      setExternalCollectedState(seeded);
+      persistProfile({
+        lor_external_service: true,
+        lor_external_collected: seeded,
+      });
+    } else {
+      persistProfile({ lor_external_service: false });
+    }
+  };
+
+  const setExternalCollected = (count: number) => {
+    if (!canEditOwnProfile || !lorExternalEnabled) return;
+    const next = Math.max(0, Math.min(lorRequired, count));
+    setExternalCollectedState(next);
+    persistProfile({ lor_external_collected: next }, { silent: true });
+    toast.success(
+      next === 0
+        ? "Letter collection reset"
+        : `${next} letter${next === 1 ? "" : "s"} marked as collected`,
+    );
   };
 
   const reviewDocument = async (
@@ -569,14 +493,6 @@ export function StudentProfileDocumentsView({
       };
     });
   }, [experiences]);
-
-  const lorReceived = useMemo(() => {
-    const fromDocs = documents.filter(
-      (d) => d.type === "Letter of Recommendation" && d.status === "Reviewed"
-    ).length;
-    const fromRequests = lorRequests.filter((r) => r.status === "REVIEWED").length;
-    return fromDocs + fromRequests;
-  }, [documents, lorRequests]);
 
   const filteredDocuments = useMemo(() => {
     return documents.filter((doc) => {
@@ -1107,17 +1023,17 @@ export function StudentProfileDocumentsView({
           </div>
         </header>
 
-        {/* Student Snapshot Section */}
+        {/* Student Snapshot Section — identity / progress only (academics live below) */}
         <section id="snapshot" className="space-y-5 scroll-mt-28">
           <div className="flex items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-white">Student Snapshot</h2>
               <p className="mt-0.5 text-xs text-slate-500">
                 {canEditOwnProfile
-                  ? "Keep your details current. Verified scores keep their badge until staff reconfirm."
+                  ? "Your identity and progress at a glance. Edit details to update academics too."
                   : canReviewDocuments
-                    ? "Read-only here — edit profile fields from the Edit Profile tab. Review documents below."
-                    : "Key profile facts. Verified scores show a badge after staff confirmation."}
+                    ? "Read-only identity snapshot. Academics are in the next section."
+                    : "Identity and progress overview."}
               </p>
             </div>
             {canEditOwnProfile && (
@@ -1132,47 +1048,41 @@ export function StudentProfileDocumentsView({
               </Button>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
             {renderStatBlock("Full Name", student.name, User)}
             {renderStatBlock(
               "Location",
-              [student.profile?.state || student.state, student.profile?.country || student.country]
+              [
+                isUnitedStates(student.profile?.country || student.country)
+                  ? student.profile?.state || student.state
+                  : null,
+                student.profile?.country || student.country,
+              ]
                 .filter(Boolean)
                 .join(", ") || "—",
-              MapPin
+              MapPin,
             )}
             {renderStatBlock("Ethnicity", student.profile?.ethnicity ?? student.ethnicity, Globe)}
             {renderStatBlock("Gender", student.profile?.gender ?? student.gender, Venus)}
             {renderStatBlock("Age", student.profile?.age ?? student.age, Calendar)}
-            {renderStatBlock(
-              "GPA",
-              student.profile?.gpa ?? student.gpa,
-              BookOpen,
-              student.profile?.gpa_verified ?? student.gpaVerified
-            )}
-            {renderStatBlock(
-              "Strength Score",
-              displayStrength,
-              GraduationCap
-            )}
+            {renderStatBlock("Strength Score", displayStrength, GraduationCap)}
             {renderStatBlock(
               "Response Time",
               formatResponseTime(
                 student.avgResponseTime ?? student.profile?.avg_response_time,
               ),
-              Clock
+              Clock,
             )}
             {renderStatBlock(
-              "DAT AA",
-              student.profile?.dat_aa ?? student.datAA,
-              Award,
-              student.profile?.dat_verified ?? student.datVerified
-            )}
-            {renderStatBlock(
-              "DAT TS",
-              student.profile?.dat_ts ?? student.datTS,
-              Award,
-              student.profile?.dat_verified ?? student.datVerified
+              "Applicant type",
+              student.profile?.applicant_type === "REAPPLICANT"
+                ? "Reapplicant"
+                : student.profile?.applicant_type === "FIRST_TIME"
+                  ? "First-time"
+                  : student.isReapplicant || student.profile?.is_reapplicant
+                    ? "Reapplicant"
+                    : "—",
+              Fingerprint,
             )}
           </div>
 
@@ -1184,34 +1094,30 @@ export function StudentProfileDocumentsView({
 
         {/* Academic Background Section */}
         <section id="academic" className="space-y-6 scroll-mt-28">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <GraduationCap className="text-indigo-400" size={20} /> Academic Background
-          </h2>
+          <div className="flex items-end justify-between gap-3">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <GraduationCap className="text-indigo-400" size={20} /> Academic Background
+            </h2>
+            {canEditOwnProfile && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                leftIcon={<Pencil className="h-3.5 w-3.5" />}
+                onClick={openSnapshotEditor}
+              >
+                Edit academics
+              </Button>
+            )}
+          </div>
           <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-8 space-y-8">
-            {/* Undergrad */}
             <div className="grid md:grid-cols-3 gap-8">
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
-                  Undergraduate Institution
+                  Major
                 </label>
                 <p className="text-lg font-bold text-white">
-                  {student.profile?.undergrad_institution || "Not specified"}
-                </p>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
-                  Degree Earned
-                </label>
-                <p className="text-lg font-bold text-white">
-                  {student.profile?.undergrad_degree || "Not specified"}
-                </p>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
-                  Graduation Year
-                </label>
-                <p className="text-lg font-bold text-white">
-                  {student.profile?.undergrad_grad_year || "Not specified"}
+                  {student.profile?.major || "Not specified"}
                 </p>
               </div>
               <div>
@@ -1229,173 +1135,228 @@ export function StudentProfileDocumentsView({
                 </p>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
-                  DAT AA
-                  {(student.profile?.dat_verified || student.datVerified) && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                      <ShieldCheck size={10} />
-                      Verified
-                    </span>
-                  )}
+                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
+                  sGPA
                 </label>
                 <p className="text-lg font-bold tabular-nums text-white">
-                  {student.profile?.dat_aa ?? student.datAA ?? "Not specified"}
+                  {student.profile?.sgpa ?? "Not specified"}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
+                  Online classes
+                </label>
+                <p className="text-lg font-bold text-white">
+                  {student.profile?.took_online_classes == null
+                    ? "Not specified"
+                    : student.profile.took_online_classes
+                      ? "Yes"
+                      : "No"}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
+                  Community college classes
+                </label>
+                <p className="text-lg font-bold text-white">
+                  {student.profile?.took_cc_classes == null
+                    ? "Not specified"
+                    : student.profile.took_cc_classes
+                      ? "Yes"
+                      : "No"}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
+                  Undergraduate institution
+                </label>
+                <p className="text-lg font-bold text-white">
+                  {student.profile?.undergrad_institution || "Not specified"}
                 </p>
               </div>
             </div>
 
             <div className="h-[1px] bg-slate-800" />
 
-            {/* Toggles for Post-Bac and Masters */}
-            <div className="grid md:grid-cols-2 gap-8">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-                      <BookOpen size={18} />
-                    </div>
-                    <div>
-                      <p className="font-bold text-white">Post-Bac Program</p>
-                      <p className="text-xs text-slate-500">Additional science coursework</p>
-                    </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase mb-3 block">
+                Additional schooling
+              </label>
+              <div className="grid gap-4 md:grid-cols-3">
+                {(student.profile?.post_bac?.enabled ||
+                  student.profile?.additional_schooling?.includes("POST_BAC")) && (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-sm font-bold text-white">Post-Bac Program</p>
+                    <p className="mt-2 text-xs uppercase tracking-wider text-slate-500">GPA</p>
+                    <p className="text-lg font-bold tabular-nums text-white">
+                      {student.profile?.post_bac?.gpa ?? "—"}
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={togglePostBac}
-                    disabled={!canEditOwnProfile}
-                    title={
-                      canEditOwnProfile
-                        ? undefined
-                        : "Students edit this on their profile; staff use Edit Profile"
-                    }
-                    className={`w-12 h-6 rounded-full p-1 transition-colors focus:outline-none ${
-                      canEditOwnProfile ? "cursor-pointer" : "cursor-not-allowed opacity-60"
-                    } ${postBacEnabled ? "bg-indigo-600" : "bg-slate-800"}`}
-                  >
-                    <div
-                      className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                        postBacEnabled ? "translate-x-6" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-                {postBacEnabled && student.profile?.post_bac && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-6 bg-slate-950/50 rounded-2xl border border-slate-800 space-y-4"
-                  >
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
-                          Institution
-                        </label>
-                        <p className="text-sm font-bold text-white">
-                          {student.profile.post_bac.institution}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
-                          Strength Score
-                        </label>
-                        <p className="text-sm font-bold text-white">
-                          {student.profile.post_bac.strengthScore}
-                        </p>
-                      </div>
-                    </div>
-                  </motion.div>
                 )}
-              </div>
-
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-                      <Award size={18} />
-                    </div>
-                    <div>
-                      <p className="font-bold text-white">Master's Degree</p>
-                      <p className="text-xs text-slate-500">Graduate level education</p>
-                    </div>
+                {(student.profile?.masters?.enabled ||
+                  student.profile?.additional_schooling?.includes("MASTERS")) && (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-sm font-bold text-white">Masters</p>
+                    <p className="mt-2 text-xs uppercase tracking-wider text-slate-500">GPA</p>
+                    <p className="text-lg font-bold tabular-nums text-white">
+                      {student.profile?.masters?.gpa ?? "—"}
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={toggleMasters}
-                    disabled={!canEditOwnProfile}
-                    title={
-                      canEditOwnProfile
-                        ? undefined
-                        : "Students edit this on their profile; staff use Edit Profile"
-                    }
-                    className={`w-12 h-6 rounded-full p-1 transition-colors focus:outline-none ${
-                      canEditOwnProfile ? "cursor-pointer" : "cursor-not-allowed opacity-60"
-                    } ${mastersEnabled ? "bg-indigo-600" : "bg-slate-800"}`}
-                  >
-                    <div
-                      className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                        mastersEnabled ? "translate-x-6" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-                {mastersEnabled && student.profile?.masters && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-6 bg-slate-950/50 rounded-2xl border border-slate-800 space-y-4"
-                  >
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
-                          Institution
-                        </label>
-                        <p className="text-sm font-bold text-white">
-                          {student.profile.masters.institution}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
-                          Strength Score
-                        </label>
-                        <p className="text-sm font-bold text-white">
-                          {student.profile.masters.strengthScore}
-                        </p>
-                      </div>
-                    </div>
-                  </motion.div>
                 )}
+                {(student.profile?.additional_schooling?.includes("OTHER") ||
+                  student.profile?.additional_schooling_other) && (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                    <p className="text-sm font-bold text-white">Other</p>
+                    <p className="mt-2 text-sm text-slate-300">
+                      {student.profile?.additional_schooling_other || "—"}
+                    </p>
+                  </div>
+                )}
+                {!student.profile?.post_bac?.enabled &&
+                  !student.profile?.masters?.enabled &&
+                  !(student.profile?.additional_schooling?.length) && (
+                    <p className="text-sm text-slate-500">None specified</p>
+                  )}
               </div>
             </div>
+
+            <div className="h-[1px] bg-slate-800" />
+
+            <div>
+              <label className="mb-3 flex items-center gap-2 text-xs font-bold uppercase text-slate-500">
+                DAT
+                {(student.profile?.dat_verified || student.datVerified) && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
+                    <ShieldCheck size={10} />
+                    Verified
+                  </span>
+                )}
+              </label>
+              <p className="mb-4 text-sm font-semibold text-white">
+                {DAT_TYPES.find((d) => d.value === student.profile?.dat_type)?.label ||
+                  (student.profile?.dat_aa != null || student.datAA != null
+                    ? "Scores on file"
+                    : "Not specified")}
+              </p>
+              {student.profile?.dat_type !== "NOT_TAKEN" && (
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {[
+                    { label: "AA", value: student.profile?.dat_aa ?? student.datAA },
+                    { label: "PAT", value: student.profile?.dat_pat },
+                    { label: "BIO", value: student.profile?.dat_bio },
+                    { label: "GC", value: student.profile?.dat_gc },
+                    { label: "OC", value: student.profile?.dat_oc },
+                    { label: "RC", value: student.profile?.dat_rc },
+                    { label: "QR", value: student.profile?.dat_qr },
+                    { label: "SNS", value: student.profile?.dat_sns },
+                    { label: "TS", value: student.profile?.dat_ts ?? student.datTS },
+                    { label: "MDT", value: student.profile?.dat_mdt },
+                  ]
+                    .filter((row) => row.value != null)
+                    .map((row) => (
+                      <div
+                        key={row.label}
+                        className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2"
+                      >
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          {row.label}
+                        </p>
+                        <p className="text-base font-bold tabular-nums text-white">{row.value}</p>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {(student.profile?.considering_schools?.length || 0) > 0 && (
+              <>
+                <div className="h-[1px] bg-slate-800" />
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase mb-3 block">
+                    Schools currently considering
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {student.profile!.considering_schools!.map((s) => (
+                      <span
+                        key={s.id}
+                        className="rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-100"
+                      >
+                        {s.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {(student.profile?.applicant_type === "REAPPLICANT" ||
+              student.profile?.is_reapplicant) &&
+              (student.profile?.reapplicant_schools?.length || 0) > 0 && (
+                <>
+                  <div className="h-[1px] bg-slate-800" />
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase mb-3 block">
+                      Previous application schools
+                    </label>
+                    <div className="space-y-2">
+                      {student.profile!.reapplicant_schools!.map((s) => (
+                        <div
+                          key={s.schoolId}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2"
+                        >
+                          <p className="text-sm font-medium text-white">{s.schoolName}</p>
+                          <p className="text-xs text-slate-400">
+                            {(s.outcomes || []).join(" · ") || "—"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
           </div>
         </section>
 
-        {/* Letters of Recommendation Tracker */}
+        {/* Letters of Recommendation Tracker — synced with Letter Vault */}
         <section id="lor" className="space-y-6 scroll-mt-28">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <FileText className="text-indigo-400" size={20} /> Letters of Recommendation
             </h2>
-            <div className="flex items-center gap-3 bg-slate-900/40 border border-slate-800 px-4 py-2 rounded-xl">
-              <span className="text-xs font-bold text-slate-500 uppercase">External Service</span>
-              <button
-                type="button"
-                onClick={toggleLorExternal}
-                disabled={!canEditOwnProfile}
-                title={
-                  canEditOwnProfile
-                    ? undefined
-                    : "Students edit this on their profile; staff use Edit Profile"
-                }
-                className={`w-10 h-5 rounded-full p-1 transition-colors focus:outline-none ${
-                  canEditOwnProfile ? "cursor-pointer" : "cursor-not-allowed opacity-60"
-                } ${lorExternalEnabled ? "bg-indigo-600" : "bg-slate-800"}`}
-              >
-                <div
-                  className={`w-3 h-3 bg-white rounded-full transition-transform ${
-                    lorExternalEnabled ? "translate-x-5" : "translate-x-0"
-                  }`}
-                />
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {canEditOwnProfile && (
+                <Link
+                  href="/student/letters/vault"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-indigo-500/40 hover:text-white"
+                >
+                  Open Letter Vault
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              )}
+              <div className="flex items-center gap-3 bg-slate-900/40 border border-slate-800 px-4 py-2 rounded-xl">
+                <span className="text-xs font-bold text-slate-500 uppercase">External Service</span>
+                <button
+                  type="button"
+                  onClick={toggleLorExternal}
+                  disabled={!canEditOwnProfile}
+                  title={
+                    canEditOwnProfile
+                      ? lorExternalEnabled
+                        ? "Using an external service — mark letters collected manually"
+                        : "Turn on if letters are collected outside Letter Vault"
+                      : "Students control this on their profile"
+                  }
+                  className={`w-10 h-5 rounded-full p-1 transition-colors focus:outline-none ${
+                    canEditOwnProfile ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+                  } ${lorExternalEnabled ? "bg-indigo-600" : "bg-slate-800"}`}
+                >
+                  <div
+                    className={`w-3 h-3 bg-white rounded-full transition-transform ${
+                      lorExternalEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
           <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-8 space-y-8">
@@ -1403,94 +1364,206 @@ export function StudentProfileDocumentsView({
               <div className="space-y-1">
                 <p className="text-4xl font-black text-white">
                   {lorReceived}
-                  <span className="text-slate-750 mx-2">/</span>
-                  {student.profile?.lor_required || 4}
+                  <span className="mx-2 text-slate-600">/</span>
+                  {lorRequired}
                 </p>
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                  Letters Received & Verified
+                  {lorExternalEnabled
+                    ? "Letters marked collected"
+                    : "Letters received & verified"}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {lorExternalEnabled
+                    ? "External service mode — mark each letter when you collect it."
+                    : "Counts Letter Vault requests after admin verification (Reviewed)."}
                 </p>
               </div>
-              <div className="flex gap-2">
-                {[...Array(student.profile?.lor_required || 4)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    initial={false}
-                    animate={{
-                      backgroundColor: i < lorReceived ? "#4f46e5" : "#0f172a",
-                      scale: i < lorReceived ? [1, 1.15, 1] : 1,
-                    }}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center border border-slate-800"
-                  >
-                    {i < lorReceived ? (
-                      <CheckCircle2 size={20} className="text-white" />
-                    ) : (
-                      <FileText size={18} className="text-slate-700" />
-                    )}
-                  </motion.div>
-                ))}
+              <div className="flex flex-wrap gap-2">
+                {[...Array(lorRequired)].map((_, i) => {
+                  const filled = i < lorReceived;
+                  const interactive = canEditOwnProfile && lorExternalEnabled;
+                  return (
+                    <motion.button
+                      key={i}
+                      type="button"
+                      disabled={!interactive}
+                      title={
+                        interactive
+                          ? filled
+                            ? `Unmark letter ${i + 1}`
+                            : `Mark letter ${i + 1} collected`
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (!interactive) return;
+                        // Clicking a filled slot sets count to that index (remove last);
+                        // clicking empty sets count to i+1
+                        setExternalCollected(filled ? i : i + 1);
+                      }}
+                      initial={false}
+                      animate={{
+                        backgroundColor: filled ? "#4f46e5" : "#0f172a",
+                        scale: filled ? 1 : 1,
+                      }}
+                      className={`flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 transition-opacity ${
+                        interactive
+                          ? "cursor-pointer hover:opacity-90"
+                          : "cursor-default"
+                      }`}
+                    >
+                      {filled ? (
+                        <CheckCircle2 size={20} className="text-white" />
+                      ) : (
+                        <FileText size={18} className="text-slate-700" />
+                      )}
+                    </motion.button>
+                  );
+                })}
               </div>
             </div>
-            <div className="relative h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+
+            <div className="relative h-3 overflow-hidden rounded-full border border-slate-800 bg-slate-950">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{
-                  width: `${
-                    (lorReceived / (student.profile?.lor_required || 4)) * 100
-                  }%`,
+                  width: `${lorRequired ? (lorReceived / lorRequired) * 100 : 0}%`,
                 }}
-                className="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-600 to-indigo-400 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.4)]"
+                className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]"
               />
             </div>
 
-            {/* Letter Vault Requests List */}
-            <div className="space-y-4 pt-4">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                Letter Vault Requests
-              </h3>
-              <div className="grid gap-4">
-                {lorRequests.map((req) => (
-                  <div
-                    key={req.id}
-                    className="bg-slate-950/50 border border-slate-800 p-4 rounded-2xl flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400">
-                        <User size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-white">{req.writerName}</p>
-                        <p className="text-[10px] text-slate-500">{req.writerEmail}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <div className="hidden sm:block text-right">
-                        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-0.5">
-                          Due Date
-                        </p>
-                        <p className="text-xs font-bold text-slate-400">
-                          {new Date(req.dueDate).toLocaleDateString()}
-                        </p>
-                      </div>
+            {lorExternalEnabled && canEditOwnProfile && (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4">
+                <p className="mr-auto text-sm text-slate-300">
+                  Manually track letters collected outside the vault.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<Minus size={14} />}
+                  disabled={lorReceived <= 0}
+                  onClick={() => setExternalCollected(lorReceived - 1)}
+                >
+                  Remove one
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  leftIcon={<Plus size={14} />}
+                  disabled={lorReceived >= lorRequired}
+                  onClick={() => setExternalCollected(lorReceived + 1)}
+                >
+                  Mark collected
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                  Letter Vault requests
+                </h3>
+                {!lorExternalEnabled && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                    {vaultReviewedCount} verified
+                  </span>
+                )}
+              </div>
+              <div className="grid gap-3">
+                {lorLoading && (
+                  <p className="py-4 text-center text-xs text-slate-500">Loading requests…</p>
+                )}
+                {!lorLoading &&
+                  lorRequests.map((req) => {
+                    const statusLabel =
+                      req.status === "REVIEWED"
+                        ? "Verified"
+                        : req.status === "UPLOADED"
+                          ? "Uploaded — pending review"
+                          : req.status === "DECLINED"
+                            ? "Declined"
+                            : "Requested";
+                    return (
                       <div
-                        className={`px-3 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest ${
-                          req.status === "REVIEWED"
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            : req.status === "UPLOADED"
-                            ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
-                            : req.status === "DECLINED"
-                            ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                            : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                        }`}
+                        key={req.id}
+                        className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4 sm:flex-row sm:items-center sm:justify-between"
                       >
-                        {req.status}
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`flex h-10 w-10 items-center justify-center rounded-xl border ${
+                              req.status === "REVIEWED"
+                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                                : req.status === "UPLOADED"
+                                  ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-400"
+                                  : req.status === "DECLINED"
+                                    ? "border-rose-500/30 bg-rose-500/10 text-rose-400"
+                                    : "border-slate-800 bg-slate-900 text-slate-400"
+                            }`}
+                          >
+                            {req.status === "REVIEWED" ? (
+                              <CheckCircle2 size={16} />
+                            ) : (
+                              <User size={16} />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white">{req.writerName}</p>
+                            <p className="text-[10px] text-slate-500">{req.writerEmail}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4 sm:justify-end">
+                          <div className="text-left sm:text-right">
+                            <p className="mb-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                              Due
+                            </p>
+                            <p className="text-xs font-bold text-slate-400">
+                              {req.dueDate
+                                ? new Date(req.dueDate).toLocaleDateString()
+                                : "—"}
+                            </p>
+                          </div>
+                          {req.uploadedAt && (
+                            <div className="text-left sm:text-right">
+                              <p className="mb-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                                Uploaded
+                              </p>
+                              <p className="text-xs font-bold text-slate-400">
+                                {new Date(req.uploadedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
+                          <div
+                            className={`rounded-lg border px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
+                              req.status === "REVIEWED"
+                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                                : req.status === "UPLOADED"
+                                  ? "border-indigo-500/20 bg-indigo-500/10 text-indigo-400"
+                                  : req.status === "DECLINED"
+                                    ? "border-rose-500/20 bg-rose-500/10 text-rose-400"
+                                    : "border-amber-500/20 bg-amber-500/10 text-amber-400"
+                            }`}
+                          >
+                            {statusLabel}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    );
+                  })}
+                {!lorLoading && lorRequests.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-slate-800 py-8 text-center">
+                    <p className="text-xs italic text-slate-500">
+                      No Letter Vault requests yet.
+                    </p>
+                    {canEditOwnProfile && (
+                      <Link
+                        href="/student/letters/vault"
+                        className="mt-3 inline-flex text-xs font-semibold text-indigo-400 hover:text-indigo-300"
+                      >
+                        Request a letter in Letter Vault →
+                      </Link>
+                    )}
                   </div>
-                ))}
-                {lorRequests.length === 0 && (
-                  <p className="text-center py-4 text-xs text-slate-600 italic">
-                    No Letter Vault requests sent yet.
-                  </p>
                 )}
               </div>
             </div>
@@ -1797,6 +1870,7 @@ export function StudentProfileDocumentsView({
                     { value: "Letter of Recommendation", label: "Letter of Recommendation" },
                     { value: "Resume", label: "Resume" },
                     { value: "Essay", label: "Essay" },
+                    { value: "Previous Application", label: "Previous Application" },
                     { value: "Other", label: "Other" },
                   ]}
                 />
@@ -2001,6 +2075,7 @@ export function StudentProfileDocumentsView({
                 { value: "Post-Bac Transcript", label: "Post-Bac Transcript" },
                 { value: "DAT Report", label: "DAT Report" },
                 { value: "Essay", label: "Essay" },
+                { value: "Previous Application", label: "Previous Application" },
                 { value: "Other", label: "Other" },
               ]}
             />
@@ -2021,128 +2096,13 @@ export function StudentProfileDocumentsView({
         </form>
       </Modal>
 
-      <Modal
-        open={snapshotEditOpen}
-        onClose={() => {
-          if (!snapshotSaving) setSnapshotEditOpen(false);
-        }}
-        title="Edit profile details"
-        description="Update your personal info and scores."
-        size="lg"
-        closeOnBackdrop={!snapshotSaving}
-        footer={
-          <div className="flex w-full justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={snapshotSaving}
-              onClick={() => setSnapshotEditOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              isLoading={snapshotSaving}
-              onClick={() => void saveSnapshotEditor()}
-            >
-              Save changes
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <FormField label="Full name" required>
-            <Input
-              value={snapshotForm.name}
-              onChange={(e) => setSnapshotForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Your name"
-            />
-          </FormField>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField label="State / city">
-              <Input
-                value={snapshotForm.state}
-                onChange={(e) => setSnapshotForm((f) => ({ ...f, state: e.target.value }))}
-                placeholder="New York City"
-              />
-            </FormField>
-            <FormField label="Country">
-              <Input
-                value={snapshotForm.country}
-                onChange={(e) => setSnapshotForm((f) => ({ ...f, country: e.target.value }))}
-                placeholder="USA"
-              />
-            </FormField>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <FormField label="Ethnicity">
-              <Input
-                value={snapshotForm.ethnicity}
-                onChange={(e) => setSnapshotForm((f) => ({ ...f, ethnicity: e.target.value }))}
-                placeholder="Ethnicity"
-              />
-            </FormField>
-            <FormField label="Gender">
-              <SelectMenu
-                value={snapshotForm.gender || ""}
-                onChange={(v) => setSnapshotForm((f) => ({ ...f, gender: v }))}
-                options={[
-                  { value: "", label: "Select…" },
-                  { value: "Male", label: "Male" },
-                  { value: "Female", label: "Female" },
-                  { value: "Non-binary", label: "Non-binary" },
-                  { value: "Prefer not to say", label: "Prefer not to say" },
-                ]}
-              />
-            </FormField>
-            <FormField label="Age">
-              <Input
-                type="number"
-                min={0}
-                max={120}
-                value={snapshotForm.age}
-                onChange={(e) => setSnapshotForm((f) => ({ ...f, age: e.target.value }))}
-                placeholder="23"
-              />
-            </FormField>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <FormField label="GPA">
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
-                max={4.5}
-                value={snapshotForm.gpa}
-                onChange={(e) => setSnapshotForm((f) => ({ ...f, gpa: e.target.value }))}
-                placeholder="3.50"
-              />
-            </FormField>
-            <FormField label="DAT AA">
-              <Input
-                type="number"
-                step="1"
-                min={0}
-                max={30}
-                value={snapshotForm.dat_aa}
-                onChange={(e) => setSnapshotForm((f) => ({ ...f, dat_aa: e.target.value }))}
-                placeholder="22"
-              />
-            </FormField>
-            <FormField label="DAT TS">
-              <Input
-                type="number"
-                step="1"
-                min={0}
-                max={30}
-                value={snapshotForm.dat_ts}
-                onChange={(e) => setSnapshotForm((f) => ({ ...f, dat_ts: e.target.value }))}
-                placeholder="25"
-              />
-            </FormField>
-          </div>
-        </div>
-      </Modal>
+      {canEditOwnProfile && (
+        <ProfileDetailsEditModal
+          open={snapshotEditOpen}
+          student={student}
+          onClose={() => setSnapshotEditOpen(false)}
+        />
+      )}
     </div>
   );
 }

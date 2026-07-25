@@ -34,12 +34,15 @@ import {
   CheckCircle,
   CalendarClock,
   Bell,
+  Plus,
+  X,
 } from "lucide-react";
 import { MOCK_MENTORS } from "@/lib/data";
 import ApplicationTracker from "./ApplicationTracker";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { Textarea, FormField } from "@/components/ui/Form";
+import { Textarea, FormField, Input } from "@/components/ui/Form";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import { renderBadgeIcon } from "@/lib/utils/badgeIcons";
 import { parseLocalDate } from "@/lib/utils/dateUtils";
@@ -60,9 +63,13 @@ interface StudentDashboardProps {
   ) => void;
   onNavigate: (tab: string) => void;
   onToggleActionItem: (itemId: string) => void;
+  onAddActionItem?: (task: string, dueDate: string) => void;
   onTakeSurvey: (id: string) => void;
   onUpdateApplications: (apps: Application[]) => void;
+  /** Next 1:1 / mentorship meeting — never replaced by webinars */
   nextMeeting?: Meeting;
+  /** Optional GLOBAL webinar / group session (shown separately when present) */
+  upcomingWebinar?: Meeting;
   platformConfig: PlatformConfig;
   strengthPercentile?: {
     strengthScore: number;
@@ -191,14 +198,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onSendMessage,
   onNavigate,
   onToggleActionItem,
+  onAddActionItem,
   onTakeSurvey,
   onUpdateApplications,
   nextMeeting,
+  upcomingWebinar,
   platformConfig,
   strengthPercentile = null,
 }) => {
   const [isChatOpen, setIsChatOpen] = React.useState(false);
   const [chatMessage, setChatMessage] = React.useState("");
+  const [isAddingTask, setIsAddingTask] = React.useState(false);
+  const [newTaskTitle, setNewTaskTitle] = React.useState("");
+  const [newTaskDueDate, setNewTaskDueDate] = React.useState(
+    () => new Date(Date.now() + 86400000).toISOString().split("T")[0],
+  );
   const [selectedBadge, setSelectedBadge] = React.useState<{
     id?: string;
     name?: string;
@@ -207,6 +221,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     color?: string;
     earnedAt?: string;
   } | null>(null);
+
+  const resetAddTaskForm = () => {
+    setIsAddingTask(false);
+    setNewTaskTitle("");
+    setNewTaskDueDate(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
+  };
+
+  const handleSaveOwnTask = () => {
+    if (!onAddActionItem || !newTaskTitle.trim() || !newTaskDueDate) return;
+    const [y, m, d] = newTaskDueDate.split("-").map(Number);
+    const due = new Date(y, m - 1, d, 12, 0, 0);
+    onAddActionItem(newTaskTitle.trim(), due.toISOString());
+    resetAddTaskForm();
+  };
 
   const mentorId = student.mentorId || student.profile?.mentor_id;
   const mentor = MOCK_MENTORS.find((m) => m.id === mentorId);
@@ -272,13 +300,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
   };
 
-  const handleJoinMeeting = () => {
-    const link = nextMeeting?.link;
+  const openMeetingLink = (meeting?: Meeting, emptyMessage?: string) => {
+    const link = meeting?.link;
     if (link) {
       window.open(link, "_blank", "noopener,noreferrer");
       return;
     }
-    toast.error("No meeting link yet. Ask your mentor to add one.");
+    toast.error(emptyMessage || "No meeting link yet. Ask your mentor to add one.");
+  };
+
+  const handleJoinMeeting = () => {
+    openMeetingLink(nextMeeting);
+  };
+
+  const handleJoinWebinar = () => {
+    openMeetingLink(upcomingWebinar, "No webinar link yet. Check back closer to the start time.");
   };
 
   const handleRescheduleClick = () => {
@@ -358,38 +394,63 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </Button>
       </div>
 
-      {(nextMeeting || surveys.length > 0) && (
+      {(nextMeeting || upcomingWebinar || surveys.length > 0) && (
         <section className="space-y-3">
           <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
             Needs attention
           </h3>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {nextMeeting && (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-500 bg-indigo-600 p-4 shadow-lg shadow-indigo-600/20">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white">
-                    <Calendar className="h-4 w-4" />
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-indigo-500 bg-indigo-600 p-4 shadow-lg shadow-indigo-600/20 animate-in slide-in-from-top-4 duration-500">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white">
+                    <Calendar className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-100/70">
-                      Next meeting
-                    </p>
-                    <h4 className="truncate text-sm font-semibold text-white">
-                      {nextMeeting.title || "Mentorship Session"}
+                    <h4 className="truncate text-sm font-bold text-white">
+                      Next Meeting: {nextMeeting.title || "Mentorship Session"}
                     </h4>
-                    <p className="text-xs text-indigo-100">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-100">
                       {formatMeetingDate(nextMeeting.date)}
                     </p>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  className="shrink-0 border border-white/25 bg-white/15 text-white shadow-none hover:bg-white/25"
-                  leftIcon={<Play className="h-3.5 w-3.5 fill-current" />}
+                <button
+                  type="button"
                   onClick={handleJoinMeeting}
+                  className="shrink-0 rounded-xl bg-white/10 p-2 text-white transition-all hover:bg-white/20"
+                  aria-label="Join meeting"
                 >
-                  Join
-                </Button>
+                  <Play className="h-4 w-4 fill-current" />
+                </button>
+              </div>
+            )}
+            {upcomingWebinar && (
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-cyan-500/40 bg-cyan-950/50 p-4 shadow-lg shadow-cyan-950/30 animate-in slide-in-from-top-4 duration-500">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-500/15 text-cyan-200">
+                    <Video className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300/70">
+                      Upcoming webinar
+                    </p>
+                    <h4 className="truncate text-sm font-bold text-white">
+                      {upcomingWebinar.title || "Webinar"}
+                    </h4>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-100/80">
+                      {formatMeetingDate(upcomingWebinar.date)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleJoinWebinar}
+                  className="shrink-0 rounded-xl bg-cyan-500/20 p-2 text-cyan-100 transition-all hover:bg-cyan-500/35"
+                  aria-label="Join webinar"
+                >
+                  <Play className="h-4 w-4 fill-current" />
+                </button>
               </div>
             )}
             {surveys.map((survey) => (
@@ -624,60 +685,94 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-indigo-500/20 rounded-xl p-5 flex flex-col">
-          <div className="mb-4">
-            <div className="w-10 h-10 bg-indigo-500/20 rounded-lg flex items-center justify-center mb-4 border border-indigo-500/30">
-              <Calendar className="w-5 h-5 text-indigo-300" />
+        <div className="flex flex-col gap-4 h-full">
+          <div className="bg-[#1E1B4B] border border-indigo-500/20 rounded-[2rem] p-8 shadow-2xl shadow-indigo-950/50 flex flex-col flex-1">
+            <div className="mb-6">
+              <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-500/30 bg-indigo-500/20">
+                <Calendar className="h-6 w-6 text-indigo-300" />
+              </div>
+              <h3 className="mb-1 text-2xl font-bold text-white">Next Meeting</h3>
+              <p className="font-medium text-indigo-200/60">
+                With {mentor?.name || "Your Mentor"}
+              </p>
             </div>
-            <h3 className="text-lg font-bold text-white mb-0.5">Next Meeting</h3>
-            <p className="text-sm text-slate-400">With {mentor?.name || "Your Mentor"}</p>
+
+            <div className="flex flex-1 flex-col justify-center">
+              <div className="mb-8 rounded-3xl border border-indigo-400/20 bg-[#2D2D7D]/40 p-6 text-center backdrop-blur-sm">
+                {nextMeeting ? (
+                  <>
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300/60">
+                      {new Date(nextMeeting.date).toLocaleDateString("en-US", {
+                        weekday: "long",
+                      })}
+                    </p>
+                    <p className="text-xl font-black text-white md:text-2xl">
+                      {new Date(nextMeeting.date).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                      <span className="mx-1 font-light text-indigo-300/40">@</span>
+                      {new Date(nextMeeting.date).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: timezone || undefined,
+                      })}
+                    </p>
+                    <p className="mt-2 truncate text-[10px] font-bold uppercase tracking-widest text-indigo-300/40">
+                      {timezone}
+                    </p>
+                  </>
+                ) : (
+                  <p className="font-medium italic text-indigo-300/60">No meeting scheduled</p>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleJoinMeeting}
+              disabled={!nextMeeting}
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 font-black text-indigo-900 shadow-lg shadow-white/10 transition-all hover:bg-indigo-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Video className="h-5 w-5" /> Join Meeting
+            </button>
+            <button
+              type="button"
+              onClick={handleRescheduleClick}
+              disabled={!nextMeeting}
+              className="w-full rounded-2xl border border-indigo-400/20 bg-indigo-600/50 py-4 font-black text-white transition-all hover:bg-indigo-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Reschedule
+            </button>
           </div>
 
-          <div className="flex-1 flex flex-col justify-center">
-            <div className="bg-indigo-950/40 border border-indigo-500/20 rounded-xl p-4 text-center mb-4">
-              {nextMeeting ? (
-                <>
-                  <p className="text-[10px] uppercase tracking-widest font-bold text-indigo-300/60 mb-1">
-                    {new Date(nextMeeting.date).toLocaleDateString("en-US", { weekday: "long" })}
+          {upcomingWebinar ? (
+            <div className="rounded-2xl border border-cyan-500/25 bg-slate-900/80 p-5">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/80">
+                    Other session
                   </p>
-                  <p className="text-lg font-bold text-white">
-                    {new Date(nextMeeting.date).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
-                    <span className="text-indigo-300/40 font-light mx-1">@</span>
-                    {new Date(nextMeeting.date).toLocaleTimeString("en-US", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      timeZone: timezone || undefined,
-                    })}
+                  <h4 className="mt-1 truncate text-base font-bold text-white">
+                    {upcomingWebinar.title || "Webinar"}
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {formatMeetingDate(upcomingWebinar.date)}
                   </p>
-                  <p className="text-[10px] text-indigo-300/40 mt-1.5 uppercase font-bold tracking-wider truncate">
-                    {timezone}
-                  </p>
-                </>
-              ) : (
-                <p className="text-indigo-300/60 text-sm italic">No meeting scheduled</p>
-              )}
+                </div>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+                  <Video className="h-5 w-5" />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleJoinWebinar}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-600/30 py-3 text-sm font-bold text-cyan-50 transition-all hover:bg-cyan-600/50"
+              >
+                <Play className="h-4 w-4 fill-current" /> Join webinar
+              </button>
             </div>
-          </div>
-
-          <Button
-            className="mb-2 w-full"
-            leftIcon={<Video className="w-4 h-4" />}
-            onClick={handleJoinMeeting}
-            disabled={!nextMeeting}
-          >
-            Join Meeting
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={handleRescheduleClick}
-            disabled={!nextMeeting}
-          >
-            Reschedule
-          </Button>
+          ) : null}
         </div>
       </div>
 
@@ -747,11 +842,55 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <CheckSquare className="w-4 h-4 text-indigo-400" /> Active Checklist
             </h3>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              {studentTasks.filter((t) => t.status === "COMPLETED").length} / {studentTasks.length}{" "}
-              Done
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                {studentTasks.filter((t) => t.status === "COMPLETED").length} / {studentTasks.length}{" "}
+                Done
+              </span>
+              {onAddActionItem && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={isAddingTask ? "danger" : "secondary"}
+                  className="h-8 w-8"
+                  onClick={() => {
+                    if (isAddingTask) resetAddTaskForm();
+                    else setIsAddingTask(true);
+                  }}
+                  aria-label={isAddingTask ? "Cancel" : "Add task"}
+                  title={isAddingTask ? "Cancel" : "Add task"}
+                >
+                  {isAddingTask ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                </Button>
+              )}
+            </div>
           </div>
+
+          {isAddingTask && onAddActionItem && (
+            <div className="mb-4 rounded-xl border border-indigo-500/30 bg-slate-950 p-3 space-y-3">
+              <Input
+                placeholder="Task title…"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSaveOwnTask();
+                  }
+                }}
+              />
+              <DatePicker value={newTaskDueDate} onChange={setNewTaskDueDate} />
+              <Button
+                size="sm"
+                className="w-full"
+                disabled={!newTaskTitle.trim() || !newTaskDueDate}
+                onClick={handleSaveOwnTask}
+              >
+                Add task
+              </Button>
+            </div>
+          )}
+
           <div className="space-y-2">
             {studentTasks.map((item) => (
               <div
@@ -797,7 +936,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
               </div>
             ))}
-            {studentTasks.length === 0 && (
+            {studentTasks.length === 0 && !isAddingTask && (
               <div className="text-center py-8 border border-dashed border-slate-800 rounded-xl">
                 <p className="text-slate-500 text-sm">No active tasks. You&apos;re all caught up!</p>
               </div>
@@ -839,7 +978,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       </section>
 
       <section>
-        <h3 className="text-base font-bold text-white mb-3">Required Resources</h3>
+        <h3 className="text-base font-bold text-white mb-3">Resources</h3>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
           {resources.map((res) => (
             <button

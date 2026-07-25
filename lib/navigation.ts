@@ -73,8 +73,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
   ],
   STUDENT: [
     { label: "Momentum", href: "/student/momentum", icon: Rocket },
-    { label: "Central Hub", href: "/student/hub", icon: LayoutGrid },
     { label: "Profile & Docs", href: "/student/profile", icon: User },
+    { label: "Central Hub", href: "/student/hub", icon: LayoutGrid },
     { label: "Resources", href: "/student/resources", icon: BookOpen },
     { label: "Inbox", href: "/student/messages", icon: MessageSquare },
   ],

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -13,6 +14,7 @@ import {
   PartyPopper,
   Clock,
   Star,
+  Check,
 } from "lucide-react";
 import { Application, ApplicationStatus, PlatformConfig, School } from "@/lib/types";
 import {
@@ -22,6 +24,11 @@ import {
   useDeleteApplication,
 } from "@/lib/hooks/useApplications";
 import { useStudentSchools } from "@/lib/hooks/useStudentSchools";
+import { useDentalSchoolsCatalog } from "@/lib/hooks/useDentalSchoolsCatalog";
+import {
+  mapDentalSchoolToHubSchool,
+  type DentalSchool,
+} from "@/lib/schools/sheetCatalog";
 import {
   Badge,
   Button,
@@ -35,6 +42,7 @@ import {
   Textarea,
   DatePicker,
 } from "@/components/ui";
+import { cn } from "@/lib/utils/cn";
 import { toast } from "sonner";
 
 interface ApplicationTrackerProps {
@@ -78,6 +86,11 @@ const ApplicationTracker: React.FC<ApplicationTrackerProps> = ({
 }) => {
   const { data: fetchedApps = [], isLoading } = useApplications(studentId);
   const { data: studentSchools = [] } = useStudentSchools(studentId);
+  const {
+    schools: catalogSchools,
+    loading: catalogLoading,
+    error: catalogError,
+  } = useDentalSchoolsCatalog();
   const createMutation = useCreateApplication();
   const updateMutation = useUpdateApplication();
   const deleteMutation = useDeleteApplication();
@@ -100,6 +113,16 @@ const ApplicationTracker: React.FC<ApplicationTrackerProps> = ({
     appliedDate: new Date().toISOString().split("T")[0],
     notes: "",
   });
+  /** Canonical school from the sheet catalog (preferred for research / ensure). */
+  const [catalogPick, setCatalogPick] = useState<DentalSchool | null>(null);
+  const [schoolSuggestOpen, setSchoolSuggestOpen] = useState(false);
+  const schoolInputRef = useRef<HTMLInputElement>(null);
+  const schoolSuggestRef = useRef<HTMLDivElement>(null);
+  const [suggestPos, setSuggestPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const [showCelebration, setShowCelebration] = useState<{
     type: "ACCEPTED" | "INTERVIEWED" | "WAITLISTED";
     message: string;
@@ -114,6 +137,73 @@ const ApplicationTracker: React.FC<ApplicationTrackerProps> = ({
       })),
     [studentSchools],
   );
+
+  const catalogSuggestions = useMemo(() => {
+    const q = formData.schoolName.trim().toLowerCase();
+    if (q.length < 1) return [];
+    return catalogSchools
+      .filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.location.toLowerCase().includes(q),
+      )
+      .slice(0, 8);
+  }, [catalogSchools, formData.schoolName]);
+
+  const measureSuggestPos = () => {
+    const el = schoolInputRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const menuHeight = Math.min(catalogSuggestions.length * 52 + 12, 280);
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < menuHeight && rect.top > spaceBelow;
+    return {
+      top: openUp ? rect.top - menuHeight - 6 : rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+    };
+  };
+
+  useLayoutEffect(() => {
+    if (!schoolSuggestOpen) {
+      setSuggestPos(null);
+      return;
+    }
+    setSuggestPos(measureSuggestPos());
+  }, [schoolSuggestOpen, catalogSuggestions.length, formData.schoolName]);
+
+  useEffect(() => {
+    if (!schoolSuggestOpen) return;
+    const onScroll = () => setSuggestPos(measureSuggestPos());
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (schoolInputRef.current?.contains(t) || schoolSuggestRef.current?.contains(t)) {
+        return;
+      }
+      setSchoolSuggestOpen(false);
+    };
+    window.addEventListener("resize", onScroll);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [schoolSuggestOpen, catalogSuggestions.length]);
+
+  const selectCatalogSchool = (school: DentalSchool) => {
+    const fromList = studentSchools.find(
+      (s) => s.name.toLowerCase() === school.name.toLowerCase(),
+    );
+    setCatalogPick(school);
+    setFormData((prev) => ({
+      ...prev,
+      schoolName: school.name,
+      schoolId: fromList?.id,
+    }));
+    setSchoolSuggestOpen(false);
+  };
 
   const triggerConfetti = () => {
     const duration = 5 * 1000;
@@ -143,6 +233,8 @@ const ApplicationTracker: React.FC<ApplicationTrackerProps> = ({
   const resetForm = () => {
     setIsAdding(false);
     setEditingId(null);
+    setCatalogPick(null);
+    setSchoolSuggestOpen(false);
     setFormData({
       schoolName: "",
       schoolId: undefined,
@@ -178,12 +270,53 @@ const ApplicationTracker: React.FC<ApplicationTrackerProps> = ({
     }
   };
 
-  const handleSave = async () => {
-    if (!formData.schoolName.trim() && !formData.schoolId) {
-      toast.error("Select or enter a dental school");
-      return;
+  const resolveSchoolForCreate = (): {
+    schoolId?: string;
+    schoolName: string;
+    school?: School;
+  } | null => {
+    const fromList = formData.schoolId
+      ? studentSchools.find((s) => s.id === formData.schoolId)
+      : undefined;
+
+    if (fromList) {
+      return {
+        schoolId: fromList.id,
+        schoolName: fromList.name,
+        school: fromList,
+      };
     }
 
+    const typed = formData.schoolName.trim();
+    if (!typed && !catalogPick) {
+      return null;
+    }
+
+    const pick =
+      catalogPick &&
+      catalogPick.name.toLowerCase() === (typed || catalogPick.name).toLowerCase()
+        ? catalogPick
+        : catalogSchools.find((s) => s.name.toLowerCase() === typed.toLowerCase());
+
+    if (pick) {
+      return {
+        schoolName: pick.name,
+        school: mapDentalSchoolToHubSchool(pick),
+      };
+    }
+
+    // Catalog loaded: require a list pick so research uses the canonical name
+    if (catalogSchools.length > 0) {
+      toast.error("Select a school from the suggestions so the name matches our catalog");
+      setSchoolSuggestOpen(true);
+      return null;
+    }
+
+    if (!typed) return null;
+    return { schoolName: typed };
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
       const status = formData.status;
@@ -201,12 +334,19 @@ const ApplicationTracker: React.FC<ApplicationTrackerProps> = ({
         });
         toast.success("Application updated");
       } else {
-        const fromList = studentSchools.find((s) => s.id === formData.schoolId);
+        const resolved = resolveSchoolForCreate();
+        if (!resolved) {
+          if (!formData.schoolName.trim() && !formData.schoolId) {
+            toast.error("Select or enter a dental school");
+          }
+          setSaving(false);
+          return;
+        }
         await createMutation.mutateAsync({
           studentId,
-          schoolId: formData.schoolId || undefined,
-          schoolName: formData.schoolName || fromList?.name || "Unknown school",
-          school: fromList,
+          schoolId: resolved.schoolId,
+          schoolName: resolved.schoolName,
+          school: resolved.school,
           status,
           appliedDate: formData.appliedDate || null,
           interviewDate: formData.interviewDate || null,
@@ -440,26 +580,140 @@ const ApplicationTracker: React.FC<ApplicationTrackerProps> = ({
                 value={formData.schoolId || ""}
                 onChange={(schoolId) => {
                   const match = studentSchools.find((s) => s.id === schoolId);
+                  const catalogMatch = match
+                    ? catalogSchools.find(
+                        (s) => s.name.toLowerCase() === match.name.toLowerCase(),
+                      )
+                    : null;
+                  setCatalogPick(catalogMatch || null);
+                  setSchoolSuggestOpen(false);
                   setFormData({
                     ...formData,
-                    schoolId,
-                    schoolName: match?.name || formData.schoolName,
+                    schoolId: schoolId || undefined,
+                    schoolName: match?.name || "",
                   });
                 }}
-                options={[{ value: "", label: "Or type a school name below…" }, ...schoolOptions]}
+                options={[{ value: "", label: "Or search the catalog below…" }, ...schoolOptions]}
                 placeholder="Select a school…"
               />
             </FormField>
           ) : null}
 
-          <FormField label="Dental school name">
-            <Input
-              value={formData.schoolName}
-              onChange={(e) => setFormData({ ...formData, schoolName: e.target.value })}
-              placeholder="e.g. Harvard School of Dental Medicine"
-              disabled={!!editingId}
-            />
+          <FormField
+            label="Dental school name"
+            hint={
+              editingId
+                ? undefined
+                : catalogError
+                  ? "Catalog unavailable — type the school name carefully."
+                  : catalogLoading
+                    ? "Loading school catalog…"
+                    : catalogPick
+                      ? "Matched to catalog — spelling is locked for research."
+                      : "Start typing and pick a school from the list (avoids misspellings)."
+            }
+          >
+            <div className="relative">
+              <Input
+                ref={schoolInputRef}
+                value={formData.schoolName}
+                onChange={(e) => {
+                  const schoolName = e.target.value;
+                  setCatalogPick(null);
+                  setFormData({
+                    ...formData,
+                    schoolName,
+                    schoolId: undefined,
+                  });
+                  setSchoolSuggestOpen(schoolName.trim().length > 0);
+                }}
+                onFocus={() => {
+                  if (!editingId && formData.schoolName.trim().length > 0) {
+                    setSchoolSuggestOpen(true);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setSchoolSuggestOpen(false);
+                  if (e.key === "Enter" && catalogSuggestions[0]) {
+                    e.preventDefault();
+                    selectCatalogSchool(catalogSuggestions[0]);
+                  }
+                }}
+                placeholder="e.g. Harvard School of Dental Medicine"
+                disabled={!!editingId}
+                autoComplete="off"
+                className={cn(catalogPick && "pr-9")}
+              />
+              {catalogPick && !editingId ? (
+                <Check
+                  className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-400"
+                  aria-hidden
+                />
+              ) : null}
+            </div>
           </FormField>
+
+          {schoolSuggestOpen &&
+          !editingId &&
+          suggestPos &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              ref={schoolSuggestRef}
+              role="listbox"
+              style={{
+                top: suggestPos.top,
+                left: suggestPos.left,
+                width: suggestPos.width,
+              }}
+              className="fixed z-[200] max-h-[17.5rem] overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-xl shadow-black/30 opacity-0 animate-[menu-fade-in_100ms_ease-out_forwards]"
+            >
+              {catalogLoading ? (
+                <p className="px-3 py-2 text-sm text-muted-foreground">Loading schools…</p>
+              ) : catalogSuggestions.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-muted-foreground">
+                  {catalogError
+                    ? "Could not load school catalog."
+                    : "No matching schools — try another spelling."}
+                </p>
+              ) : (
+                catalogSuggestions.map((school) => {
+                  const selected =
+                    catalogPick?.id === school.id ||
+                    formData.schoolName.toLowerCase() === school.name.toLowerCase();
+                  return (
+                    <button
+                      key={school.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selectCatalogSchool(school)}
+                      className={cn(
+                        "flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors",
+                        "hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        selected && "bg-surface-muted",
+                      )}
+                    >
+                      <SchoolIcon className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-foreground">
+                          {school.name}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {school.location}
+                        </span>
+                      </span>
+                      {selected ? (
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                      ) : null}
+                    </button>
+                  );
+                })
+              )}
+            </div>,
+            document.body,
+          )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Current status">

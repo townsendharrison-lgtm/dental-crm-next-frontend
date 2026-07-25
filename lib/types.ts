@@ -177,6 +177,22 @@ export interface PostBacOrMasters {
   strengthScore: number;
   degreeType: string;
   year: string;
+  gpa?: number | null;
+}
+
+export type ApplicantType = "FIRST_TIME" | "REAPPLICANT";
+export type DatType = "NOT_TAKEN" | "AMERICAN" | "CANADIAN";
+
+export interface ReapplicantSchool {
+  schoolId: string;
+  schoolName: string;
+  outcomes: string[];
+}
+
+export interface ConsideringSchool {
+  id: string;
+  name: string;
+  location?: string;
 }
 
 export interface StudentProfile {
@@ -192,11 +208,30 @@ export interface StudentProfile {
   zip_code?: string | null;
   strength_score: number;
   gpa?: number | null;
+  sgpa?: number | null;
+  major?: string | null;
   avg_response_time: number;
   dat_score?: number | null;
   dat_aa?: number | null;
   dat_ts?: number | null;
+  dat_pat?: number | null;
+  dat_bio?: number | null;
+  dat_gc?: number | null;
+  dat_oc?: number | null;
+  dat_rc?: number | null;
+  dat_qr?: number | null;
+  dat_sns?: number | null;
+  dat_mdt?: number | null;
+  dat_type?: DatType | null;
   is_reapplicant: boolean;
+  applicant_type?: ApplicantType | null;
+  previous_application_doc_id?: string | null;
+  reapplicant_schools?: ReapplicantSchool[] | null;
+  considering_schools?: ConsideringSchool[] | null;
+  took_online_classes?: boolean | null;
+  took_cc_classes?: boolean | null;
+  additional_schooling?: string[] | null;
+  additional_schooling_other?: string | null;
   application_cycle?: string | null;
   status: "Preparing" | "Applying" | "Interviewing";
   state?: string | null;
@@ -213,6 +248,8 @@ export interface StudentProfile {
   masters?: PostBacOrMasters | null;
   lor_required: number;
   lor_external_service: boolean;
+  /** Manual letters collected when using an external service (not Letter Vault). */
+  lor_external_collected?: number | null;
   timezone?: string | null;
   last_profile_reminder_at?: string | null;
   school_categories?: SchoolCategory[] | null;
@@ -496,7 +533,15 @@ export interface StaffTask {
   studentUser?: AuthUser | null;
 }
 
-export type DocumentType = "Transcript" | "Resume" | "Letter of Recommendation" | "Post-Bac Transcript" | "DAT Report" | "Essay" | "Other";
+export type DocumentType =
+  | "Transcript"
+  | "Resume"
+  | "Letter of Recommendation"
+  | "Post-Bac Transcript"
+  | "DAT Report"
+  | "Essay"
+  | "Previous Application"
+  | "Other";
 
 export interface StudentDocument {
   id: string;

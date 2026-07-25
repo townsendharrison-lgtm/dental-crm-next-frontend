@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useStudent, useStudentStrengthPercentile } from "@/lib/hooks/useStudentProfile";
 import { useBadges, useEarnedBadges, useEvaluateBadges } from "@/lib/hooks/useBadges";
-import { useActionItems, useUpdateActionItem } from "@/lib/hooks/useActionItems";
+import { useActionItems, useUpdateActionItem, useCreateActionItem } from "@/lib/hooks/useActionItems";
 import { useNotifications } from "@/lib/hooks/useNotifications";
 import { useSurveys, useSubmitSurveyResponse } from "@/lib/hooks/useSurveys";
 import { useMeetings } from "@/lib/hooks/useMeetings";
@@ -50,6 +50,7 @@ export default function StudentMomentumPage() {
   const { data: resources = [] } = useResources(!!user);
 
   const updateActionItemMutation = useUpdateActionItem();
+  const createActionItemMutation = useCreateActionItem();
   const submitSurveyMutation = useSubmitSurveyResponse();
 
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
@@ -112,20 +113,29 @@ export default function StudentMomentumPage() {
   }
 
   const now = Date.now();
-  const nextMeeting =
-    (focusMeetingId && meetings.find((m) => m.id === focusMeetingId)) ||
-    meetings
-      .filter((m) => {
-        if (m.completed) return false;
-        const due = new Date(m.date).getTime() >= now - 60 * 60 * 1000;
-        if (!due) return false;
-        const sid = meetingStudentId(m);
-        if (sid === studentWithBadges.id) return true;
-        // Global webinars visible to all students
-        if (m.audience === "GLOBAL") return true;
-        return false;
-      })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+  const isUpcoming = (m: (typeof meetings)[number]) => {
+    if (m.completed) return false;
+    return new Date(m.date).getTime() >= now - 60 * 60 * 1000;
+  };
+  const isWebinar = (m: (typeof meetings)[number]) =>
+    m.audience === "GLOBAL" || m.isGlobal === true;
+  const isMentorMeeting = (m: (typeof meetings)[number]) =>
+    !isWebinar(m) && meetingStudentId(m) === studentWithBadges.id;
+
+  const bySoonest = (a: (typeof meetings)[number], b: (typeof meetings)[number]) =>
+    new Date(a.date).getTime() - new Date(b.date).getTime();
+
+  const upcoming = meetings.filter(isUpcoming);
+  let nextMeeting = [...upcoming].filter(isMentorMeeting).sort(bySoonest)[0];
+  let upcomingWebinar = [...upcoming].filter(isWebinar).sort(bySoonest)[0];
+
+  if (focusMeetingId) {
+    const focused = meetings.find((m) => m.id === focusMeetingId);
+    if (focused && isUpcoming(focused)) {
+      if (isWebinar(focused)) upcomingWebinar = focused;
+      else if (isMentorMeeting(focused)) nextMeeting = focused;
+    }
+  }
 
   const handleToggleActionItem = (itemId: string) => {
     const item = actionItems.find((ai) => ai.id === itemId);
@@ -136,6 +146,22 @@ export default function StudentMomentumPage() {
         updates: { status: newStatus },
       });
     }
+  };
+
+  const handleAddActionItem = (task: string, dueDate: string) => {
+    createActionItemMutation.mutate(
+      {
+        studentId: subjectId,
+        task,
+        dueDate,
+        priority: "MEDIUM",
+        category: "Personal",
+      },
+      {
+        onSuccess: () => toast.success("Task added"),
+        onError: (err: any) => toast.error(err?.message || "Failed to add task"),
+      },
+    );
   };
 
   const handleNavigate = (tab: string) => {
@@ -205,9 +231,11 @@ export default function StudentMomentumPage() {
         onSendMessage={() => {}}
         onNavigate={handleNavigate}
         onToggleActionItem={handleToggleActionItem}
+        onAddActionItem={handleAddActionItem}
         onTakeSurvey={handleTakeSurvey}
         onUpdateApplications={() => {}}
         nextMeeting={nextMeeting}
+        upcomingWebinar={upcomingWebinar}
         platformConfig={platformConfig}
         strengthPercentile={strengthPercentile}
       />
