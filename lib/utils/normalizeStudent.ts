@@ -46,7 +46,7 @@ export function normalizeStudent(s: Student): Student {
     undergradInstitution: s.undergradInstitution ?? profile?.undergrad_institution,
     undergradDegree: s.undergradDegree ?? profile?.undergrad_degree,
     undergradGradYear: s.undergradGradYear ?? profile?.undergrad_grad_year,
-    applicationCycle: s.applicationCycle ?? profile?.application_cycle,
+    applicationCycle: s.applicationCycle ?? profile?.application_cycle ?? undefined,
     lorRequired: s.lorRequired ?? profile?.lor_required,
     lorExternalService: s.lorExternalService ?? profile?.lor_external_service,
     postBac: s.postBac ?? profile?.post_bac ?? undefined,
