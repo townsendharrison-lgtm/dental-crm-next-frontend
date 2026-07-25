@@ -12,6 +12,8 @@ export interface SendMessagePayload {
   file?: File;
 }
 
+export type SentMonthlyPoint = { month: string; count: number };
+
 export const messagesApi = {
   /**
    * List conversations/threads for the current authenticated user.
@@ -19,6 +21,19 @@ export const messagesApi = {
   list: async (): Promise<Conversation[]> => {
     const response = await apiGet<{ conversations: Conversation[] }>("/api/conversations");
     return response.conversations || [];
+  },
+
+  /** Messages sent by month for the current user (or staff preview of another user). */
+  sentMonthly: async (
+    months = 12,
+    userId?: string,
+  ): Promise<{ userId: string; months: SentMonthlyPoint[] }> => {
+    const query = new URLSearchParams();
+    query.set("months", String(months));
+    if (userId) query.set("userId", userId);
+    return await apiGet<{ userId: string; months: SentMonthlyPoint[] }>(
+      `/api/conversations/analytics/sent-monthly?${query.toString()}`,
+    );
   },
 
   /**

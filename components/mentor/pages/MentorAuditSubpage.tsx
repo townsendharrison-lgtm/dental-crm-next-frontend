@@ -2,13 +2,14 @@
 
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useMentor } from "@/lib/hooks/useMentors";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
 import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useActionItems } from "@/lib/hooks/useActionItems";
 import { studentsApi } from "@/lib/api/students";
+import { messagesApi } from "@/lib/api/messages";
 import { queryKeys } from "@/lib/api/queryKeys";
 import MentorAnalyticsView from "@/components/mentor/MentorAnalyticsView";
 import MentorSubpageShell, {
@@ -28,6 +29,12 @@ export default function MentorAuditSubpage({ basePath }: MentorAuditSubpageProps
   const { data: studentsRaw = [], isLoading: studentsLoading } = useStudents();
   const { data: meetingsRaw = [] } = useMeetings();
   const { data: actionItemsRaw = [] } = useActionItems();
+  const { data: sentMonthly } = useQuery({
+    queryKey: ["messages", "sent-monthly", mentorId],
+    queryFn: () => messagesApi.sentMonthly(12, mentorId),
+    enabled: Boolean(mentorId),
+    staleTime: 60_000,
+  });
 
   const students = useMemo(() => normalizeStudents(studentsRaw), [studentsRaw]);
   const meetings = useMemo(
@@ -47,6 +54,13 @@ export default function MentorAuditSubpage({ basePath }: MentorAuditSubpageProps
       })),
     [actionItemsRaw],
   );
+  const messagesSentByMonth = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const row of sentMonthly?.months || []) {
+      map[row.month] = row.count;
+    }
+    return map;
+  }, [sentMonthly]);
 
   const roster = useMemo(
     () => students.filter((s) => s.mentorId === mentorId),
@@ -108,6 +122,7 @@ export default function MentorAuditSubpage({ basePath }: MentorAuditSubpageProps
         mentors={[mentor]}
         strengthHistories={strengthHistories}
         historiesLoading={strengthQueries.some((q) => q.isLoading)}
+        messagesSentByMonth={messagesSentByMonth}
       />
     </MentorSubpageShell>
   );

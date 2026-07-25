@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
@@ -10,6 +10,7 @@ import { useMentor, useMentorStudents } from "@/lib/hooks/useMentors";
 import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useActionItems } from "@/lib/hooks/useActionItems";
 import { studentsApi } from "@/lib/api/students";
+import { messagesApi } from "@/lib/api/messages";
 import { queryKeys } from "@/lib/api/queryKeys";
 import MentorAnalyticsView from "@/components/mentor/MentorAnalyticsView";
 import { normalizeStudents } from "@/lib/utils/normalizeStudent";
@@ -23,6 +24,12 @@ export default function MentorAnalyticsPage() {
   const { data: studentsRaw = [], isLoading: studentsLoading } = useMentorStudents(mentorId);
   const { data: meetingsRaw = [], isLoading: meetingsLoading } = useMeetings();
   const { data: actionItemsRaw = [], isLoading: actionsLoading } = useActionItems();
+  const { data: sentMonthly, isLoading: messagesLoading } = useQuery({
+    queryKey: ["messages", "sent-monthly", mentorId],
+    queryFn: () => messagesApi.sentMonthly(12, mentorId),
+    enabled: Boolean(mentorId),
+    staleTime: 60_000,
+  });
 
   const students = useMemo(() => normalizeStudents(studentsRaw), [studentsRaw]);
   const meetings = useMemo(
@@ -42,6 +49,13 @@ export default function MentorAnalyticsPage() {
       })),
     [actionItemsRaw],
   );
+  const messagesSentByMonth = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const row of sentMonthly?.months || []) {
+      map[row.month] = row.count;
+    }
+    return map;
+  }, [sentMonthly]);
 
   const strengthQueries = useQueries({
     queries: students.map((s) => ({
@@ -67,7 +81,15 @@ export default function MentorAnalyticsPage() {
 
   const historiesLoading = strengthQueries.some((q) => q.isLoading);
 
-  if (isLoadingSubjects || mentorLoading || studentsLoading || meetingsLoading || actionsLoading || !user) {
+  if (
+    isLoadingSubjects ||
+    mentorLoading ||
+    studentsLoading ||
+    meetingsLoading ||
+    actionsLoading ||
+    messagesLoading ||
+    !user
+  ) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
@@ -92,6 +114,7 @@ export default function MentorAnalyticsPage() {
       mentors={[mentor]}
       strengthHistories={strengthHistories}
       historiesLoading={historiesLoading}
+      messagesSentByMonth={messagesSentByMonth}
       onNavigateSchedule={() => router.push("/mentor/schedule")}
       onNavigateStudents={() => router.push("/mentor/students")}
     />

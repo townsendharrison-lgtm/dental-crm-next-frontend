@@ -53,6 +53,8 @@ interface MentorAnalyticsViewProps {
   /** Real strength score snapshots per assigned student */
   strengthHistories?: StrengthHistorySeries[];
   historiesLoading?: boolean;
+  /** Messages sent by the mentor, keyed by YYYY-MM */
+  messagesSentByMonth?: Record<string, number>;
   /** Hide the heavy page header when embedded in a subpage shell */
   compact?: boolean;
   onNavigateSchedule?: () => void;
@@ -118,6 +120,7 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
   meetings = [],
   actionItems = [],
   mentorId,
+  messagesSentByMonth = {},
   mentors = [],
   strengthHistories = [],
   historiesLoading = false,
@@ -268,24 +271,13 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
         }
       }).length;
 
-      const tasksCount = mentorActions.filter((a) => {
-        if (a.status !== "COMPLETED") return false;
-        const stamp = a.updated_at || a.created_at || dueOf(a);
-        if (!stamp) return false;
-        try {
-          return monthKey(parseLocalDate(String(stamp).slice(0, 10))) === key;
-        } catch {
-          return false;
-        }
-      }).length;
-
       return {
         month: monthLabel(key),
         meetings: meetingsCount,
-        tasks: tasksCount,
+        messages: messagesSentByMonth[key] || 0,
       };
     });
-  }, [monthKeys, mentorMeetings, mentorActions]);
+  }, [monthKeys, mentorMeetings, messagesSentByMonth]);
 
   const readinessData = [
     {
@@ -781,7 +773,7 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-white">Monthly engagement</h3>
-              <p className="text-xs text-slate-500">Scheduled meetings and completed tasks</p>
+              <p className="text-xs text-slate-500">Scheduled meetings and messages sent</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950 p-2 text-indigo-400">
               <Zap className="h-4 w-4" />
@@ -809,7 +801,7 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
                   }}
                 />
                 <Bar dataKey="meetings" name="Meetings" fill="#818cf8" radius={[4, 4, 0, 0]} barSize={18} />
-                <Bar dataKey="tasks" name="Tasks done" fill="#10b981" radius={[4, 4, 0, 0]} barSize={18} />
+                <Bar dataKey="messages" name="Messages sent" fill="#10b981" radius={[4, 4, 0, 0]} barSize={18} />
               </BarChart>
             </ResponsiveContainer>
           </div>

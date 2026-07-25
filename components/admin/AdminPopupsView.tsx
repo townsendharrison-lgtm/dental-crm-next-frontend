@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import type { PopupAdvertisement } from "@/lib/types";
+import type {
+  PopupAdvertisement,
+  PopupImageFit,
+  PopupImageHeight,
+} from "@/lib/types";
 import {
   Plus,
   Calendar,
@@ -27,6 +31,13 @@ import { Input, Textarea, FormField } from "@/components/ui/Form";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 import { usePopupAnalytics, useUploadPopupImage } from "@/lib/hooks/usePopups";
+import {
+  popupImageClass,
+  popupImageFit,
+  popupImageFrameClass,
+  popupImageHeight,
+} from "@/lib/utils/popupImage";
+import { cn } from "@/lib/utils/cn";
 
 interface AdminPopupsViewProps {
   popups: PopupAdvertisement[];
@@ -40,6 +51,8 @@ type PopupFormState = {
   title: string;
   message: string;
   imageUrl: string;
+  imageFit: PopupImageFit;
+  imageHeight: PopupImageHeight;
   ctaText: string;
   ctaUrl: string;
   backgroundColor: string;
@@ -70,6 +83,8 @@ function defaultForm(): PopupFormState {
     title: "",
     message: "",
     imageUrl: "",
+    imageFit: "cover",
+    imageHeight: "md",
     ctaText: "",
     ctaUrl: "",
     backgroundColor: "#4f46e5",
@@ -136,6 +151,8 @@ function PopupCardPreview({
   title,
   message,
   imageUrl,
+  imageFit = "cover",
+  imageHeight = "md",
   ctaText,
   backgroundColor,
   textColor,
@@ -143,6 +160,8 @@ function PopupCardPreview({
   title: string;
   message: string;
   imageUrl?: string;
+  imageFit?: PopupImageFit;
+  imageHeight?: PopupImageHeight;
   ctaText?: string;
   backgroundColor: string;
   textColor: string;
@@ -153,9 +172,14 @@ function PopupCardPreview({
       style={{ backgroundColor, color: textColor }}
     >
       {imageUrl ? (
-        <div className="h-40 overflow-hidden">
+        <div
+          className={cn(
+            popupImageFrameClass(imageFit, imageHeight, "preview"),
+            imageFit === "contain" && "bg-black/20",
+          )}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+          <img src={imageUrl} alt="" className={popupImageClass(imageFit)} />
         </div>
       ) : null}
       <div className="p-6 text-center space-y-3">
@@ -207,6 +231,8 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
       title: popup.title,
       message: popup.message,
       imageUrl: popupImage(popup),
+      imageFit: popupImageFit(popup),
+      imageHeight: popupImageHeight(popup),
       ctaText: popupCta(popup),
       ctaUrl: popupCtaUrl(popup),
       backgroundColor: popupBg(popup),
@@ -256,6 +282,8 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
       title: formData.title.trim(),
       message: formData.message.trim(),
       imageUrl: formData.imageUrl.trim() || null,
+      imageFit: formData.imageFit,
+      imageHeight: formData.imageHeight,
       ctaText: formData.ctaText.trim() || null,
       ctaUrl: formData.ctaUrl.trim() || null,
       backgroundColor: formData.backgroundColor,
@@ -517,12 +545,18 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
                 placeholder="Or paste image URL (optional)"
               />
               {formData.imageUrl ? (
-                <div className="h-28 rounded-lg overflow-hidden border border-slate-800 bg-slate-950">
+                <div
+                  className={cn(
+                    "rounded-lg border border-slate-800 bg-slate-950",
+                    popupImageFrameClass(formData.imageFit, formData.imageHeight, "preview"),
+                    formData.imageFit === "contain" && "bg-slate-900",
+                  )}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={formData.imageUrl}
                     alt="Campaign"
-                    className="w-full h-full object-cover"
+                    className={popupImageClass(formData.imageFit)}
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).style.display = "none";
                     }}
@@ -536,6 +570,48 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
               )}
             </div>
           </FormField>
+
+          {formData.imageUrl ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                label="Image fit"
+                hint="Cover crops to fill. Contain shows the full image. Original keeps natural proportions."
+              >
+                <SelectMenu
+                  value={formData.imageFit}
+                  onChange={(v) =>
+                    setFormData({ ...formData, imageFit: v as PopupImageFit })
+                  }
+                  options={[
+                    { value: "cover", label: "Cover (fill & crop)" },
+                    { value: "contain", label: "Contain (show full)" },
+                    { value: "original", label: "Original height" },
+                  ]}
+                />
+              </FormField>
+              <FormField
+                label="Image height"
+                hint={
+                  formData.imageFit === "original"
+                    ? "Not used when fit is Original."
+                    : "How tall the image band is in the pop-up."
+                }
+              >
+                <SelectMenu
+                  value={formData.imageHeight}
+                  onChange={(v) =>
+                    setFormData({ ...formData, imageHeight: v as PopupImageHeight })
+                  }
+                  disabled={formData.imageFit === "original"}
+                  options={[
+                    { value: "sm", label: "Small" },
+                    { value: "md", label: "Medium" },
+                    { value: "lg", label: "Large" },
+                  ]}
+                />
+              </FormField>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="CTA Text">
@@ -667,6 +743,8 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
             title={formData.title}
             message={formData.message}
             imageUrl={formData.imageUrl || undefined}
+            imageFit={formData.imageFit}
+            imageHeight={formData.imageHeight}
             ctaText={formData.ctaText || undefined}
             backgroundColor={formData.backgroundColor}
             textColor={formData.textColor}
@@ -690,6 +768,8 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
             title={previewPopup.title}
             message={previewPopup.message}
             imageUrl={popupImage(previewPopup) || undefined}
+            imageFit={popupImageFit(previewPopup)}
+            imageHeight={popupImageHeight(previewPopup)}
             ctaText={popupCta(previewPopup) || undefined}
             backgroundColor={popupBg(previewPopup)}
             textColor={popupFg(previewPopup)}

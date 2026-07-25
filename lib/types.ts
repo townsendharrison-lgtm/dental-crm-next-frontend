@@ -788,11 +788,16 @@ export interface PendingWorkflowAction {
   workflow?: Workflow;
 }
 
+export type PopupImageFit = "cover" | "contain" | "original";
+export type PopupImageHeight = "sm" | "md" | "lg";
+
 export interface PopupAdvertisement {
   id: string;
   title: string;
   message: string;
   image_url?: string | null;
+  image_fit?: PopupImageFit | null;
+  image_height?: PopupImageHeight | null;
   cta_text?: string | null;
   cta_url?: string | null;
   background_color?: string | null;
@@ -807,6 +812,8 @@ export interface PopupAdvertisement {
   updated_at?: string;
   /** camelCase aliases (normalized by API client) */
   imageUrl?: string | null;
+  imageFit?: PopupImageFit | null;
+  imageHeight?: PopupImageHeight | null;
   ctaText?: string | null;
   ctaUrl?: string | null;
   backgroundColor?: string | null;

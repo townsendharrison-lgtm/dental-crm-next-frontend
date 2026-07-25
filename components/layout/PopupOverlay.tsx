@@ -7,6 +7,13 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
 import { useActivePopups, useDismissPopup, useRecordPopupClick } from "@/lib/hooks/usePopups";
 import type { PopupAdvertisement } from "@/lib/types";
+import {
+  popupImageClass,
+  popupImageFit,
+  popupImageFrameClass,
+  popupImageHeight,
+} from "@/lib/utils/popupImage";
+import { cn } from "@/lib/utils/cn";
 
 function fieldImage(p: PopupAdvertisement) {
   return p.imageUrl ?? p.image_url ?? "";
@@ -117,9 +124,23 @@ export function PopupOverlay() {
           </button>
 
           {img && (
-            <div className="h-64 overflow-hidden relative">
+            <div
+              className={cn(
+                "relative",
+                popupImageFrameClass(
+                  popupImageFit(activePopup),
+                  popupImageHeight(activePopup),
+                  "live",
+                ),
+                popupImageFit(activePopup) === "contain" && "bg-black/15",
+              )}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img} alt="" className="w-full h-full object-cover" />
+              <img
+                src={img}
+                alt=""
+                className={popupImageClass(popupImageFit(activePopup))}
+              />
             </div>
           )}
 

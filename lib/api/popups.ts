@@ -5,6 +5,8 @@ export interface CreatePopupPayload {
   title: string;
   message: string;
   imageUrl?: string | null;
+  imageFit?: "cover" | "contain" | "original";
+  imageHeight?: "sm" | "md" | "lg";
   ctaText?: string | null;
   ctaUrl?: string | null;
   backgroundColor?: string;
@@ -19,6 +21,10 @@ type RawPopup = PopupAdvertisement & Record<string, unknown>;
 
 export function normalizePopup(raw: RawPopup): PopupAdvertisement {
   const imageUrl = (raw.imageUrl ?? raw.image_url ?? null) as string | null;
+  const imageFit = (raw.imageFit ?? raw.image_fit ?? "cover") as PopupAdvertisement["imageFit"];
+  const imageHeight = (raw.imageHeight ??
+    raw.image_height ??
+    "md") as PopupAdvertisement["imageHeight"];
   const ctaText = (raw.ctaText ?? raw.cta_text ?? null) as string | null;
   const ctaUrl = (raw.ctaUrl ?? raw.cta_url ?? null) as string | null;
   const backgroundColor = (raw.backgroundColor ?? raw.background_color ?? null) as string | null;
@@ -48,6 +54,10 @@ export function normalizePopup(raw: RawPopup): PopupAdvertisement {
     message: raw.message,
     image_url: imageUrl,
     imageUrl,
+    image_fit: imageFit,
+    imageFit,
+    image_height: imageHeight,
+    imageHeight,
     cta_text: ctaText,
     ctaText,
     cta_url: ctaUrl,
