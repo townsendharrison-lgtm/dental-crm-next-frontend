@@ -585,6 +585,7 @@ export interface CentralHubViewProps {
   hideShell?: boolean;
 }
 
+/** Fallback defaults when API/DB is unavailable. Also used as the catalog for adding sections in admin. */
 export const NATIONAL_BENCHMARKS = [
   { label: 'Strength Score', key: 'strengthScore', benchmark: 85, unit: '', description: 'Overall application competitiveness' },
   { label: 'Avg. Response Time', key: 'avgResponseTime', benchmark: 4, unit: 'h', description: 'Engagement and responsiveness' },
@@ -597,7 +598,11 @@ export const NATIONAL_BENCHMARKS = [
   { label: 'Academic Enrichment', key: 'academic', benchmark: 1, unit: 'exp', description: 'Summer programs and workshops' },
   { label: 'Leadership Exp.', key: 'leadership', benchmark: 1, unit: 'exp', description: 'Organizational leadership roles' },
   { label: 'Manual Dexterity', key: 'dexterity', benchmark: 1, unit: 'lvl', description: 'Fine motor skill proficiency' },
-];
+] as const;
+
+export type NationalBenchmarkMetricKey = (typeof NATIONAL_BENCHMARKS)[number]['key'];
+
+export const NATIONAL_BENCHMARK_CATALOG = NATIONAL_BENCHMARKS.map((item) => ({ ...item }));
 
 export const parseLocalDate = (dateStr: string) => {
   if (!dateStr) return new Date();

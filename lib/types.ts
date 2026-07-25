@@ -1035,9 +1035,23 @@ export interface ManualDexterity {
   studentId: string;
   activity: string;
   description: string;
-  startDate: string;
+  startDate?: string | null;
   endDate?: string;
   isOngoing: boolean;
+}
+
+export type StudentCredentialKind = "LICENSE" | "ACHIEVEMENT";
+
+export interface StudentCredential {
+  id: string;
+  studentId: string;
+  kind: StudentCredentialKind;
+  title: string;
+  issuer: string;
+  year: string;
+  description: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface StudentNote {

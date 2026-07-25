@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
-  History, LineChart, BarChart3, Sparkles
+  History, LineChart, BarChart3, Target
 } from 'lucide-react';
 import {
   LineChart as ReLineChart,
@@ -22,11 +22,61 @@ import {
 import { Student, Experience, OptimizationPlan } from '@/lib/types';
 import { NATIONAL_BENCHMARKS, parseLocalDate } from './hubShared';
 import { Badge } from '@/components/ui';
+import { useNationalBenchmarks } from '@/lib/hooks/useNationalBenchmarks';
 
 interface AnalyticsTabProps {
   student: Student;
   experiences: Experience[];
   optimizationPlan?: OptimizationPlan;
+}
+
+function resolveStudentMetricValue(
+  key: string,
+  student: Student,
+  experiences: Experience[],
+  optimizationPlan?: OptimizationPlan,
+): number {
+  if (key === 'strengthScore') return student.strengthScore || 0;
+  if (key === 'avgResponseTime') return Number(student.avgResponseTime) || 0;
+  if (key === 'datAA') return student.datAA || 0;
+  if (key === 'datTS') return student.datTS || 0;
+  if (key === 'shadowing') {
+    return (experiences || [])
+      .filter((e) => e.category === 'Shadowing')
+      .reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0);
+  }
+  if (key === 'dental') {
+    return (experiences || [])
+      .filter((e) => e.category === 'Dental Experience')
+      .reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0);
+  }
+  if (key === 'volunteering') {
+    return (experiences || [])
+      .filter((e) => e.category === 'Volunteering')
+      .reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0);
+  }
+  if (key === 'research') {
+    return (experiences || []).filter((e) => e.category === 'Research').length;
+  }
+  if (key === 'academic') {
+    return (experiences || []).filter((e) => e.category === 'Academic').length;
+  }
+  if (key === 'leadership') {
+    return (experiences || []).filter(
+      (e) =>
+        /lead/i.test(e.title || '') ||
+        /lead/i.test(e.description || '') ||
+        e.category === 'Employment',
+    ).length;
+  }
+  if (key === 'dexterity') {
+    return optimizationPlan?.manualDexterity?.status
+      ? optimizationPlan.manualDexterity.status === 'Strong'
+        ? 2
+        : 1
+      : 0;
+  }
+  return 0;
 }
 
 export default function AnalyticsTab({
@@ -35,6 +85,23 @@ export default function AnalyticsTab({
   optimizationPlan,
 }: AnalyticsTabProps) {
   const overallScore = optimizationPlan?.overallScore ?? optimizationPlan?.overall_score ?? 0;
+  const { data: remoteBenchmarks } = useNationalBenchmarks();
+
+  const benchmarkItems = useMemo(() => {
+    if (remoteBenchmarks && remoteBenchmarks.length > 0) {
+      return remoteBenchmarks.map((b) => ({
+        key: b.key,
+        label: b.label,
+        benchmark: b.benchmark,
+        unit: b.unit,
+        description: b.description,
+      }));
+    }
+    return NATIONAL_BENCHMARKS.map((b) => ({ ...b }));
+  }, [remoteBenchmarks]);
+
+  const overallBenchmark =
+    benchmarkItems.find((b) => b.key === 'strengthScore')?.benchmark ?? 85;
 
   // Real cumulative hours by month (not fake score trending)
   const hoursHistory = useMemo(() => {
@@ -227,15 +294,15 @@ export default function AnalyticsTab({
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 blur-[100px] -mr-32 -mt-32 rounded-full" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-600/5 blur-[100px] -ml-32 -mb-32 rounded-full" />
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 relative overflow-visible">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 blur-[100px] -mr-32 -mt-32 rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-600/5 blur-[100px] -ml-32 -mb-32 rounded-full pointer-events-none" />
 
-        <div className="relative z-10">
+        <div className="relative">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="text-indigo-400 w-5 h-5" />
+                <Target className="text-indigo-400 w-5 h-5" />
                 <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider">Competitive Alignment Index</span>
               </div>
               <h3 className="text-lg font-semibold text-white">National Benchmark Comparison</h3>
@@ -248,38 +315,19 @@ export default function AnalyticsTab({
               </div>
               <div className="px-4 py-2.5 bg-slate-950/50 border border-slate-800 rounded-xl flex flex-col items-center">
                 <span className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Benchmark</span>
-                <span className="text-lg font-semibold text-indigo-400">85</span>
+                <span className="text-lg font-semibold text-indigo-400">{overallBenchmark}</span>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            {NATIONAL_BENCHMARKS.map((item, idx) => {
-              let studentValue = 0;
-              if (item.key === 'strengthScore') studentValue = student.strengthScore || 0;
-              else if (item.key === 'avgResponseTime') studentValue = Number(student.avgResponseTime) || 0;
-              else if (item.key === 'datAA') studentValue = student.datAA || 0;
-              else if (item.key === 'datTS') studentValue = student.datTS || 0;
-              else if (item.key === 'shadowing') studentValue = (experiences || []).filter(e => e.category === 'Shadowing').reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0);
-              else if (item.key === 'dental') studentValue = (experiences || []).filter(e => e.category === 'Dental Experience').reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0);
-              else if (item.key === 'volunteering') studentValue = (experiences || []).filter(e => e.category === 'Volunteering').reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0);
-              else if (item.key === 'research') studentValue = (experiences || []).filter(e => e.category === 'Research').length;
-              else if (item.key === 'academic') studentValue = (experiences || []).filter(e => e.category === 'Academic').length;
-              else if (item.key === 'leadership') {
-                studentValue = (experiences || []).filter(
-                  (e) =>
-                    /lead/i.test(e.title || '') ||
-                    /lead/i.test(e.description || '') ||
-                    e.category === 'Employment',
-                ).length;
-              }
-              else if (item.key === 'dexterity') {
-                studentValue = optimizationPlan?.manualDexterity?.status
-                  ? optimizationPlan.manualDexterity.status === 'Strong'
-                    ? 2
-                    : 1
-                  : 0;
-              }
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 overflow-visible">
+            {benchmarkItems.map((item, idx) => {
+              const studentValue = resolveStudentMetricValue(
+                item.key,
+                student,
+                experiences,
+                optimizationPlan,
+              );
 
               const diff = studentValue - item.benchmark;
               const isAbove = diff >= 0;
@@ -293,11 +341,11 @@ export default function AnalyticsTab({
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  className="group relative rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:border-indigo-500/50 transition-all cursor-help"
+                  className="group relative z-0 rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:z-[200] hover:border-indigo-500/50 transition-all cursor-help overflow-visible"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-slate-800/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-xl" />
 
-                  <div className="relative z-10">
+                  <div className="relative">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">{item.label}</span>
                       <div className={`w-2 h-2 rounded-full ${isAbove ? 'bg-emerald-500' : (isNear ? 'bg-amber-500' : 'bg-rose-500')}`} />
@@ -320,7 +368,7 @@ export default function AnalyticsTab({
                       <div className="h-2 bg-slate-950 rounded-full overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
-                          animate={{ width: `${Math.min(100, (studentValue / (item.benchmark * 1.2)) * 100)}%` }}
+                          animate={{ width: `${Math.min(100, (studentValue / (item.benchmark * 1.2 || 1)) * 100)}%` }}
                           className={`h-full rounded-full ${isAbove ? 'bg-emerald-500' : (isNear ? 'bg-amber-500' : 'bg-rose-500')}`}
                         />
                       </div>
@@ -330,8 +378,8 @@ export default function AnalyticsTab({
                     </div>
                   </div>
 
-                  <div className="absolute bottom-full left-0 w-full mb-3 opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50">
-                    <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl shadow-2xl">
+                  <div className="absolute bottom-full left-0 w-full mb-3 opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-[300]">
+                    <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl shadow-2xl relative z-[300]">
                       <p className="text-xs font-semibold text-indigo-400 uppercase mb-1">Why this matters</p>
                       <p className="text-sm text-slate-400 leading-relaxed">{item.description}. Admissions committees use this to evaluate your readiness for the rigorous dental curriculum.</p>
                     </div>

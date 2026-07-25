@@ -17,6 +17,10 @@ import { toast } from "sonner";
 import { Experience, Student } from "@/lib/types";
 import { parseLocalDate } from "./hubShared";
 import {
+  buildPriorHourSessions,
+  computeExperienceStats,
+} from "@/lib/utils/experienceStats";
+import {
   useCreateExperience,
   useUpdateExperience,
   useDeleteExperience,
@@ -24,6 +28,9 @@ import {
   useUpdateExperienceSession,
   useDeleteExperienceSession,
 } from "@/lib/hooks/useExperiences";
+import { experiencesApi } from "@/lib/api/experiences";
+import { queryKeys } from "@/lib/api/queryKeys";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Badge,
   Button,
@@ -63,6 +70,10 @@ const emptyExperienceForm = {
   supervisorContact: "",
   description: "",
   startDate: "",
+  endDate: "",
+  priorTotalHours: "",
+  priorAvgHrs: "",
+  priorWeeks: "",
 };
 
 const emptySessionForm = {
@@ -73,10 +84,6 @@ const emptySessionForm = {
 
 function expField(exp: Experience, camel: keyof Experience, snake: keyof Experience) {
   return (exp[camel] ?? exp[snake] ?? "") as string;
-}
-
-function expOngoing(exp: Experience) {
-  return Boolean(exp.isOngoing ?? exp.is_ongoing);
 }
 
 function categoryBadgeVariant(
@@ -115,6 +122,7 @@ function CategoryIcon({ category }: { category: string }) {
 }
 
 export default function HourTrackerTab({ student, experiences }: HourTrackerTabProps) {
+  const queryClient = useQueryClient();
   const createExperience = useCreateExperience();
   const updateExperience = useUpdateExperience();
   const deleteExperience = useDeleteExperience();
@@ -153,6 +161,10 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
         supervisorContact: expField(editingExperience, "supervisorContact", "supervisor_contact"),
         description: editingExperience.description || "",
         startDate: expField(editingExperience, "startDate", "start_date"),
+        endDate: expField(editingExperience, "endDate", "end_date") || "",
+        priorTotalHours: "",
+        priorAvgHrs: "",
+        priorWeeks: "",
       });
     } else {
       setExperienceForm(emptyExperienceForm);
@@ -178,41 +190,14 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
 
   const experienceStats = useMemo(() => {
     return (experiences || []).map((exp) => {
-      const sessions = exp.sessions || [];
-      const totalHours = sessions.reduce((sum, s) => sum + Number(s.duration || 0), 0);
-      const distinctWeeks = new Set<number>();
-      sessions.forEach((s) => {
-        const d = parseLocalDate(s.date);
-        const weekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay());
-        distinctWeeks.add(weekStart.getTime());
-      });
-      const totalWeeks = Math.max(1, distinctWeeks.size);
-      const sessionDates = sessions.map((s) => parseLocalDate(s.date).getTime());
-      const startRaw = expField(exp, "startDate", "start_date");
-      const endRaw = expField(exp, "endDate", "end_date");
-      const ongoing = expOngoing(exp);
-      const startDate =
-        sessionDates.length > 0
-          ? new Date(Math.min(...sessionDates))
-          : startRaw
-            ? parseLocalDate(startRaw)
-            : new Date();
-      const avgHoursPerWeek = totalHours / totalWeeks;
+      const stats = computeExperienceStats(exp);
       return {
         ...exp,
-        sessions,
-        isOngoing: ongoing,
-        startDate: startRaw,
-        endDate: endRaw || null,
-        totalHours,
-        totalWeeks,
-        avgHoursPerWeek,
-        displayStartDate: startDate.toLocaleDateString(),
-        displayEndDate: ongoing
-          ? "Current"
-          : endRaw
-            ? new Date(endRaw).toLocaleDateString()
-            : "N/A",
+        sessions: exp.sessions || [],
+        isOngoing: stats.isCurrent,
+        startDate: expField(exp, "startDate", "start_date"),
+        endDate: expField(exp, "endDate", "end_date") || null,
+        ...stats,
       };
     });
   }, [experiences]);
@@ -221,7 +206,9 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
     return experienceStats.filter((exp) => {
       const matchesSearch =
         exp.title.toLowerCase().includes(experienceSearch.toLowerCase()) ||
-        exp.organization.toLowerCase().includes(experienceSearch.toLowerCase()) ||
+        (exp.organization || "")
+          .toLowerCase()
+          .includes(experienceSearch.toLowerCase()) ||
         exp.category.toLowerCase().includes(experienceSearch.toLowerCase());
       const matchesFilter = experienceFilter === "All" || exp.category === experienceFilter;
       return matchesSearch && matchesFilter;
@@ -246,41 +233,64 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
   };
 
   const submitExperience = async () => {
-    if (
-      !experienceForm.title.trim() ||
-      !experienceForm.organization.trim() ||
-      !experienceForm.supervisorName.trim() ||
-      !experienceForm.supervisorContact.trim() ||
-      !experienceForm.description.trim() ||
-      !experienceForm.startDate
-    ) {
-      toast.error("Please fill in all required fields");
+    if (!experienceForm.category || !experienceForm.title.trim() || !experienceForm.startDate) {
+      toast.error("Category, title, and start date are required");
       return;
     }
 
+    const endDate = experienceForm.endDate.trim() || null;
     const payload = {
       studentId: student.id,
       category: experienceForm.category as Experience["category"],
       title: experienceForm.title.trim(),
       organization: experienceForm.organization.trim(),
-      supervisorName: experienceForm.supervisorName.trim(),
-      supervisorContact: experienceForm.supervisorContact.trim(),
-      description: experienceForm.description.trim(),
+      supervisorName: experienceForm.supervisorName.trim() || undefined,
+      supervisorContact: experienceForm.supervisorContact.trim() || undefined,
+      description: experienceForm.description.trim() || undefined,
       startDate: experienceForm.startDate,
-      isOngoing: true,
+      endDate,
+      isOngoing: !endDate,
     };
 
+    const priorSessions = buildPriorHourSessions({
+      startDate: experienceForm.startDate,
+      totalHours: experienceForm.priorTotalHours
+        ? Number(experienceForm.priorTotalHours)
+        : null,
+      avgHrsPerWeek: experienceForm.priorAvgHrs ? Number(experienceForm.priorAvgHrs) : null,
+      weeks: experienceForm.priorWeeks ? Number(experienceForm.priorWeeks) : null,
+    });
+
+    for (const s of priorSessions) {
+      if (!Number.isFinite(s.duration) || s.duration <= 0) {
+        toast.error("Prior hours values must be valid numbers");
+        return;
+      }
+    }
+
     try {
+      let experienceId = editingExperience?.id;
       if (editingExperience) {
         await updateExperience.mutateAsync({
           id: editingExperience.id,
           updates: payload,
         });
-        toast.success("Experience updated");
       } else {
-        await createExperience.mutateAsync(payload);
-        toast.success("Experience created");
+        const created = await createExperience.mutateAsync(payload);
+        experienceId = created.id;
       }
+
+      if (experienceId && priorSessions.length > 0) {
+        for (const session of priorSessions) {
+          await experiencesApi.createSession(experienceId, session);
+        }
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.experiences.all(student.id),
+        });
+        await queryClient.invalidateQueries({ queryKey: ["experiences"] });
+      }
+
+      toast.success(editingExperience ? "Experience updated" : "Experience created");
       closeExperienceModal();
     } catch (err: any) {
       toast.error(err?.message || "Failed to save experience");
@@ -423,10 +433,10 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                             <CategoryIcon category={exp.category} />
                             {categoryLabel(exp.category)}
                           </Badge>
-                          {exp.isOngoing && (
+                          {exp.isCurrent && (
                             <Badge variant="success">
                               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                              Ongoing
+                              Current
                             </Badge>
                           )}
                         </div>
@@ -621,6 +631,16 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                 options={CATEGORY_OPTIONS}
               />
             </FormField>
+            <FormField label="Title" htmlFor="exp-title" required>
+              <Input
+                id="exp-title"
+                value={experienceForm.title}
+                onChange={(e) => setExperienceForm((prev) => ({ ...prev, title: e.target.value }))}
+                placeholder="e.g. Lead Volunteer"
+              />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Start Date" htmlFor="exp-startDate" required>
               <DatePicker
                 value={experienceForm.startDate}
@@ -628,16 +648,15 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                 placeholder="Select start date"
               />
             </FormField>
+            <FormField label="End Date" htmlFor="exp-endDate" hint="Leave blank if still active">
+              <DatePicker
+                value={experienceForm.endDate}
+                onChange={(value) => setExperienceForm((prev) => ({ ...prev, endDate: value }))}
+                placeholder="Optional end date"
+              />
+            </FormField>
           </div>
-          <FormField label="Title" htmlFor="exp-title" required>
-            <Input
-              id="exp-title"
-              value={experienceForm.title}
-              onChange={(e) => setExperienceForm((prev) => ({ ...prev, title: e.target.value }))}
-              placeholder="e.g. Lead Volunteer"
-            />
-          </FormField>
-          <FormField label="Organization" htmlFor="exp-organization" required>
+          <FormField label="Organization" htmlFor="exp-organization">
             <Input
               id="exp-organization"
               value={experienceForm.organization}
@@ -648,7 +667,7 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
             />
           </FormField>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Supervisor" htmlFor="exp-supervisorName" required>
+            <FormField label="Supervisor" htmlFor="exp-supervisorName">
               <Input
                 id="exp-supervisorName"
                 value={experienceForm.supervisorName}
@@ -657,7 +676,7 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                 }
               />
             </FormField>
-            <FormField label="Contact Info" htmlFor="exp-supervisorContact" required>
+            <FormField label="Contact Info" htmlFor="exp-supervisorContact">
               <Input
                 id="exp-supervisorContact"
                 value={experienceForm.supervisorContact}
@@ -667,7 +686,7 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
               />
             </FormField>
           </div>
-          <FormField label="Description" htmlFor="exp-description" required>
+          <FormField label="Description" htmlFor="exp-description">
             <Textarea
               id="exp-description"
               value={experienceForm.description}
@@ -678,6 +697,53 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
               className="h-28 resize-none"
             />
           </FormField>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-white">Prior hours (optional)</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Quick-add hours from before you joined — total hours, avg hrs/wk, and/or weeks.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <FormField label="Total hours">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.5"
+                  value={experienceForm.priorTotalHours}
+                  onChange={(e) =>
+                    setExperienceForm((prev) => ({ ...prev, priorTotalHours: e.target.value }))
+                  }
+                  placeholder="e.g. 120"
+                />
+              </FormField>
+              <FormField label="Avg hrs/wk">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.5"
+                  value={experienceForm.priorAvgHrs}
+                  onChange={(e) =>
+                    setExperienceForm((prev) => ({ ...prev, priorAvgHrs: e.target.value }))
+                  }
+                  placeholder="e.g. 4"
+                />
+              </FormField>
+              <FormField label="Weeks">
+                <Input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={experienceForm.priorWeeks}
+                  onChange={(e) =>
+                    setExperienceForm((prev) => ({ ...prev, priorWeeks: e.target.value }))
+                  }
+                  placeholder="e.g. 30"
+                />
+              </FormField>
+            </div>
+          </div>
         </div>
       </Modal>
 

@@ -38,13 +38,21 @@ import {
   XCircle,
   ExternalLink,
   Minus,
+  Trophy,
+  Medal,
 } from "lucide-react";
 import Link from "next/link";
-import type { Student, StudentDocument, StudentNote } from "@/lib/types";
+import type {
+  Student,
+  StudentDocument,
+  StudentNote,
+  StudentCredentialKind,
+} from "@/lib/types";
 import {
   calculateStrengthScore,
   hoursByCategoryFromExperiences,
 } from "@/lib/utils/strengthScore";
+import { computeExperienceStats } from "@/lib/utils/experienceStats";
 import {
   useDocuments,
   useUploadDocument,
@@ -63,6 +71,9 @@ import {
   useStudentDexterity,
   useCreateStudentDexterity,
   useDeleteStudentDexterity,
+  useStudentCredentials,
+  useCreateStudentCredential,
+  useDeleteStudentCredential,
 } from "@/lib/hooks/useStudentNotesDexterity";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useAuthStore } from "@/lib/stores/authStore";
@@ -75,7 +86,6 @@ import {
   Input,
   Textarea,
   SelectMenu,
-  DatePicker,
   Table,
   Badge,
   EmptyState,
@@ -146,6 +156,7 @@ export function StudentProfileDocumentsView({
   );
   const { data: notes = [] } = useStudentNotes(student.id);
   const { data: manualDexterity = [] } = useStudentDexterity(student.id);
+  const { data: credentials = [] } = useStudentCredentials(student.id);
 
   useEffect(() => {
     setLorExternalEnabled(student.profile?.lor_external_service || false);
@@ -227,6 +238,8 @@ export function StudentProfileDocumentsView({
   const deleteNoteMutation = useDeleteStudentNote(student.id);
   const createDexterityMutation = useCreateStudentDexterity(student.id);
   const deleteDexterityMutation = useDeleteStudentDexterity(student.id);
+  const createCredentialMutation = useCreateStudentCredential(student.id);
+  const deleteCredentialMutation = useDeleteStudentCredential(student.id);
 
   const persistProfile = (updates: Record<string, unknown>, opts?: { silent?: boolean }) => {
     if (!onUpdateStudent) {
@@ -374,15 +387,19 @@ export function StudentProfileDocumentsView({
   const [selectedNoteTags, setSelectedNoteTags] = useState<NoteTag[]>([]);
   const [dexActivity, setDexActivity] = useState("");
   const [dexDescription, setDexDescription] = useState("");
-  const [dexStartDate, setDexStartDate] = useState("");
-  const [dexEndDate, setDexEndDate] = useState("");
-  const [dexOngoing, setDexOngoing] = useState(true);
+  const [isAddCredentialOpen, setIsAddCredentialOpen] = useState(false);
+  const [credentialKind, setCredentialKind] = useState<StudentCredentialKind>("LICENSE");
+  const [credentialTitle, setCredentialTitle] = useState("");
+  const [credentialIssuer, setCredentialIssuer] = useState("");
+  const [credentialYear, setCredentialYear] = useState("");
+  const [credentialDescription, setCredentialDescription] = useState("");
 
   const sections = [
     { id: "snapshot", label: "Student Snapshot", icon: User },
     { id: "academic", label: "Academic Background", icon: GraduationCap },
     { id: "lor", label: "Letters of Rec", icon: FileText },
     { id: "dexterity", label: "Manual Dexterity", icon: Fingerprint },
+    { id: "credentials", label: "Licenses & Achievements", icon: Trophy },
     { id: "experience", label: "Experience Summary", icon: Briefcase },
     { id: "notes", label: "Mentor Notes", icon: MessageSquare },
     { id: "documents", label: "Document Center", icon: Upload },
@@ -468,31 +485,37 @@ export function StudentProfileDocumentsView({
       "Research",
       "Shadowing",
       "Dental Experience",
+      "Academic",
       "Employment",
     ] as const;
     return categories.map((cat) => {
       const catExps = (experiences || []).filter((e) => e.category === cat);
-      const totalHours = catExps.reduce(
-        (sum, e) =>
-          sum +
-          ((e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0) || 0),
-        0
-      );
+      const entries = catExps.map((e) => {
+        const stats = computeExperienceStats(e);
+        return {
+          id: e.id,
+          title: e.title,
+          location: e.organization || "—",
+          ...stats,
+        };
+      });
+      const totalHours = entries.reduce((sum, e) => sum + e.totalHours, 0);
       return {
         category: cat,
         hours: totalHours,
-        entries: catExps.map((e) => ({
-          id: e.id,
-          title: e.title,
-          location: e.organization,
-          description: e.description,
-          startDate: e.startDate || e.start_date,
-          endDate: e.endDate || e.end_date,
-          hours: (e.sessions || []).reduce((sum, s) => sum + s.duration, 0) || 0,
-        })),
+        entries,
       };
     });
   }, [experiences]);
+
+  const licenses = useMemo(
+    () => credentials.filter((c) => c.kind === "LICENSE"),
+    [credentials],
+  );
+  const achievements = useMemo(
+    () => credentials.filter((c) => c.kind === "ACHIEVEMENT"),
+    [credentials],
+  );
 
   const filteredDocuments = useMemo(() => {
     return documents.filter((doc) => {
@@ -552,29 +575,63 @@ export function StudentProfileDocumentsView({
   const resetDexterityForm = () => {
     setDexActivity("");
     setDexDescription("");
-    setDexStartDate("");
-    setDexEndDate("");
-    setDexOngoing(true);
   };
 
   const handleAddDexterity = async () => {
-    if (!dexActivity.trim() || !dexStartDate) {
-      toast.error("Activity name and start date are required");
+    if (!dexActivity.trim()) {
+      toast.error("Activity name is required");
       return;
     }
     try {
       await createDexterityMutation.mutateAsync({
         activity: dexActivity.trim(),
         description: dexDescription.trim(),
-        startDate: dexStartDate,
-        endDate: dexOngoing ? null : dexEndDate || null,
-        isOngoing: dexOngoing,
       });
       resetDexterityForm();
       setIsAddDexterityOpen(false);
       toast.success("Activity added");
     } catch (err: any) {
       toast.error(err?.message || "Failed to add activity");
+    }
+  };
+
+  const resetCredentialForm = () => {
+    setCredentialKind("LICENSE");
+    setCredentialTitle("");
+    setCredentialIssuer("");
+    setCredentialYear("");
+    setCredentialDescription("");
+  };
+
+  const handleAddCredential = async () => {
+    if (!credentialTitle.trim()) {
+      toast.error("Title is required");
+      return;
+    }
+    try {
+      await createCredentialMutation.mutateAsync({
+        kind: credentialKind,
+        title: credentialTitle.trim(),
+        issuer: credentialIssuer.trim(),
+        year: credentialYear.trim(),
+        description: credentialDescription.trim(),
+      });
+      resetCredentialForm();
+      setIsAddCredentialOpen(false);
+      toast.success(
+        credentialKind === "LICENSE" ? "License added" : "Achievement added",
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save");
+    }
+  };
+
+  const handleDeleteCredential = async (id: string) => {
+    try {
+      await deleteCredentialMutation.mutateAsync(id);
+      toast.success("Removed");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete");
     }
   };
 
@@ -1593,25 +1650,12 @@ export function StudentProfileDocumentsView({
                 className="bg-slate-900/40 border border-slate-800 p-6 rounded-2xl group hover:border-indigo-500/30 transition-all flex justify-between items-start"
               >
                 <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <h4 className="font-bold text-white text-lg">{activity.activity}</h4>
-                    {activity.isOngoing && <Badge variant="success">Ongoing</Badge>}
-                  </div>
-                  <p className="text-sm text-slate-400 max-w-2xl leading-relaxed">
-                    {activity.description}
-                  </p>
-                  <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar size={12} /> Started{" "}
-                      {new Date(activity.startDate).toLocaleDateString()}
-                    </span>
-                    {!activity.isOngoing && activity.endDate && (
-                      <span className="flex items-center gap-1.5">
-                        <CheckCircle size={12} /> Completed{" "}
-                        {new Date(activity.endDate).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
+                  <h4 className="font-bold text-white text-lg">{activity.activity}</h4>
+                  {activity.description ? (
+                    <p className="text-sm text-slate-400 max-w-2xl leading-relaxed">
+                      {activity.description}
+                    </p>
+                  ) : null}
                 </div>
                 <Button
                   type="button"
@@ -1631,6 +1675,106 @@ export function StudentProfileDocumentsView({
                 title="No manual dexterity activities logged yet."
               />
             )}
+          </div>
+        </section>
+
+        {/* Licenses & Achievements */}
+        <section id="credentials" className="space-y-6 scroll-mt-28">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <Trophy className="text-indigo-400" size={20} /> Licenses & Achievements
+            </h2>
+            {(canEditOwnProfile || canReviewDocuments) && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                leftIcon={<Plus size={14} />}
+                onClick={() => setIsAddCredentialOpen(true)}
+              >
+                Add
+              </Button>
+            )}
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 space-y-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
+                <Medal className="h-4 w-4 text-amber-400" /> Licenses
+              </h3>
+              {licenses.length === 0 ? (
+                <p className="text-xs italic text-slate-500">No licenses listed yet.</p>
+              ) : (
+                licenses.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
+                  >
+                    <div>
+                      <p className="font-semibold text-white">{item.title}</p>
+                      {(item.issuer || item.year) && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {[item.issuer, item.year].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
+                      {item.description ? (
+                        <p className="mt-2 text-sm text-slate-400">{item.description}</p>
+                      ) : null}
+                    </div>
+                    {(canEditOwnProfile || canReviewDocuments) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-slate-600 hover:text-rose-400"
+                        onClick={() => void handleDeleteCredential(item.id)}
+                        aria-label="Delete license"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 space-y-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
+                <Trophy className="h-4 w-4 text-indigo-400" /> Achievements
+              </h3>
+              {achievements.length === 0 ? (
+                <p className="text-xs italic text-slate-500">No achievements listed yet.</p>
+              ) : (
+                achievements.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
+                  >
+                    <div>
+                      <p className="font-semibold text-white">{item.title}</p>
+                      {(item.issuer || item.year) && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {[item.issuer, item.year].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
+                      {item.description ? (
+                        <p className="mt-2 text-sm text-slate-400">{item.description}</p>
+                      ) : null}
+                    </div>
+                    {(canEditOwnProfile || canReviewDocuments) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-slate-600 hover:text-rose-400"
+                        onClick={() => void handleDeleteCredential(item.id)}
+                        aria-label="Delete achievement"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </section>
 
@@ -1697,26 +1841,55 @@ export function StudentProfileDocumentsView({
                         {stat.entries.map((entry) => (
                           <div
                             key={entry.id}
-                            className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl space-y-2"
+                            className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/50 p-4"
                           >
-                            <div className="flex justify-between items-start">
-                              <h5 className="font-bold text-white">{entry.title}</h5>
-                              <span className="text-xs font-black text-indigo-400">
-                                {entry.hours}h
-                              </span>
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="mb-1 flex flex-wrap items-center gap-2">
+                                  {entry.isCurrent && (
+                                    <Badge variant="success">Current</Badge>
+                                  )}
+                                </div>
+                                <h5 className="font-bold text-white">{entry.title}</h5>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                  {entry.location}
+                                </p>
+                              </div>
                             </div>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                              {entry.location}
-                            </p>
-                            <p className="text-xs text-slate-400 leading-relaxed">
-                              {entry.description}
-                            </p>
-                            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-tighter">
-                              {entry.startDate ? new Date(entry.startDate).toLocaleDateString() : "—"} —{" "}
-                              {entry.endDate
-                                ? new Date(entry.endDate).toLocaleDateString()
-                                : "Present"}
-                            </p>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5">
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                  Total Hours
+                                </p>
+                                <p className="text-base font-semibold text-white">
+                                  {entry.totalHours}
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5">
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                  Avg Hrs/Wk
+                                </p>
+                                <p className="text-base font-semibold text-white">
+                                  {entry.avgHoursPerWeek.toFixed(1)}
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5">
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                  Weeks
+                                </p>
+                                <p className="text-base font-semibold text-white">
+                                  {entry.totalWeeks}
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5">
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                  Timeline
+                                </p>
+                                <p className="text-xs font-medium text-slate-300">
+                                  {entry.displayStartDate} – {entry.displayEndDate}
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         ))}
                         {stat.entries.length === 0 && (
@@ -2000,27 +2173,85 @@ export function StudentProfileDocumentsView({
               placeholder="Describe your involvement..."
             />
           </FormField>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Start Date" required>
-              <DatePicker value={dexStartDate} onChange={setDexStartDate} />
-            </FormField>
-            {!dexOngoing ? (
-              <FormField label="End Date">
-                <DatePicker value={dexEndDate} onChange={setDexEndDate} />
-              </FormField>
-            ) : (
-              <div />
-            )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={isAddCredentialOpen}
+        onClose={() => {
+          setIsAddCredentialOpen(false);
+          resetCredentialForm();
+        }}
+        title="Add License or Achievement"
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsAddCredentialOpen(false);
+                resetCredentialForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleAddCredential()}
+              isLoading={createCredentialMutation.isPending}
+            >
+              Save
+            </Button>
           </div>
-          <label className="flex items-center gap-3 text-sm text-slate-300">
-            <input
-              type="checkbox"
-              checked={dexOngoing}
-              onChange={(e) => setDexOngoing(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-indigo-600"
+        }
+      >
+        <div className="space-y-4">
+          <FormField label="Type" required>
+            <SelectMenu
+              value={credentialKind}
+              onChange={(v) => setCredentialKind(v as StudentCredentialKind)}
+              options={[
+                { value: "LICENSE", label: "License" },
+                { value: "ACHIEVEMENT", label: "Achievement" },
+              ]}
             />
-            Ongoing activity
-          </label>
+          </FormField>
+          <FormField label="Title" required>
+            <Input
+              value={credentialTitle}
+              onChange={(e) => setCredentialTitle(e.target.value)}
+              placeholder={
+                credentialKind === "LICENSE"
+                  ? "e.g. Dental Radiography License"
+                  : "e.g. Dean’s List"
+              }
+            />
+          </FormField>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Issuer / Organization">
+              <Input
+                value={credentialIssuer}
+                onChange={(e) => setCredentialIssuer(e.target.value)}
+                placeholder="Optional"
+              />
+            </FormField>
+            <FormField label="Year">
+              <Input
+                value={credentialYear}
+                onChange={(e) => setCredentialYear(e.target.value)}
+                placeholder="e.g. 2024"
+              />
+            </FormField>
+          </div>
+          <FormField label="Notes">
+            <Textarea
+              value={credentialDescription}
+              onChange={(e) => setCredentialDescription(e.target.value)}
+              placeholder="Optional details"
+              className="min-h-[80px]"
+            />
+          </FormField>
         </div>
       </Modal>
 

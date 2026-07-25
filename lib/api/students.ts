@@ -1,5 +1,12 @@
 import { apiClient, apiGet, apiPost, apiPut, apiDelete, ApiRequestError } from "./client";
-import type { Student, StudentProfile, StudentNote, ManualDexterity } from "@/lib/types";
+import type {
+  Student,
+  StudentProfile,
+  StudentNote,
+  ManualDexterity,
+  StudentCredential,
+  StudentCredentialKind,
+} from "@/lib/types";
 
 export type NoteTag = StudentNote["tags"][number];
 
@@ -16,12 +23,22 @@ export interface UpdateNotePayload {
 export interface CreateDexterityPayload {
   activity: string;
   description?: string;
-  startDate: string;
+  startDate?: string | null;
   endDate?: string | null;
   isOngoing?: boolean;
 }
 
 export type UpdateDexterityPayload = Partial<CreateDexterityPayload>;
+
+export interface CreateCredentialPayload {
+  kind: StudentCredentialKind;
+  title: string;
+  issuer?: string;
+  year?: string;
+  description?: string;
+}
+
+export type UpdateCredentialPayload = Partial<CreateCredentialPayload>;
 
 export interface CreateStudentPayload {
   userId: string;
@@ -176,6 +193,44 @@ export const studentsApi = {
 
   deleteDexterity: async (id: string, itemId: string): Promise<void> => {
     await apiDelete(`/api/students/${id}/dexterity/${itemId}`);
+  },
+
+  listCredentials: async (
+    id: string,
+    kind?: StudentCredentialKind,
+  ): Promise<StudentCredential[]> => {
+    const response = await apiGet<{ items: StudentCredential[] }>(
+      `/api/students/${id}/credentials`,
+      { params: kind ? { kind } : undefined },
+    );
+    return response.items || [];
+  },
+
+  createCredential: async (
+    id: string,
+    payload: CreateCredentialPayload,
+  ): Promise<StudentCredential> => {
+    const response = await apiPost<{ item: StudentCredential }>(
+      `/api/students/${id}/credentials`,
+      payload,
+    );
+    return response.item;
+  },
+
+  updateCredential: async (
+    id: string,
+    itemId: string,
+    payload: UpdateCredentialPayload,
+  ): Promise<StudentCredential> => {
+    const response = await apiPut<{ item: StudentCredential }>(
+      `/api/students/${id}/credentials/${itemId}`,
+      payload,
+    );
+    return response.item;
+  },
+
+  deleteCredential: async (id: string, itemId: string): Promise<void> => {
+    await apiDelete(`/api/students/${id}/credentials/${itemId}`);
   },
 
   /** Download a backend-generated PDF of the student profile / records. */

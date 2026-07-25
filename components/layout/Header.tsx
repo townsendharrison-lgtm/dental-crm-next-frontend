@@ -657,6 +657,10 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
     title: "Platform Analytics",
     description: "Live cohort funnels, school performance, and compliance signals.",
   },
+  "/admin/benchmarks": {
+    title: "National Benchmarks",
+    description: "Edit Competitive Alignment Index values shown in student Hub Analytics.",
+  },
   "/admin/research": {
     title: "Admissions Research",
     description: "Explore statistics and requirements for dental schools.",

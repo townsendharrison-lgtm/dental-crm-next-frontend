@@ -44,6 +44,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { label: "School Selection", href: "/admin/school-selection", icon: GraduationCap },
     { label: "Courses", href: "/admin/courses", icon: FileText },
     { label: "Global Data", href: "/admin/analytics", icon: BarChart3 },
+    { label: "Benchmarks", href: "/admin/benchmarks", icon: Target },
     { label: "Admissions Research", href: "/admin/research", icon: Search },
     { label: "LOR Config", href: "/admin/lor-config", icon: ShieldAlert },
     { label: "LOR Review", href: "/admin/letter-portal", icon: FileText },

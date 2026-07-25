@@ -7,9 +7,10 @@ import {
   type UpdateNotePayload,
   type CreateDexterityPayload,
   type UpdateDexterityPayload,
+  type CreateCredentialPayload,
 } from "@/lib/api/students";
 import { queryKeys } from "@/lib/api/queryKeys";
-import type { StudentNote, ManualDexterity } from "@/lib/types";
+import type { StudentNote, ManualDexterity, StudentCredential } from "@/lib/types";
 
 export function useStudentNotes(studentId: string) {
   return useQuery<StudentNote[]>({
@@ -86,6 +87,35 @@ export function useDeleteStudentDexterity(studentId: string) {
     mutationFn: (itemId: string) => studentsApi.deleteDexterity(studentId, itemId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.students.dexterity(studentId) });
+    },
+  });
+}
+
+export function useStudentCredentials(studentId: string) {
+  return useQuery<StudentCredential[]>({
+    queryKey: queryKeys.students.credentials(studentId),
+    queryFn: () => studentsApi.listCredentials(studentId),
+    enabled: !!studentId,
+  });
+}
+
+export function useCreateStudentCredential(studentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateCredentialPayload) =>
+      studentsApi.createCredential(studentId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.students.credentials(studentId) });
+    },
+  });
+}
+
+export function useDeleteStudentCredential(studentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => studentsApi.deleteCredential(studentId, itemId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.students.credentials(studentId) });
     },
   });
 }

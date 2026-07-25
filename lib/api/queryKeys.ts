@@ -14,6 +14,7 @@ export const queryKeys = {
     strengthPercentile: (id: string) => ["students", id, "strength-percentile"] as const,
     notes: (id: string) => ["students", id, "notes"] as const,
     dexterity: (id: string) => ["students", id, "dexterity"] as const,
+    credentials: (id: string) => ["students", id, "credentials"] as const,
   },
   mentors: {
     all: () => ["mentors"] as const,
@@ -65,6 +66,9 @@ export const queryKeys = {
   },
   badges: {
     all: () => ["badges", "all"] as const,
+  },
+  nationalBenchmarks: {
+    all: () => ["nationalBenchmarks"] as const,
   },
   resources: {
     all: () => ["resources"] as const,

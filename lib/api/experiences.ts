@@ -5,7 +5,7 @@ export interface CreateExperiencePayload {
   studentId?: string; // required if created by staff; defaults to student self
   category: ExperienceCategory;
   title: string;
-  organization: string;
+  organization?: string;
   supervisorName?: string;
   supervisorContact?: string;
   description?: string;
