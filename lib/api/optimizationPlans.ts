@@ -54,6 +54,16 @@ export function toUpsertPlanPayload(
   };
 }
 
+export type OptimizationPlanListItem = OptimizationPlan & {
+  student?: {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string | null;
+    isExternal?: boolean;
+  };
+};
+
 export const optimizationPlansApi = {
   /**
    * Fetch a student's profile optimization plan.
@@ -63,6 +73,11 @@ export const optimizationPlansApi = {
   get: async (studentId?: string): Promise<OptimizationPlan> => {
     const endpoint = `/api/optimization-plans${studentId ? `?studentId=${studentId}` : ""}`;
     return await apiGet<OptimizationPlan>(endpoint);
+  },
+
+  /** Admin / mentor-manager: all created optimization / school-selection plans. */
+  list: async (): Promise<OptimizationPlanListItem[]> => {
+    return await apiGet<OptimizationPlanListItem[]>("/api/optimization-plans?list=1");
   },
 
   /**

@@ -8,7 +8,8 @@ import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useStudent, useStudentStrengthPercentile } from "@/lib/hooks/useStudentProfile";
 import { useBadges, useEarnedBadges, useEvaluateBadges } from "@/lib/hooks/useBadges";
 import { useActionItems, useUpdateActionItem, useCreateActionItem } from "@/lib/hooks/useActionItems";
-import { useNotifications } from "@/lib/hooks/useNotifications";
+import { useDeleteNotification, useNotifications } from "@/lib/hooks/useNotifications";
+import type { SystemNotification } from "@/lib/types";
 import { useSurveys, useSubmitSurveyResponse } from "@/lib/hooks/useSurveys";
 import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useResources } from "@/lib/hooks/useResources";
@@ -45,6 +46,7 @@ export default function StudentMomentumPage() {
   const evaluateBadges = useEvaluateBadges();
   const { data: actionItems = [] } = useActionItems(subjectId);
   const { data: notifications = [] } = useNotifications();
+  const deleteNotification = useDeleteNotification();
   const { data: surveys = [] } = useSurveys();
   const { data: meetings = [] } = useMeetings();
   const { data: resources = [] } = useResources(!!user);
@@ -176,6 +178,19 @@ export default function StudentMomentumPage() {
     if (href) router.push(href);
   };
 
+  const handleOpenNotification = (notif: SystemNotification) => {
+    const category = (notif.category || "").toUpperCase();
+    if (!category.includes("MESSAGE")) return;
+
+    // Remove from Momentum / bell once the inbox thread is opened
+    deleteNotification.mutate(notif.id);
+    router.push(
+      notif.related_id
+        ? `/student/messages/${notif.related_id}`
+        : "/student/messages",
+    );
+  };
+
   const handleTakeSurvey = (id: string) => {
     const survey = surveys.find((s) => s.id === id) || null;
     if (!survey) {
@@ -230,6 +245,7 @@ export default function StudentMomentumPage() {
         surveys={pendingSurveys}
         onSendMessage={() => {}}
         onNavigate={handleNavigate}
+        onOpenNotification={handleOpenNotification}
         onToggleActionItem={handleToggleActionItem}
         onAddActionItem={handleAddActionItem}
         onTakeSurvey={handleTakeSurvey}

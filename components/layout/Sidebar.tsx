@@ -21,15 +21,12 @@ function isActive(pathname: string, href: string) {
     return (
       pathname === href ||
       pathname.startsWith(href + "/") ||
-      pathname === "/student/find-dentist"
+      pathname === "/student/find-dentist" ||
+      pathname.startsWith("/student/letters")
     );
   }
   if (href === "/student/profile") {
-    return (
-      pathname === href ||
-      pathname.startsWith(href + "/") ||
-      pathname.startsWith("/student/letters")
-    );
+    return pathname === href || pathname.startsWith(href + "/");
   }
   return pathname === href || pathname.startsWith(href + "/");
 }

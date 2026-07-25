@@ -63,6 +63,8 @@ interface StudentDashboardProps {
     threadId?: string,
   ) => void;
   onNavigate: (tab: string) => void;
+  /** Open a recent-update notification (dismiss + deep-link). */
+  onOpenNotification?: (notif: SystemNotification) => void;
   onToggleActionItem: (itemId: string) => void;
   onAddActionItem?: (task: string, dueDate: string) => void;
   onTakeSurvey: (id: string) => void;
@@ -162,6 +164,23 @@ function notifVisual(notif: SystemNotification) {
   };
 }
 
+function isInboxNotification(notif: SystemNotification) {
+  const category = (notif.category || "").toUpperCase();
+  const title = `${notif.title || ""} ${notif.message || ""}`.toLowerCase();
+  return (
+    category.includes("MESSAGE") ||
+    title.includes("inbox") ||
+    title.includes("message")
+  );
+}
+
+function truncateNotifPreview(text: string, maxLen = 140) {
+  const single = text.replace(/\s+/g, " ").trim();
+  if (!single) return "";
+  if (single.length <= maxLen) return single;
+  return `${single.slice(0, maxLen).trimEnd()}…`;
+}
+
 function resolveNotifMessage(
   notif: SystemNotification,
   studentName: string,
@@ -198,6 +217,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   surveys,
   onSendMessage,
   onNavigate,
+  onOpenNotification,
   onToggleActionItem,
   onAddActionItem,
   onTakeSurvey,
@@ -500,15 +520,23 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
               const Icon = visual.icon;
               const when = formatRelativeTime(notifCreatedAt(notif));
               const title = cleanNotifTitle(notif.title);
-              const message = resolveNotifMessage(notif, student.name, platformConfig);
+              const fullMessage = resolveNotifMessage(
+                notif,
+                student.name,
+                platformConfig,
+              );
+              const preview = truncateNotifPreview(fullMessage);
+              const inbox = isInboxNotification(notif);
+              const openInbox = inbox && Boolean(onOpenNotification);
 
-              return (
-                <div
-                  key={notif.id}
-                  className={`flex gap-3 px-4 py-4 transition-colors ${
-                    index > 0 ? "border-t border-slate-800/80" : ""
-                  } ${!notif.is_read ? "bg-slate-900/70" : "hover:bg-slate-900/50"}`}
-                >
+              const rowClass = `flex w-full gap-3 px-4 py-4 text-left transition-colors ${
+                index > 0 ? "border-t border-slate-800/80" : ""
+              } ${
+                !notif.is_read ? "bg-slate-900/70" : "hover:bg-slate-900/50"
+              } ${openInbox ? "cursor-pointer hover:bg-slate-900/80" : ""}`;
+
+              const body = (
+                <>
                   <div
                     className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${visual.tone}`}
                   >
@@ -524,16 +552,46 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         </span>
                       )}
                       {when && (
-                        <span className="text-[11px] text-slate-500 sm:ml-auto">{when}</span>
+                        <span className="text-[11px] text-slate-500 sm:ml-auto">
+                          {when}
+                        </span>
                       )}
                     </div>
 
-                    {message && (
-                      <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-300">
-                        {message}
+                    {preview && (
+                      <p className="mt-1.5 line-clamp-2 break-words text-sm leading-relaxed text-slate-300">
+                        {preview}
                       </p>
                     )}
                   </div>
+
+                  {openInbox && (
+                    <span
+                      className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-300"
+                      aria-hidden
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  )}
+                </>
+              );
+
+              if (openInbox) {
+                return (
+                  <button
+                    key={notif.id}
+                    type="button"
+                    onClick={() => onOpenNotification?.(notif)}
+                    className={rowClass}
+                  >
+                    {body}
+                  </button>
+                );
+              }
+
+              return (
+                <div key={notif.id} className={rowClass}>
+                  {body}
                 </div>
               );
             })}

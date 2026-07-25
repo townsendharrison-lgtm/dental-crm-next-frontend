@@ -86,6 +86,7 @@ export const queryKeys = {
     detail: (id: string) => ["actionItems", id] as const,
   },
   optimizationPlans: {
+    list: () => ["optimizationPlans", "list"] as const,
     detail: (studentId?: string) => ["optimizationPlans", { studentId }] as const,
   },
   studentSchools: {

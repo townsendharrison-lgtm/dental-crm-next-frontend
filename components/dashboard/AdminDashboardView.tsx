@@ -55,6 +55,7 @@ import { useActionItems } from "@/lib/hooks/useActionItems";
 import { useCourseSubmissions } from "@/lib/hooks/useCourses";
 import { normalizeStudents } from "@/lib/utils/normalizeStudent";
 import { parseLocalDate } from "@/lib/utils/dateUtils";
+import { Modal, Button, Avatar } from "@/components/ui";
 import type { Lead } from "@/lib/types";
 
 const MENTOR_CHART_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
@@ -89,6 +90,7 @@ export function AdminDashboardView() {
   const [mentorBandFilter, setMentorBandFilter] = useState<MentorBand>("all");
   const [openingChat, setOpeningChat] = useState(false);
   const [performanceTab, setPerformanceTab] = useState<"COMPLIANCE" | "STRENGTH">("COMPLIANCE");
+  const [inactivityReportOpen, setInactivityReportOpen] = useState(false);
 
   const { data: users = [], isLoading: usersLoading } = useAdminUsers();
   const { data: leads = [], isLoading: leadsLoading } = useLeads();
@@ -174,12 +176,42 @@ export function AdminDashboardView() {
     };
 
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const inactiveStudents = students.filter((s) => {
-      const last =
-        s.lastMeetingDate || s.lastContactDate || s.profile?.last_meeting_date || s.profile?.last_contact_date;
-      if (!last) return true;
-      return new Date(last).getTime() < thirtyDaysAgo;
-    });
+    const inactiveStudents = students
+      .filter((s) => {
+        // Shell customers created for school-selection plans are not real CRM students
+        if (s.email?.toLowerCase().endsWith("@school-selection.local")) return false;
+        const last =
+          s.lastMeetingDate ||
+          s.lastContactDate ||
+          s.profile?.last_meeting_date ||
+          s.profile?.last_contact_date;
+        if (!last) return true;
+        return new Date(last).getTime() < thirtyDaysAgo;
+      })
+      .map((s) => {
+        const mentor =
+          mentors.find((m) => m.id === s.mentorId) ||
+          mentors.find((m) => (m.studentIds || []).includes(s.id));
+        const lastRaw =
+          s.lastMeetingDate ||
+          s.lastContactDate ||
+          s.profile?.last_meeting_date ||
+          s.profile?.last_contact_date ||
+          null;
+        const lastMs = lastRaw ? new Date(lastRaw).getTime() : Number.NEGATIVE_INFINITY;
+        return {
+          id: s.id,
+          name: s.name || "Unnamed student",
+          email: s.email || "",
+          avatar: s.avatar || undefined,
+          mentorId: mentor?.id || null,
+          mentorName: mentor?.name?.trim() || "Unassigned",
+          lastActivity: lastRaw,
+          lastMs: Number.isFinite(lastMs) ? lastMs : Number.NEGATIVE_INFINITY,
+        };
+      })
+      // Longest inactivity first (never / oldest activity → top)
+      .sort((a, b) => a.lastMs - b.lastMs || a.name.localeCompare(b.name));
 
     const avgCompliance =
       mentors.length > 0
@@ -220,6 +252,7 @@ export function AdminDashboardView() {
       avgReadiness,
       readinessDist,
       inactiveCount: inactiveStudents.length,
+      inactiveStudents,
       avgCompliance,
       retentionRate,
       retainedCount: retained,
@@ -530,24 +563,91 @@ export function AdminDashboardView() {
               <h3 className="text-lg lg:text-2xl font-bold text-white mb-1">Student Inactivity Monitor</h3>
               <p className="text-sm lg:text-base text-slate-400">
                 <span className="text-amber-400 font-bold">{stats.inactiveCount} student{stats.inactiveCount === 1 ? "" : "s"}</span>{" "}
-                with no meeting/contact in the last 30 days
-                {stats.inactiveCount > 0 ? " — review Mentor Ops to re-engage." : "."}
+                with no meeting/contact in the last 30 days.
               </p>
             </div>
           </div>
-          {stats.inactiveCount > 0 && (
-            <button
-              onClick={() => router.push("/admin/mentors")}
-              className="px-5 py-2.5 bg-amber-600/20 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-xl hover:bg-amber-600/30 transition-all cursor-pointer"
-            >
-              Open Mentor Ops
-            </button>
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-amber-500/30 bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 hover:text-amber-200"
+            onClick={() => setInactivityReportOpen(true)}
+            disabled={studentsLoading}
+          >
+            Show report
+          </Button>
         </div>
         <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none hidden lg:block">
           <Hourglass size={160} className="text-amber-500" />
         </div>
       </div>
+
+      <Modal
+        open={inactivityReportOpen}
+        onClose={() => setInactivityReportOpen(false)}
+        title="Student Inactivity Report"
+        description="Ranking students by time between meetings (Longest to Shortest)"
+        size="lg"
+        footer={
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setInactivityReportOpen(false)}
+            className="rounded-xl px-5"
+          >
+            Close Report
+          </Button>
+        }
+      >
+        {stats.inactiveStudents.length === 0 ? (
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-10 text-center">
+            <p className="text-sm text-slate-400">No inactive students right now.</p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/50">
+            <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3 border-b border-slate-800 px-4 py-3 sm:px-5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                Student
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                Mentor
+              </p>
+            </div>
+            <div className="max-h-[min(52vh,420px)] overflow-y-auto">
+              {stats.inactiveStudents.map((row) => (
+                <div
+                  key={row.id}
+                  className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-center gap-3 border-b border-slate-800/80 px-4 py-3.5 last:border-b-0 sm:px-5"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar
+                      name={row.name}
+                      src={row.avatar}
+                      size="sm"
+                      className="h-9 w-9 rounded-lg bg-slate-800 text-slate-300"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{row.name}</p>
+                      {row.email ? (
+                        <p className="truncate text-xs text-slate-500">{row.email}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p
+                    className={`min-w-0 truncate text-sm font-medium ${
+                      row.mentorId ? "text-slate-200" : "text-slate-400"
+                    }`}
+                    title={row.mentorName}
+                  >
+                    {row.mentorName}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Urgent Alerts layout matching exactly */}
       {urgentAlerts.length > 0 && (

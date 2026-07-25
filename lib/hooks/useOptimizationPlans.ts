@@ -1,7 +1,11 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { optimizationPlansApi, type UpsertPlanPayload } from "@/lib/api/optimizationPlans";
+import {
+  optimizationPlansApi,
+  type OptimizationPlanListItem,
+  type UpsertPlanPayload,
+} from "@/lib/api/optimizationPlans";
 import { queryKeys } from "@/lib/api/queryKeys";
 import type { OptimizationPlan } from "@/lib/types";
 import {
@@ -25,12 +29,21 @@ export function useOptimizationPlan(studentId?: string) {
   });
 }
 
+export function useOptimizationPlansList(enabled = true) {
+  return useQuery<OptimizationPlanListItem[]>({
+    queryKey: queryKeys.optimizationPlans.list(),
+    queryFn: () => optimizationPlansApi.list(),
+    enabled,
+  });
+}
+
 export function useUpsertOptimizationPlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: UpsertPlanPayload) => optimizationPlansApi.upsert(payload),
     onSuccess: (newPlan) => {
       qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.detail(newPlan.student_id) });
+      qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.list() });
     },
   });
 }
@@ -42,6 +55,7 @@ export function useUpdateOptimizationPlan() {
       optimizationPlansApi.update(id, updates),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.detail(updated.student_id) });
+      qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.list() });
     },
   });
 }
@@ -53,6 +67,7 @@ export function useDeleteOptimizationPlan() {
       optimizationPlansApi.remove(id),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.detail(vars.studentId) });
+      qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.list() });
     },
   });
 }

@@ -616,10 +616,10 @@ export default function SchoolSelectionTab({
   return (
     <>
       <div className="space-y-4">
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold text-white">Strategic School Selection</h2>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="mt-1 text-sm text-slate-500">
               Curate your list based on fit, stats, and strategy.
               {localOnly && (
                 <span className="ml-2 text-slate-400">Included in plan preview / PDF.</span>
@@ -631,18 +631,28 @@ export default function SchoolSelectionTab({
               {saving && <span className="ml-2 text-indigo-400">Saving…</span>}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 w-full md:w-auto">
+          <div className="flex shrink-0 flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
             <Button
               variant="secondary"
+              size="sm"
+              className="shrink-0"
               leftIcon={<Plus size={16} />}
               onClick={openAddSchoolsBrowser}
             >
               Add Schools
             </Button>
-            <Button variant="secondary" leftIcon={<Plus size={16} />} onClick={() => setIsAddingCategory(true)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="shrink-0"
+              leftIcon={<Plus size={16} />}
+              onClick={() => setIsAddingCategory(true)}
+            >
               New Category
             </Button>
             <Button
+              size="sm"
+              className="shrink-0"
               leftIcon={<Save size={16} />}
               onClick={() => void handleSaveSelection()}
               disabled={!dirty || saving}

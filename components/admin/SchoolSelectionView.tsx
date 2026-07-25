@@ -16,6 +16,9 @@ import {
   Eye,
   CheckCircle2,
   Download,
+  FileText,
+  Search,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,11 +32,14 @@ import {
   SelectMenu,
   EmptyState,
   Modal,
+  Avatar,
 } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
 import {
+  useDeleteOptimizationPlan,
   useOptimizationPlan,
+  useOptimizationPlansList,
   useUpsertOptimizationPlan,
 } from "@/lib/hooks/useOptimizationPlans";
 import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
@@ -43,6 +49,8 @@ import { useSchoolCategories } from "@/lib/hooks/useSchoolCategories";
 import { studentsApi } from "@/lib/api/students";
 import { studentSchoolsApi } from "@/lib/api/studentSchools";
 import { schoolCategoriesApi } from "@/lib/api/schoolCategories";
+import { schoolsApi } from "@/lib/api/schools";
+import { schoolEnsurePayloadFromHub } from "@/lib/utils/schoolApplications";
 import { queryKeys } from "@/lib/api/queryKeys";
 import SchoolSelectionTab from "@/components/student/hub/SchoolSelectionTab";
 import { DEFAULT_CATEGORIES } from "@/components/student/hub/hubShared";
@@ -53,7 +61,8 @@ import type {
   Student,
 } from "@/lib/types";
 
-type Tab = "manual" | "ai";
+type MainTab = "reports" | "create";
+type CreateMode = "manual" | "ai";
 type KpiLevel = "Strong" | "Moderate" | "Developing" | "Weak";
 type Impact = "High" | "Moderate" | "Lower";
 type Severity = "High" | "Medium" | "Low";
@@ -102,13 +111,36 @@ const SEVERITY_OPTIONS = [
   { value: "Low", label: "Low" },
 ];
 
-const TABS: { id: Tab; label: string; icon: typeof Target }[] = [
-  { id: "manual", label: "Manual Plan", icon: Target },
-  { id: "ai", label: "AI Plan", icon: Wand2 },
+const MAIN_TABS: { id: MainTab; label: string; icon: typeof FileText }[] = [
+  { id: "reports", label: "Created Reports", icon: FileText },
+  { id: "create", label: "Create New Report", icon: Plus },
+];
+
+const CREATE_MODES: { id: CreateMode; label: string; icon: typeof Target }[] = [
+  { id: "manual", label: "Manual", icon: Target },
+  { id: "ai", label: "AI", icon: Wand2 },
 ];
 
 function isExternalStudentEmail(email?: string | null) {
   return !!email && email.toLowerCase().endsWith("@school-selection.local");
+}
+
+function sanitizeClonedColors(doc: Document, root: HTMLElement) {
+  const win = doc.defaultView;
+  if (!win) return;
+  root.querySelectorAll("*").forEach((node) => {
+    const el = node as HTMLElement;
+    const cs = win.getComputedStyle(el);
+    const fix = (prop: "color" | "backgroundColor" | "borderColor", fallback: string) => {
+      const val = cs[prop];
+      if (val && (val.includes("oklch") || val.includes("color(") || val.includes("lab("))) {
+        el.style[prop] = fallback;
+      }
+    };
+    fix("color", "#e2e8f0");
+    fix("backgroundColor", "transparent");
+    fix("borderColor", "#1e293b");
+  });
 }
 
 const EMPTY_DRAFT = (): PlanDraft => ({
@@ -648,21 +680,28 @@ function PlanPreviewBody({
 
 export default function SchoolSelectionView() {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("manual");
+  const [mainTab, setMainTab] = useState<MainTab>("reports");
+  const [createMode, setCreateMode] = useState<CreateMode>("manual");
   const [studentId, setStudentId] = useState("");
   const [studentName, setStudentName] = useState("");
   const [draft, setDraft] = useState<PlanDraft>(EMPTY_DRAFT);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
+  const [reportSearch, setReportSearch] = useState("");
   const [manualSchools, setManualSchools] = useState<HubSchool[]>([]);
   const [manualCategories, setManualCategories] =
     useState<SchoolCategory[]>(DEFAULT_CATEGORIES);
 
   const platformConfig = usePlatformConfig();
   const { data: students = [], isLoading: studentsLoading } = useStudents();
+  const {
+    data: planReports = [],
+    isLoading: reportsLoading,
+  } = useOptimizationPlansList(mainTab === "reports" || mainTab === "create");
   const { data: existingPlan, isLoading: planLoading } = useOptimizationPlan(studentId || undefined);
   const upsertPlan = useUpsertOptimizationPlan();
+  const deletePlan = useDeleteOptimizationPlan();
   const { data: accountSchools = [] } = useStudentSchools(studentId || undefined);
   const { data: accountCategories = [] } = useSchoolCategories(studentId || undefined);
 
@@ -753,9 +792,11 @@ export default function SchoolSelectionView() {
           await schoolCategoriesApi.replace(targetStudentId, manualCategories);
         }
         for (const school of manualSchools) {
+          // Sheet catalog ids are not DB UUIDs — ensure a directory row first
+          const ensured = await schoolsApi.ensure(schoolEnsurePayloadFromHub(school));
           await studentSchoolsApi.create({
             studentId: targetStudentId,
-            schoolId: school.id,
+            schoolId: ensured.id,
             category: school.type || manualCategories[0]?.id || "Target",
             notes: typeof school.notes === "string" ? school.notes : undefined,
           });
@@ -812,18 +853,38 @@ export default function SchoolSelectionView() {
   const handleExportPdf = async () => {
     const element = document.getElementById("school-selection-pdf");
     if (!element) {
-      toast.error("Preview content not found");
+      toast.error("Open plan preview first, then download the PDF.");
       return;
     }
     setExportingPdf(true);
     toast.info("Generating PDF…");
+
+    const host = document.createElement("div");
+    host.setAttribute("aria-hidden", "true");
+    host.style.cssText =
+      "position:fixed;left:-12000px;top:0;width:800px;background:#020617;pointer-events:none;z-index:-1;";
+
     try {
-      const canvas = await html2canvas(element, {
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.id = "school-selection-pdf-export";
+      clone.style.width = "800px";
+      clone.style.maxHeight = "none";
+      clone.style.overflow = "visible";
+      host.appendChild(clone);
+      document.body.appendChild(host);
+
+      const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: "#020617",
+        windowWidth: 800,
+        onclone: (doc) => {
+          const root = doc.getElementById("school-selection-pdf-export");
+          if (root) sanitizeClonedColors(doc, root);
+        },
       });
+
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
       const imgProps = pdf.getImageProperties(imgData);
@@ -849,14 +910,53 @@ export default function SchoolSelectionView() {
       console.error(err);
       toast.error("Failed to generate PDF");
     } finally {
+      host.remove();
       setExportingPdf(false);
     }
   };
 
+  const resetCreateForm = () => {
+    setStudentId("");
+    setStudentName("");
+    setDraft(EMPTY_DRAFT());
+    setManualSchools([]);
+    setManualCategories(DEFAULT_CATEGORIES);
+    setCreateMode("manual");
+  };
+
+  const openReport = (reportStudentId: string, reportStudentName: string) => {
+    setStudentId(reportStudentId);
+    setStudentName(reportStudentName);
+    setManualSchools([]);
+    setManualCategories(DEFAULT_CATEGORIES);
+    setCreateMode("manual");
+    setMainTab("create");
+  };
+
+  const startNewReport = () => {
+    resetCreateForm();
+    setMainTab("create");
+  };
+
+  const filteredReports = useMemo(() => {
+    const q = reportSearch.trim().toLowerCase();
+    if (!q) return planReports;
+    return planReports.filter((r) => {
+      const name = r.student?.name || "";
+      const email = r.student?.email || "";
+      const snap = r.snapshot || "";
+      return (
+        name.toLowerCase().includes(q) ||
+        email.toLowerCase().includes(q) ||
+        snap.toLowerCase().includes(q)
+      );
+    });
+  }, [planReports, reportSearch]);
+
   const saveDisabled = !canEditPlan || savingPlan || upsertPlan.isPending;
 
   usePageHeaderAction(
-    tab === "manual"
+    mainTab === "create" && createMode === "manual"
       ? {
           label: existingPlan || studentId ? "Save plan" : "Create plan",
           icon:
@@ -868,21 +968,32 @@ export default function SchoolSelectionView() {
           onClick: () => void handleSave(),
           disabled: saveDisabled,
         }
-      : null,
+      : mainTab === "reports"
+        ? {
+            label: "Create New Report",
+            icon: <Plus className="h-4 w-4" />,
+            onClick: startNewReport,
+          }
+        : null,
   );
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
       <div className="overflow-x-auto no-scrollbar">
         <div className="inline-flex min-w-max items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1 sm:min-w-0">
-          {TABS.map((item) => {
+          {MAIN_TABS.map((item) => {
             const Icon = item.icon;
-            const selected = tab === item.id;
+            const selected = mainTab === item.id;
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setTab(item.id)}
+                onClick={() => {
+                  if (item.id === "create" && mainTab === "reports" && !studentId) {
+                    resetCreateForm();
+                  }
+                  setMainTab(item.id);
+                }}
                 className={cn(
                   "flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition-all",
                   selected
@@ -892,26 +1003,202 @@ export default function SchoolSelectionView() {
               >
                 <Icon className="h-4 w-4" />
                 {item.label}
-                {item.id === "ai" && (
-                  <span className="rounded-md border border-amber-500/20 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-300">
-                    Soon
-                  </span>
-                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {tab === "ai" && (
-        <EmptyState
-          icon={<Sparkles className="h-6 w-6" />}
-          title="AI Generated Plan"
-          description="Not wired yet. In a later phase, admins will generate strategic selection plans from student profiles, documents, and notes."
-        />
+      {mainTab === "reports" && (
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="relative md:col-span-3">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <Input
+                value={reportSearch}
+                onChange={(e) => setReportSearch(e.target.value)}
+                placeholder="Search by student name…"
+                className="h-11 rounded-xl border-slate-800 bg-slate-900/50 pl-10"
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Total reports
+                </p>
+                <p className="text-2xl font-black text-white">
+                  {reportsLoading ? "…" : planReports.length}
+                </p>
+              </div>
+              <div className="rounded-xl bg-indigo-500/10 p-3">
+                <FileText className="h-5 w-5 text-indigo-400" />
+              </div>
+            </div>
+          </div>
+
+          {reportsLoading ? (
+            <div className="flex h-48 items-center justify-center">
+              <Loader2 className="h-7 w-7 animate-spin text-indigo-500" />
+            </div>
+          ) : filteredReports.length === 0 ? (
+            <EmptyState
+              icon={<Target className="h-6 w-6" />}
+              title="No reports yet"
+              description="Create your first school selection report for an internal or external student."
+              action={
+                <Button leftIcon={<Plus className="h-4 w-4" />} onClick={startNewReport}>
+                  Create New Report
+                </Button>
+              }
+            />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {filteredReports.map((report) => {
+                const reportStudentId =
+                  report.student_id || report.studentId || report.student?.id || "";
+                const name = report.student?.name || "Unnamed student";
+                const email = report.student?.email || "";
+                const external = Boolean(report.student?.isExternal);
+                const updated = report.updated_at || report.created_at || "";
+                const score = Number(
+                  report.overallScore ?? report.overall_score ?? 0,
+                );
+                return (
+                  <div
+                    key={report.id}
+                    className="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-5 transition-all hover:border-indigo-500/30"
+                  >
+                    <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        title="Open report"
+                        disabled={!reportStudentId}
+                        onClick={() => openReport(reportStudentId, name)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-rose-400 hover:text-rose-300"
+                        title="Delete report"
+                        disabled={!reportStudentId}
+                        onClick={() => {
+                          if (!window.confirm(`Delete report for ${name}?`)) return;
+                          deletePlan.mutate(
+                            { id: report.id, studentId: reportStudentId },
+                            {
+                              onSuccess: () => toast.success("Report deleted"),
+                              onError: (err: any) =>
+                                toast.error(err?.message || "Failed to delete"),
+                            },
+                          );
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="mb-4 flex items-start gap-3">
+                      <Avatar
+                        name={name}
+                        src={report.student?.avatar || undefined}
+                        size="md"
+                        className="rounded-xl"
+                      />
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-bold text-white group-hover:text-indigo-300">
+                          {name}
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          {external ? "External" : email || "Internal student"}
+                          {updated
+                            ? ` · Updated ${new Date(updated).toLocaleDateString()}`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        Overall strength
+                      </span>
+                      <span className="text-sm font-bold text-indigo-300">{score}%</span>
+                    </div>
+                    <p className="mb-4 line-clamp-2 text-sm italic text-slate-400">
+                      {report.snapshot?.trim() || "No strategic snapshot."}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      leftIcon={<Eye className="h-4 w-4" />}
+                      disabled={!reportStudentId}
+                      onClick={() => openReport(reportStudentId, name)}
+                    >
+                      Open report
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
-      {tab === "manual" && (
+      {mainTab === "create" && (
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => setMainTab("reports")}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to reports
+            </button>
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1">
+              {CREATE_MODES.map((item) => {
+                const Icon = item.icon;
+                const selected = createMode === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setCreateMode(item.id)}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
+                      selected
+                        ? "bg-indigo-600 text-white"
+                        : "text-slate-400 hover:bg-slate-800 hover:text-white",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {item.label}
+                    {item.id === "ai" && (
+                      <span className="rounded border border-amber-500/20 bg-amber-500/15 px-1 py-0.5 text-[9px] uppercase tracking-wide text-amber-300">
+                        Soon
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {createMode === "ai" && (
+            <EmptyState
+              icon={<Sparkles className="h-6 w-6" />}
+              title="AI Generated Plan"
+              description="Not wired yet. In a later phase, admins will generate strategic selection plans from student profiles, documents, and notes."
+            />
+          )}
+
+          {createMode === "manual" && (
         <div className="space-y-4">
           <SectionCard
             icon={Target}
@@ -1272,6 +1559,8 @@ export default function SchoolSelectionView() {
                 ))}
               </SectionCard>
             </div>
+          )}
+        </div>
           )}
         </div>
       )}
