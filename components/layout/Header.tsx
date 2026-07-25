@@ -184,11 +184,46 @@ function NotificationBell() {
         },
         (payload) => {
           const newNotif = payload.new as SystemNotification;
-          toast.info(newNotif.title, {
-            description: newNotif.message?.substring(0, 120),
-            duration: 8000,
-          });
+          const category = (newNotif.category || "").toUpperCase();
+          const relatedId = newNotif.related_id || (newNotif as { relatedId?: string }).relatedId;
+          const isAssignment =
+            category === "ASSIGNMENT" &&
+            !!relatedId &&
+            (role === "MENTOR" || role === "MENTOR_MANAGER") &&
+            !/declined/i.test(newNotif.title || "");
+
+          if (isAssignment) {
+            const assignmentId = encodeURIComponent(String(relatedId));
+            toast.info(newNotif.title, {
+              description: newNotif.message?.substring(0, 160),
+              duration: 20000,
+              action: {
+                label: "Accept",
+                onClick: () => {
+                  router.push(
+                    `/mentor/command-center?assignmentAction=accept&assignmentId=${assignmentId}`,
+                  );
+                },
+              },
+              cancel: {
+                label: "Decline",
+                onClick: () => {
+                  router.push(
+                    `/mentor/command-center?assignmentAction=decline&assignmentId=${assignmentId}`,
+                  );
+                },
+              },
+            });
+          } else {
+            toast.info(newNotif.title, {
+              description: newNotif.message?.substring(0, 120),
+              duration: 8000,
+            });
+          }
           queryClient.invalidateQueries({ queryKey: ["notifications"] });
+          if (isAssignment) {
+            queryClient.invalidateQueries({ queryKey: ["mentors", "assignments", "pending"] });
+          }
         },
       )
       .subscribe();
@@ -196,7 +231,7 @@ function NotificationBell() {
     return () => {
       supabaseClient.removeChannel(channel);
     };
-  }, [user?.id, token, queryClient]);
+  }, [user?.id, token, queryClient, router, role]);
 
   useEffect(() => {
     const initialized = initializeFirebase();
@@ -205,6 +240,17 @@ function NotificationBell() {
     const unsubscribe = onForegroundMessage((payload) => {
       const title = payload.notification?.title || payload.data?.title || "Dental CRM";
       const body = payload.notification?.body || payload.data?.body || "You have a new update";
+      const data = payload.data || {};
+      const isAssignment = data.type === "NEW_ASSIGNMENT" && data.assignmentId;
+
+      if (isAssignment) {
+        // Realtime INSERT already shows an Accept/Decline toast while the tab is open.
+        // Only refresh caches here to avoid a duplicate prompt.
+        queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        queryClient.invalidateQueries({ queryKey: ["mentors", "assignments", "pending"] });
+        return;
+      }
+
       toast.info(title, {
         description: body.substring(0, 120),
         duration: 8000,
@@ -261,7 +307,12 @@ function NotificationBell() {
     setIsOpen(false);
 
     if (category === "ASSIGNMENT" && (role === "MENTOR" || role === "MENTOR_MANAGER")) {
-      router.push("/mentor/students");
+      const relatedId = notif.related_id || (notif as { relatedId?: string }).relatedId;
+      router.push(
+        relatedId
+          ? `/mentor/command-center?assignmentId=${encodeURIComponent(relatedId)}`
+          : "/mentor/command-center",
+      );
       return;
     }
     if (category === "MEETING" && notif.related_id) {
@@ -658,8 +709,8 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
     description: "Live cohort funnels, school performance, and compliance signals.",
   },
   "/admin/benchmarks": {
-    title: "National Benchmarks",
-    description: "Edit Competitive Alignment Index values shown in student Hub Analytics.",
+    title: "Rules Engine",
+    description: "Meeting types, benchmarks, and platform automation rules.",
   },
   "/admin/research": {
     title: "Admissions Research",
@@ -679,11 +730,13 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
   },
   "/admin/rules-engine": {
     title: "Rules Engine",
-    description: "Platform rules, auto-replies, welcome templates, and status messages.",
+    description:
+      "Platform rules, meeting types, benchmarks, welcome templates, and status messages.",
   },
   "/admin/settings": {
     title: "Rules Engine",
-    description: "Platform rules, auto-replies, welcome templates, and status messages.",
+    description:
+      "Platform rules, meeting types, benchmarks, welcome templates, and status messages.",
   },
   "/admin/users": {
     title: "User Management",

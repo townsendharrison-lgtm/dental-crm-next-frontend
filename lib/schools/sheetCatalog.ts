@@ -18,7 +18,12 @@ export const COL_MAP = {
   lengthOfSchool: ["Length of School (Yrs)", "Length of School", "Length of school", "Program Length", "Years"],
   acceptsCanadianDat: ["Acc. Canadian DAT", "Accepts Canadian DAT", "Canadian DAT", "Acc Canadian DAT"],
   cgpa: ["Mean cGPA", "Average cGPA", "cGPA"],
-  sgpa: ["Mean sGPA", "Average sGPA", "sGPA"],
+  sgpa: [
+    "Mean sGPA",
+    "Average sGPA",
+    "sGPA",
+    "Dental School Guide: School Data Catalog Mean sGPA",
+  ],
   datAA: ["Avg. DAT AA", "Average DAT AA", "DAT AA", "Mean DAT AA"],
   datPAT: ["Mean PAT", "PAT"],
   datTS: ["Mean TS", "TS"],
@@ -27,22 +32,44 @@ export const COL_MAP = {
   tuitionNonRes: ["$ Nonresident Tuition", "Tuition for nonresident", "Nonresident Tuition"],
   deadline: ["Application Deadline", "Application deadline", "Deadline"],
   canadians: ["Accepts Canadians", "Canadians"],
+  acceptsNonUsNonCanadian: [
+    "Accepts Non-U.S. & Non-Canadian Applicants",
+    "Accepts Non-US & Non-Canadian Applicants",
+    "Accepts Non-U.S. and Non-Canadian Applicants",
+    "Non-U.S. & Non-Canadian",
+  ],
   housing: ["Campus Housing", "Campus housing", "Housing"],
   additionalInfo: ["Additional Info.", "Additional info", "Notes"],
   interview: ["Interview Format", "Interview format", "Interview"],
   prereqs: ["Required classes / prerequisites", "Prerequisites"],
-  links: ["link to youtube tour of school", "Links like school tour or related resources", "Links"],
-  website: ["Website", "School Website", "URL", "Link"],
-  email: ["Email", "Contact Email", "Admissions Email"],
-  phone: ["Phone", "Contact Phone", "Admissions Phone"],
+  links: [
+    "link to youtube tour of school",
+    "Links like school tour or related resources",
+    "Links",
+    "Video Tour",
+    "YouTube tour",
+  ],
+  website: ["School Website", "Website", "URL"],
+  email: ["Email", "Contact Email", "Admissions Email", "School Email"],
+  phone: ["Phone", "Contact Phone", "Admissions Phone", "School Phone Number"],
   secondaryFee: ["Secondary Fee", "Supplemental Fee", "Secondary Application Fee"],
   deposit: ["Deposit", "Enrollment Deposit", "Seat Deposit"],
   casper: ["Casper", "Altus", "Acuity Insights", "Casper Required"],
   letters: ["Letters of Recommendation", "LOR", "Letters", "Recommendation Letters"],
   mission: ["Mission", "Mission Statement", "School Mission"],
-  podcast: ["DSG Podcast with Dean of Admissions", "Podcast with Dean of Admissions", "Podcast", "Dean Podcast"],
+  podcast: [
+    "DSG Podcast with Dean of Admissions",
+    "DSG Podcast with Admissions Member",
+    "Podcast with Dean of Admissions",
+    "Podcast",
+    "Dean Podcast",
+  ],
   minCgpa5th: ["Min Acc. cGPA (5th %)", "Minimum accepted GPA stats", "Min Acc. cGPA", "5th % cGPA", "Min Acc.cGPA"],
+  maxCgpa95th: ["Max Acc. cGPA (95th %)", "Max Acc. cGPA", "95th % cGPA", "Max Acc.cGPA"],
+  minSgpa5th: ["Min Acc. sGPA (5th %)", "Min Acc. sGPA", "5th % sGPA", "Min Acc.sGPA"],
+  maxSgpa95th: ["Max acc. sGPA (95th %)", "Max Acc. sGPA (95th %)", "Max Acc. sGPA", "95th % sGPA"],
   minDat5th: ["Min Acc.DAT (5th %)", "Minimum accepted DAT", "Min Acc. DAT", "5th % DAT", "Min Acc.DAT"],
+  maxDat95th: ["Max Acc. DAT (95th %)", "Max Acc. DAT", "95th % DAT", "Max Acc.DAT"],
   inStateEnrollment: ["In-state enrollment", "In-state students", "Resident enrollment", "IS Enrollment", "IS Enrolled"],
   outOfStateEnrollment: ["Out-of-state enrollment", "Out-of-state students", "Non-resident enrollment", "OS Enrollment", "OS Enrolled"],
   maleEnrollment: ["# of Men", "Male enrollment", "Male students", "Number of males", "Male", "# of men", "Men"],
@@ -54,6 +81,50 @@ export const COL_MAP = {
   internationalEnrollment: ["# of International", "International", "International students", "Intl students", "Intl enrollment"],
   ccCredits: ["CC credits accepted", "Accepts CC credits", "CC credits", "Community College Credits", "CC Credits Accepted"],
 } as const;
+
+/** Spreadsheet Y/N course-requirement columns (school requires the class when Yes). */
+export const COURSE_REQUIREMENT_FIELDS = [
+  { key: "biochem", label: "BioChem", aliases: ["BioChem", "Biochem", "Biochemistry"] },
+  { key: "biology", label: "Biology", aliases: ["Home Page Bio", "Biology", "Bio"] },
+  { key: "gchem", label: "Gchem", aliases: ["Gchem", "Gen Chem", "General Chemistry"] },
+  { key: "ochem", label: "Ochem", aliases: ["Ochem", "Org Chem", "Organic Chemistry"] },
+  { key: "physics", label: "Physics", aliases: ["Physics"] },
+  { key: "english", label: "English", aliases: ["English"] },
+  { key: "mathStats", label: "Math/Stats", aliases: ["Math/Stats", "Math / Stats", "Math", "Stats"] },
+  { key: "anatomy", label: "Anatomy", aliases: ["Anatomy"] },
+  { key: "physiology", label: "Physiology", aliases: ["Physiology"] },
+  { key: "cellBio", label: "Cell Bio", aliases: ["Cell Bio", "Cell Biology"] },
+  { key: "histology", label: "Histology", aliases: ["Histology"] },
+  { key: "immunology", label: "Immunology", aliases: ["Immunology"] },
+  { key: "microbio", label: "Microbio", aliases: ["Microbio", "Microbiology"] },
+  {
+    key: "genetics",
+    label: "Genetics/MolecBio",
+    aliases: ["Genetics/MolecBio", "Genetics / MolecBio", "Genetics", "MolecBio"],
+  },
+  { key: "otherReq", label: "Other Req", aliases: ["Other Req", "Other Required"] },
+] as const;
+
+export type CourseRequirementKey = (typeof COURSE_REQUIREMENT_FIELDS)[number]["key"];
+
+/** Normalize spreadsheet Y/N (and Yes/No) into a boolean; null = unknown / blank. */
+export function parseYesNo(val: string | null | undefined): boolean | null {
+  if (val == null) return null;
+  const v = String(val).trim().toLowerCase();
+  if (!v || v === "n/a" || v === "na" || v === "-" || v === "—") return null;
+  if (v === "y" || v === "yes" || v === "true" || v === "required" || v === "1") return true;
+  if (v === "n" || v === "no" || v === "false" || v === "0") return false;
+  return null;
+}
+
+export function formatYesNo(val: string | boolean | null | undefined): string {
+  if (typeof val === "boolean") return val ? "Yes" : "No";
+  const parsed = parseYesNo(typeof val === "string" ? val : null);
+  if (parsed === true) return "Yes";
+  if (parsed === false) return "No";
+  const raw = val == null ? "" : String(val).trim();
+  return raw || "—";
+}
 
 export interface DentalSchool {
   id: string;
@@ -77,6 +148,7 @@ export interface DentalSchool {
   tuitionNonRes: number;
   deadline: string;
   canadians: boolean;
+  acceptsNonUsNonCanadian: boolean;
   housing: boolean;
   additionalInfo: string;
   interview: string;
@@ -92,7 +164,11 @@ export interface DentalSchool {
   mission: string;
   podcast: string;
   minCgpa5th: number;
+  maxCgpa95th: number;
+  minSgpa5th: number;
+  maxSgpa95th: number;
   minDat5th: number;
+  maxDat95th: number;
   inStateEnrollment: number;
   outOfStateEnrollment: number;
   maleEnrollment: number;
@@ -105,6 +181,8 @@ export interface DentalSchool {
     asian: number;
     international: number;
   };
+  /** true = school requires the course (spreadsheet Yes/Y) */
+  courseRequirements: Record<CourseRequirementKey, boolean | null>;
   raw: Record<string, string>;
 }
 
@@ -219,6 +297,7 @@ export function parseDentalSchoolsCsv(text: string): DentalSchool[] {
     tuitionNonRes: findIdx(COL_MAP.tuitionNonRes),
     deadline: findIdx(COL_MAP.deadline),
     canadians: findIdx(COL_MAP.canadians),
+    acceptsNonUsNonCanadian: findIdx(COL_MAP.acceptsNonUsNonCanadian),
     housing: findIdx(COL_MAP.housing),
     additionalInfo: findIdx(COL_MAP.additionalInfo),
     interview: findIdx(COL_MAP.interview),
@@ -234,7 +313,11 @@ export function parseDentalSchoolsCsv(text: string): DentalSchool[] {
     mission: findIdx(COL_MAP.mission),
     podcast: findIdx(COL_MAP.podcast),
     minCgpa5th: findIdx(COL_MAP.minCgpa5th),
+    maxCgpa95th: findIdx(COL_MAP.maxCgpa95th),
+    minSgpa5th: findIdx(COL_MAP.minSgpa5th),
+    maxSgpa95th: findIdx(COL_MAP.maxSgpa95th),
     minDat5th: findIdx(COL_MAP.minDat5th),
+    maxDat95th: findIdx(COL_MAP.maxDat95th),
     inStateEnrollment: findIdx(COL_MAP.inStateEnrollment),
     outOfStateEnrollment: findIdx(COL_MAP.outOfStateEnrollment),
     maleEnrollment: findIdx(COL_MAP.maleEnrollment),
@@ -246,6 +329,10 @@ export function parseDentalSchoolsCsv(text: string): DentalSchool[] {
     internationalEnrollment: findIdx(COL_MAP.internationalEnrollment),
     ccCredits: findIdx(COL_MAP.ccCredits),
   };
+
+  const courseIdx = Object.fromEntries(
+    COURSE_REQUIREMENT_FIELDS.map((field) => [field.key, findIdx([...field.aliases])]),
+  ) as Record<CourseRequirementKey, number>;
 
   return dataRows
     .map((row, i) => {
@@ -267,6 +354,13 @@ export function parseDentalSchoolsCsv(text: string): DentalSchool[] {
       headers.forEach((h, idx) => {
         raw[h] = row[idx] || "";
       });
+
+      const courseRequirements = Object.fromEntries(
+        COURSE_REQUIREMENT_FIELDS.map((field) => [
+          field.key,
+          parseYesNo(getVal(courseIdx[field.key])),
+        ]),
+      ) as Record<CourseRequirementKey, boolean | null>;
 
       const name = getVal(indices.name);
       const slug = name
@@ -301,6 +395,7 @@ export function parseDentalSchoolsCsv(text: string): DentalSchool[] {
         tuitionNonRes: parseNum(getVal(indices.tuitionNonRes)),
         deadline: getVal(indices.deadline),
         canadians: parseBool(getVal(indices.canadians)),
+        acceptsNonUsNonCanadian: parseBool(getVal(indices.acceptsNonUsNonCanadian)),
         housing: parseBool(getVal(indices.housing)),
         additionalInfo: getVal(indices.additionalInfo),
         interview: getVal(indices.interview),
@@ -316,7 +411,11 @@ export function parseDentalSchoolsCsv(text: string): DentalSchool[] {
         mission: getVal(indices.mission),
         podcast: getVal(indices.podcast),
         minCgpa5th: parseNum(getVal(indices.minCgpa5th)),
+        maxCgpa95th: parseNum(getVal(indices.maxCgpa95th)),
+        minSgpa5th: parseNum(getVal(indices.minSgpa5th)),
+        maxSgpa95th: parseNum(getVal(indices.maxSgpa95th)),
         minDat5th: parseNum(getVal(indices.minDat5th)),
+        maxDat95th: parseNum(getVal(indices.maxDat95th)),
         inStateEnrollment: parseNum(getVal(indices.inStateEnrollment)),
         outOfStateEnrollment: parseNum(getVal(indices.outOfStateEnrollment)),
         maleEnrollment: parseNum(getVal(indices.maleEnrollment)),
@@ -329,6 +428,7 @@ export function parseDentalSchoolsCsv(text: string): DentalSchool[] {
           asian: parseNum(getVal(indices.asianEnrollment)),
           international: parseNum(getVal(indices.internationalEnrollment)),
         },
+        courseRequirements,
         raw,
       } satisfies DentalSchool;
     })

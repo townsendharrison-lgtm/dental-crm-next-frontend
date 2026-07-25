@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/lib/hooks/useMentors";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
 import { useTasks, useUpdateTask, useCreateTask, useDeleteTask } from "@/lib/hooks/useTasks";
-import { useMeetings } from "@/lib/hooks/useMeetings";
+import { useMeetings, useCreateMeeting } from "@/lib/hooks/useMeetings";
 import { useActionItems } from "@/lib/hooks/useActionItems";
 import {
   useNotifications,
@@ -26,20 +26,21 @@ import { Modal } from "@/components/ui/Modal";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { normalizeStudents } from "@/lib/utils/normalizeStudent";
+import { usePlatformConfig } from "@/lib/hooks/usePlatformConfig";
+import { DEFAULT_ASSIGNMENT_WELCOME } from "@/lib/api/adminSettings";
+import { messagesApi } from "@/lib/api/messages";
 import type { Survey } from "@/lib/types";
-
-const DEFAULT_WELCOME = `Hi [Mentee Name],
-
-I'm excited to work with you as your mentor! Looking forward to supporting you on your dental school journey.
-
-Best,
-[Mentor Name]`;
 
 export default function MentorCommandCenterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
+  const platformConfig = usePlatformConfig();
   const { subjectId: mentorId, isLoadingSubjects } = usePreviewSubject("MENTOR");
   const { data: mentor, isLoading: isMentorLoading } = useMentor(mentorId);
+  const pushActionHandled = useRef<string | null>(null);
+  const welcomeMessageTemplate =
+    platformConfig.welcomeTemplateAssignment || DEFAULT_ASSIGNMENT_WELCOME;
   const { data: mentorStudentsRaw = [], isLoading: isMentorStudentsLoading } = useMentorStudents(
     mentorId,
   );
@@ -55,12 +56,58 @@ export default function MentorCommandCenterPage() {
   const updateTaskMutation = useUpdateTask();
   const createTaskMutation = useCreateTask();
   const deleteTaskMutation = useDeleteTask();
+  const createMeetingMutation = useCreateMeeting();
   const acceptAssignmentMutation = useAcceptAssignment();
   const declineAssignmentMutation = useDeclineAssignment();
   const deleteNotificationMutation = useDeleteNotification();
   const submitSurveyMutation = useSubmitSurveyResponse();
 
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
+  const [pushAcceptAssignmentId, setPushAcceptAssignmentId] = useState<string | null>(null);
+
+  // Handle Accept / Decline CTAs from push notifications
+  useEffect(() => {
+    const assignmentId = searchParams.get("assignmentId");
+    const action = (searchParams.get("assignmentAction") || "").toLowerCase();
+    if (!assignmentId || (action !== "accept" && action !== "decline")) return;
+    if (!user) return;
+
+    const key = `${action}:${assignmentId}`;
+    if (pushActionHandled.current === key) return;
+    pushActionHandled.current = key;
+
+    const clearParams = () => {
+      router.replace("/mentor/command-center", { scroll: false });
+    };
+
+    if (action === "accept") {
+      // Open the same Accept modal flow (availability + welcome message)
+      setPushAcceptAssignmentId(assignmentId);
+      clearParams();
+      return;
+    }
+
+    declineAssignmentMutation.mutate(assignmentId, {
+      onSuccess: () => {
+        toast.success("Assignment declined");
+        clearParams();
+      },
+      onError: (err: any) => {
+        toast.error(err?.message || "Failed to decline assignment");
+        clearParams();
+      },
+    });
+  }, [searchParams, user, router, declineAssignmentMutation]);
+
+  // If push Accept targeted an assignment that is no longer pending, drop the request
+  useEffect(() => {
+    if (!pushAcceptAssignmentId || isPendingLoading) return;
+    const stillPending = pendingAssignments.some((a) => a.id === pushAcceptAssignmentId);
+    if (!stillPending) {
+      toast.error("That assignment is no longer pending");
+      setPushAcceptAssignmentId(null);
+    }
+  }, [pushAcceptAssignmentId, pendingAssignments, isPendingLoading]);
 
   const mentorStudents = useMemo(
     () => normalizeStudents(mentorStudentsRaw),
@@ -122,13 +169,17 @@ export default function MentorCommandCenterPage() {
         notifications={notifications}
         surveys={pendingSurveys}
         pendingAssignments={pendingAssignments}
-        welcomeMessageTemplate={DEFAULT_WELCOME}
+        welcomeMessageTemplate={welcomeMessageTemplate}
         defaultAvailability={
           mentor.defaultAvailability || mentor.profile?.default_availability || []
         }
+        autoOpenAcceptAssignmentId={pushAcceptAssignmentId}
+        onAutoOpenAcceptConsumed={() => setPushAcceptAssignmentId(null)}
         acceptBusy={acceptAssignmentMutation.isPending}
-        onSelectStudent={(id) => {
-          router.push(`/mentor/students?studentId=${id}`);
+        onSelectStudent={(id, tab) => {
+          const params = new URLSearchParams({ studentId: id });
+          if (tab) params.set("tab", tab);
+          router.push(`/mentor/students?${params.toString()}`);
         }}
         onMessageStudent={async (id) => {
           try {
@@ -136,6 +187,26 @@ export default function MentorCommandCenterPage() {
             await openDmWithUser(id, "/mentor/messages", router.push.bind(router));
           } catch (err: any) {
             toast.error(err?.message || "Could not open conversation");
+          }
+        }}
+        onQuickCreateMeeting={async (payload) => {
+          try {
+            await createMeetingMutation.mutateAsync(payload);
+            toast.success("Meeting scheduled");
+          } catch (err: any) {
+            toast.error(err?.message || "Failed to schedule meeting");
+            throw err;
+          }
+        }}
+        onSendScheduleSuggestMessage={async (studentId, message) => {
+          try {
+            const conv = await messagesApi.create({ participantIds: [studentId] });
+            await messagesApi.sendMessage(conv.id, message);
+            toast.success("Scheduling message sent");
+            router.push(`/mentor/messages/${conv.id}`);
+          } catch (err: any) {
+            toast.error(err?.message || "Failed to send message");
+            throw err;
           }
         }}
         onNavigate={handleNavigate}
@@ -191,15 +262,16 @@ export default function MentorCommandCenterPage() {
         onMarkNotificationRead={(id) => {
           deleteNotificationMutation.mutate(id);
         }}
-        onAcceptAssignment={(assignmentId, availableTimes, _timezone, customMessage) => {
+        onAcceptAssignment={(assignmentId, availableTimes, timezone, customMessage) => {
           acceptAssignmentMutation.mutate(
             {
               assignmentId,
               availableTimes,
               welcomeMessage: customMessage,
+              timezone,
             },
             {
-              onSuccess: () => toast.success("Assignment accepted"),
+              onSuccess: () => toast.success("Assignment accepted — welcome message sent"),
               onError: (err: any) => toast.error(err?.message || "Failed to accept"),
             },
           );

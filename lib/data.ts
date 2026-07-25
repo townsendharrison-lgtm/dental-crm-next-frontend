@@ -127,6 +127,19 @@ export const MOCK_PLATFORM_CONFIG: PlatformConfig = {
     "Welcome {{student_name}} to Dental CRM! We are excited to help you prepare for your applications.",
   welcomeTemplateMentor:
     "Welcome Mentor {{mentor_name}} to Dental CRM! Thank you for helping guide our students.",
+  welcomeTemplateAssignment: `Hi [Mentee Name],
+
+Your mentor, [Mentor Name], is thrilled to be working with you! They look forward to helping you pursue your dream of becoming a dentist.
+
+To get started, please use the link below to schedule a 30-minute meet-and-greet meeting:
+
+[Meeting Times]
+
+[Timezone]
+
+Feel free to reach out if you have any questions—we are here to support you every step of the way!
+
+Looking forward to your progress!`,
 };
 
 export const MOCK_AUTO_REPLY_SETTINGS: AutoReplySettings = {

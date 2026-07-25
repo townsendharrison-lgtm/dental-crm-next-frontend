@@ -26,51 +26,86 @@ messaging.onBackgroundMessage((payload) => {
     return;
   }
 
-  // Fallback: manually display notification if only data was sent
-  const notificationTitle = payload.data?.title || "Dental CRM";
+  const data = payload.data || {};
+  const notificationTitle = data.title || "Dental CRM";
+  const isAssignment = data.type === "NEW_ASSIGNMENT";
+
   const notificationOptions = {
-    body: payload.data?.body || "You have a new notification",
+    body: data.body || "You have a new notification",
     icon: "/logo.png",
     badge: "/logo.png",
-    data: payload.data,
+    data,
     requireInteraction: true,
-    tag: "dental-crm-notification",
+    tag: isAssignment && data.assignmentId
+      ? `assignment-${data.assignmentId}`
+      : data.tag || "dental-crm-notification",
+    renotify: true,
+    ...(isAssignment
+      ? {
+          actions: [
+            { action: "accept", title: "Accept" },
+            { action: "decline", title: "Decline" },
+          ],
+        }
+      : {}),
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// Handle notification click — open deep link when provided
+function resolveTargetUrl(data, action) {
+  if (action === "accept" && data.acceptLink) return data.acceptLink;
+  if (action === "decline" && data.declineLink) return data.declineLink;
+
+  if (action === "accept" && data.assignmentId) {
+    return `/mentor/command-center?assignmentAction=accept&assignmentId=${encodeURIComponent(data.assignmentId)}`;
+  }
+  if (action === "decline" && data.assignmentId) {
+    return `/mentor/command-center?assignmentAction=decline&assignmentId=${encodeURIComponent(data.assignmentId)}`;
+  }
+
+  return data.link || data.url || "/";
+}
+
+function toAbsoluteUrl(targetUrl) {
+  if (targetUrl.startsWith("http")) return targetUrl;
+  return `${self.location.origin}${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
+}
+
+// Handle notification click — open deep link / run Accept·Decline CTAs
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   const data = event.notification.data || {};
-  const targetUrl = data.link || data.url || "/";
+  const targetUrl = toAbsoluteUrl(resolveTargetUrl(data, event.action));
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
           client.focus();
-          if ("navigate" in client && targetUrl) {
+          if ("navigate" in client) {
             try {
-              const absolute =
-                targetUrl.startsWith("http")
-                  ? targetUrl
-                  : `${self.location.origin}${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
-              return client.navigate(absolute);
+              return client.navigate(targetUrl);
             } catch {
-              // fall through to openWindow
+              // fall through
             }
+          }
+          // Fallback: ask the page to handle the deep link
+          try {
+            client.postMessage({
+              type: "NOTIFICATION_ACTION",
+              action: event.action || "open",
+              data,
+              url: targetUrl,
+            });
+          } catch {
+            // ignore
           }
           return;
         }
       }
-      const absolute =
-        targetUrl.startsWith("http")
-          ? targetUrl
-          : `${self.location.origin}${targetUrl.startsWith("/") ? targetUrl : `/${targetUrl}`}`;
-      return clients.openWindow(absolute);
+      return clients.openWindow(targetUrl);
     })
   );
 });

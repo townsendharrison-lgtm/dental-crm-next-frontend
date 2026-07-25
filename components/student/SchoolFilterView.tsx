@@ -25,11 +25,18 @@ import {
   Database,
   Plus,
   X,
+  ChevronDown,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useDentalSchoolsCatalog } from '@/lib/hooks/useDentalSchoolsCatalog';
-import { COL_MAP } from '@/lib/schools/sheetCatalog';
+import {
+  COL_MAP,
+  COURSE_REQUIREMENT_FIELDS,
+  formatYesNo,
+  type CourseRequirementKey,
+} from '@/lib/schools/sheetCatalog';
 import {
   Button,
   Input,
@@ -38,10 +45,27 @@ import {
   EmptyState,
   Card,
   Spinner,
+  Tooltip,
 } from '@/components/ui';
+import { cn } from '@/lib/utils/cn';
 
 export type { DentalSchool } from '@/lib/schools/sheetCatalog';
 import type { DentalSchool } from '@/lib/schools/sheetCatalog';
+
+type GenderFilter = 'All' | 'male' | 'female';
+type EthnicityFilter = 'All' | 'white' | 'black' | 'hispanic' | 'asian' | 'international';
+/** Student has taken the course? Any = don't filter on this class. */
+type CourseTakenFilter = 'Any' | 'Yes' | 'No';
+
+const EMPTY_COURSE_FILTERS = Object.fromEntries(
+  COURSE_REQUIREMENT_FIELDS.map((f) => [f.key, 'Any' as CourseTakenFilter]),
+) as Record<CourseRequirementKey, CourseTakenFilter>;
+
+const COURSE_TAKEN_OPTIONS = [
+  { value: 'Any', label: 'Any' },
+  { value: 'Yes', label: 'Yes' },
+  { value: 'No', label: 'No' },
+];
 
 interface SchoolFilterViewProps {
   onSelectSchool?: (school: DentalSchool) => void;
@@ -53,6 +77,210 @@ interface SchoolFilterViewProps {
   initialSelectedSchoolId?: string | null;
   /** Catalog ids and/or names already on the board — Select is disabled for these. */
   alreadyAddedSchoolKeys?: string[];
+}
+
+function acceptsScore(minAccepted: number, userScore: number) {
+  // 0 filter = no constraint. Missing school min (0) = keep school.
+  if (userScore <= 0) return true;
+  if (!minAccepted || minAccepted <= 0) return true;
+  return minAccepted <= userScore;
+}
+
+function formatPct(count: number, total: number) {
+  if (!count || !total) return null;
+  return `${((count / total) * 100).toFixed(1)}%`;
+}
+
+function schoolGenderPct(school: DentalSchool, gender: GenderFilter) {
+  if (gender === 'All') return null;
+  const total =
+    school.classSize ||
+    school.maleEnrollment + school.femaleEnrollment ||
+    0;
+  const count = gender === 'male' ? school.maleEnrollment : school.femaleEnrollment;
+  return formatPct(count, total);
+}
+
+function schoolEthnicityPct(school: DentalSchool, ethnicity: EthnicityFilter) {
+  if (ethnicity === 'All') return null;
+  const { white, black, hispanic, asian, international } = school.ethnicity;
+  const total =
+    school.classSize || white + black + hispanic + asian + international || 0;
+  const count = school.ethnicity[ethnicity] || 0;
+  return formatPct(count, total);
+}
+
+function ScoreFilterControl({
+  label,
+  tips,
+  value,
+  min,
+  max,
+  step,
+  display,
+  onChange,
+}: {
+  label: string;
+  tips: string[];
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  display: string;
+  onChange: (next: number) => void;
+}) {
+  const active = value > 0;
+  return (
+    <div
+      className={cn(
+        'min-w-0 overflow-hidden rounded-xl border px-2.5 py-2.5 transition-colors',
+        active
+          ? 'border-indigo-500/30 bg-indigo-500/5'
+          : 'border-slate-800/80 bg-slate-950/50',
+      )}
+    >
+      <div className="flex min-w-0 items-center justify-between gap-1.5">
+        <span className="inline-flex min-w-0 items-center gap-1 text-[10px] font-medium uppercase tracking-widest text-slate-500">
+          <span className="truncate">{label}</span>
+          <Tooltip
+            side="top"
+            content={
+              <ul className="space-y-1 text-left font-normal text-slate-300">
+                {tips.map((line) => (
+                  <li key={line} className="flex gap-1.5">
+                    <span className="mt-[0.35em] h-1 w-1 shrink-0 rounded-full bg-indigo-400" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            }
+          >
+            <span className="inline-flex shrink-0 cursor-help text-slate-500 hover:text-indigo-400">
+              <Info className="h-3 w-3" />
+            </span>
+          </Tooltip>
+        </span>
+        <span
+          className={cn(
+            'shrink-0 text-[10px] tabular-nums',
+            active ? 'text-indigo-300/80' : 'text-slate-600',
+          )}
+        >
+          {display}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="mt-2 w-full min-w-0 accent-indigo-500"
+      />
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value || ''}
+        placeholder="0"
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === '') {
+            onChange(0);
+            return;
+          }
+          const n = parseFloat(raw);
+          if (Number.isNaN(n)) return;
+          onChange(Math.min(max, Math.max(min, n)));
+        }}
+        className="mt-2 h-7 w-full min-w-0 rounded-md border border-slate-700/80 bg-slate-900 px-2 text-center text-[11px] font-semibold tabular-nums text-white [appearance:textfield] focus:border-indigo-500 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        aria-label={`${label} typed value`}
+      />
+    </div>
+  );
+}
+
+function RangeFilterControl({
+  label,
+  value,
+  display,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  display: string;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (next: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest flex items-center justify-between gap-2">
+        <span className="truncate">{label}</span>
+        <span className="shrink-0 tabular-nums text-slate-300">{display}</span>
+      </label>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full accent-indigo-500"
+      />
+    </div>
+  );
+}
+
+function FilterToggle({
+  label,
+  active,
+  onToggle,
+}: {
+  label: string;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        'flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-all cursor-pointer',
+        active
+          ? 'border-indigo-500/40 bg-indigo-500/10 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.12)]'
+          : 'border-slate-800/80 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-900/60',
+      )}
+    >
+      <span
+        className={cn(
+          'text-xs font-medium leading-snug',
+          active ? 'text-indigo-200' : 'text-slate-400',
+        )}
+      >
+        {label}
+      </span>
+      <span
+        className={cn(
+          'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+          active ? 'bg-indigo-500' : 'bg-slate-700',
+        )}
+      >
+        <span
+          className={cn(
+            'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all',
+            active ? 'left-[18px]' : 'left-0.5',
+          )}
+        />
+      </span>
+    </button>
+  );
 }
 
 const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
@@ -75,8 +303,11 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
   const [filters, setFilters] = useState({
     state: 'All',
     type: 'All',
+    /** Applicant cGPA — keep schools whose MIN cGPA is at or below this score */
     minCGPA: 0,
+    /** Applicant sGPA — keep schools whose MIN sGPA is at or below this score */
     minSGPA: 0,
+    /** Applicant DAT — keep schools whose MIN DAT is at or below this score */
     minDAT: 0,
     maxTuition: 1000000,
     minAcceptance: 0,
@@ -85,9 +316,13 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
     minClassSize: 0,
     acceptsCanadians: 'All',
     acceptsCC: 'All',
-    hasHousing: 'All',
-    minShadowing: 0
+    acceptsCanadianDat: 'All',
+    gender: 'All' as GenderFilter,
+    ethnicity: 'All' as EthnicityFilter,
+    minShadowing: 0,
+    courses: { ...EMPTY_COURSE_FILTERS },
   });
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [sortBy, setSortBy] = useState('alphabetical');
   const [selectedSchool, setSelectedSchool] = useState<DentalSchool | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'spreadsheet'>('cards');
@@ -124,9 +359,9 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                            s.location.toLowerCase().includes(search.toLowerCase());
       const matchesState = filters.state === 'All' || s.location.includes(filters.state);
       const matchesType = filters.type === 'All' || s.type.toLowerCase().includes(filters.type.toLowerCase());
-      const matchesCGPA = s.cgpa >= filters.minCGPA;
-      const matchesSGPA = s.sgpa >= filters.minSGPA;
-      const matchesDAT = s.datAA >= filters.minDAT;
+      const matchesCGPA = acceptsScore(s.minCgpa5th, filters.minCGPA);
+      const matchesSGPA = acceptsScore(s.minSgpa5th, filters.minSGPA);
+      const matchesDAT = acceptsScore(s.minDat5th, filters.minDAT);
       const matchesTuition = s.tuitionRes <= filters.maxTuition;
       const matchesAcceptance = s.acceptanceRate >= filters.minAcceptance;
       const matchesISAcceptance = s.isAcceptanceRate >= filters.minISAcceptance;
@@ -136,14 +371,25 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                                (filters.acceptsCanadians === 'Yes' ? s.canadians : !s.canadians);
       const matchesCC = filters.acceptsCC === 'All' || 
                         (filters.acceptsCC === 'Yes' ? s.ccCredits : !s.ccCredits);
-      const matchesHousing = filters.hasHousing === 'All' || 
-                             (filters.hasHousing === 'Yes' ? s.housing : !s.housing);
+      const matchesCanadianDat =
+        filters.acceptsCanadianDat === 'All' ||
+        (filters.acceptsCanadianDat === 'Yes'
+          ? s.acceptsCanadianDat
+          : !s.acceptsCanadianDat);
       const matchesShadowing = s.shadowing >= filters.minShadowing;
+      // Gender/ethnicity do not remove schools — they drive accepted-class % on cards.
+      // Course filters: if student marks No for a class, hide schools that require it (Yes).
+      const matchesCourses = COURSE_REQUIREMENT_FIELDS.every((field) => {
+        const taken = filters.courses[field.key];
+        if (taken !== 'No') return true;
+        return s.courseRequirements?.[field.key] !== true;
+      });
 
       return matchesFavorite && matchesSearch && matchesState && matchesType && matchesCGPA && 
              matchesSGPA && matchesDAT && matchesTuition && matchesAcceptance && 
              matchesISAcceptance && matchesOOSAcceptance &&
-             matchesClassSize && matchesCanadians && matchesCC && matchesHousing && matchesShadowing;
+             matchesClassSize && matchesCanadians && matchesCC && matchesCanadianDat &&
+             matchesShadowing && matchesCourses;
     }).sort((a, b) => {
       switch (sortBy) {
         case 'alphabetical': return a.name.localeCompare(b.name);
@@ -160,51 +406,224 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
     });
   }, [schools, search, filters, sortBy, showFavoritesOnly, favorites]);
 
-  // Categorize raw data for the detail view
+  // Full spreadsheet dump for staff (admin / mentor / mentor-manager) detail view.
+  // Only hide name/location (modal chrome) and per-course Y/N columns (Required coursework grid).
   const rawCategories = useMemo(() => {
     if (!selectedSchool) return null;
-    
-    // Flatten all keywords from COL_MAP to identify handled fields
-    const handledHeaders = Object.values(COL_MAP).flat().map(h => h.toLowerCase().trim());
-    
-    const categories: Record<string, { label: string, items: [string, string][] }> = {
-      academic: { label: 'Academic & Stats', items: [] },
-      admissions: { label: 'Admissions & Enrollment', items: [] },
-      financial: { label: 'Financials & Fees', items: [] },
-      demographics: { label: 'Student Demographics', items: [] },
-      podcast: { label: 'Podcast & Media', items: [] },
-      contact: { label: 'Contact & Resources', items: [] },
-      other: { label: 'Other Information', items: [] }
+
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const handled = new Set(
+      [
+        'school',
+        'schoolname',
+        'name',
+        'location',
+        'institution',
+        'schoolselectioncorestatsschool',
+      ].map(normalize),
+    );
+    for (const field of COURSE_REQUIREMENT_FIELDS) {
+      for (const alias of field.aliases) handled.add(normalize(alias));
+      handled.add(normalize(field.label));
+    }
+
+    const PREREQ_COURSES = new Set(
+      [
+        'biochem',
+        'homepagebio',
+        'biology',
+        'bio',
+        'gchem',
+        'ochem',
+        'physics',
+        'english',
+        'mathstats',
+        'math',
+        'stats',
+        'anatomy',
+        'physiology',
+        'cellbio',
+        'histology',
+        'immunology',
+        'microbio',
+        'geneticsmolecbio',
+        'genetics',
+        'molecbio',
+        'otherreq',
+      ].map(normalize),
+    );
+
+    type CatKey =
+      | 'program'
+      | 'academic'
+      | 'prereqs'
+      | 'admissions'
+      | 'financial'
+      | 'demographics'
+      | 'media'
+      | 'contact'
+      | 'other';
+
+    const categories: Record<CatKey, { label: string; items: [string, string][] }> = {
+      program: { label: 'Program details', items: [] },
+      academic: { label: 'Academic stats & requirements', items: [] },
+      prereqs: { label: 'Prerequisites & credits', items: [] },
+      admissions: { label: 'Admissions & deadlines', items: [] },
+      financial: { label: 'Costs & housing', items: [] },
+      demographics: { label: 'Class demographics', items: [] },
+      media: { label: 'Media & resources', items: [] },
+      contact: { label: 'Contact', items: [] },
+      other: { label: 'Other', items: [] },
     };
 
-    Object.entries(selectedSchool.raw).forEach(([key, value]) => {
-      // Skip empty or N/A values
-      if (!value || value === 'N/A' || value === '0') return;
-      
-      const lowerKey = key.toLowerCase().trim();
-      
-      // Check if this specific header is already handled in the main UI
-      const isHandled = handledHeaders.includes(lowerKey);
-      if (isHandled) return;
+    const prettyLabel = (raw: string) =>
+      raw
+        .replace(/^Dental School Guide:\s*School Data Catalog\s*/i, '')
+        .replace(/^School Selection Core Stats\s*/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 
-      // Categorize based on keywords in the header
-      const normalizedKey = lowerKey.replace(/[^a-z0-9]/g, '');
-      
-      if (normalizedKey.includes('podcast') || normalizedKey.includes('dean') || normalizedKey.includes('interview') && normalizedKey.includes('link')) {
-        categories.podcast.items.push([key, value]);
-      } else if (normalizedKey.includes('gpa') || normalizedKey.includes('dat') || normalizedKey.includes('prereq') || normalizedKey.includes('shadow') || normalizedKey.includes('test') || normalizedKey.includes('score')) {
-        categories.academic.items.push([key, value]);
-      } else if (normalizedKey.includes('applicant') || normalizedKey.includes('acceptance') || normalizedKey.includes('enrolled') || normalizedKey.includes('size') || normalizedKey.includes('class') || normalizedKey.includes('admission')) {
-        categories.admissions.items.push([key, value]);
-      } else if (normalizedKey.includes('tuition') || normalizedKey.includes('fee') || normalizedKey.includes('deposit') || normalizedKey.includes('cost') || normalizedKey.includes('price') || normalizedKey.includes('money') || normalizedKey.includes('dollar')) {
-        categories.financial.items.push([key, value]);
-      } else if (normalizedKey.includes('male') || normalizedKey.includes('female') || normalizedKey.includes('white') || normalizedKey.includes('black') || normalizedKey.includes('hispanic') || normalizedKey.includes('asian') || normalizedKey.includes('international') || normalizedKey.includes('ethnicity') || normalizedKey.includes('race') || normalizedKey.includes('gender')) {
-        categories.demographics.items.push([key, value]);
-      } else if (normalizedKey.includes('email') || normalizedKey.includes('phone') || normalizedKey.includes('website') || normalizedKey.includes('link') || normalizedKey.includes('contact') || normalizedKey.includes('url') || normalizedKey.includes('address')) {
-        categories.contact.items.push([key, value]);
-      } else {
-        categories.other.items.push([key, value]);
+    Object.entries(selectedSchool.raw).forEach(([key, value]) => {
+      const trimmed = (value || '').toString().trim();
+      if (!trimmed || trimmed === 'N/A' || trimmed === '-' || trimmed === '—') return;
+
+      const normalizedKey = normalize(key);
+      if (!normalizedKey || handled.has(normalizedKey)) return;
+
+      const displayVal = (() => {
+        const yn = formatYesNo(trimmed);
+        if ((yn === 'Yes' || yn === 'No') && /^(y|n|yes|no)$/i.test(trimmed)) return yn;
+        return trimmed;
+      })();
+
+      // Course / prereq policy columns (Y/N subjects live in Required coursework)
+      if (
+        PREREQ_COURSES.has(normalizedKey) ||
+        normalizedKey.includes('prereq') ||
+        normalizedKey.includes('requiredclass') ||
+        normalizedKey.includes('requiredminimumgrade') ||
+        normalizedKey.includes('expirationofclass') ||
+        normalizedKey.includes('onlineclass') ||
+        normalizedKey.includes('apcredit') ||
+        normalizedKey.includes('cccredit')
+      ) {
+        categories.prereqs.items.push([prettyLabel(key), displayVal]);
+        return;
       }
+
+      if (
+        normalizedKey.includes('podcast') ||
+        normalizedKey.includes('youtube') ||
+        normalizedKey.includes('tour') ||
+        (normalizedKey.includes('schedule') && normalizedKey.includes('d1')) ||
+        normalizedKey.includes('d1schedule')
+      ) {
+        categories.media.items.push([prettyLabel(key), displayVal]);
+        return;
+      }
+
+      if (
+        normalizedKey.includes('email') ||
+        normalizedKey.includes('phone') ||
+        normalizedKey.includes('website') ||
+        normalizedKey.includes('mailingaddress') ||
+        normalizedKey.includes('mailing') ||
+        normalizedKey.includes('contact')
+      ) {
+        categories.contact.items.push([prettyLabel(key), displayVal]);
+        return;
+      }
+
+      if (
+        normalizedKey.includes('tuition') ||
+        normalizedKey.includes('fee') ||
+        normalizedKey.includes('deposit') ||
+        normalizedKey.includes('parking') ||
+        normalizedKey.includes('rent') ||
+        normalizedKey.includes('housing') ||
+        normalizedKey.includes('cost') ||
+        normalizedKey.includes('book') ||
+        normalizedKey.includes('supplies')
+      ) {
+        categories.financial.items.push([prettyLabel(key), displayVal]);
+        return;
+      }
+
+      if (
+        normalizedKey === 'men' ||
+        normalizedKey === 'women' ||
+        normalizedKey.includes('ofmen') ||
+        normalizedKey.includes('ofwomen') ||
+        normalizedKey.includes('male') ||
+        normalizedKey.includes('female') ||
+        normalizedKey === 'white' ||
+        normalizedKey.includes('africanamerican') ||
+        normalizedKey === 'black' ||
+        normalizedKey.includes('hispanic') ||
+        normalizedKey.includes('latino') ||
+        normalizedKey === 'asian' ||
+        normalizedKey.includes('international') ||
+        normalizedKey.includes('ethnicity') ||
+        normalizedKey.includes('gender') ||
+        normalizedKey.includes('classsize') ||
+        normalizedKey.includes('enrollment')
+      ) {
+        categories.demographics.items.push([prettyLabel(key), displayVal]);
+        return;
+      }
+
+      // Deadlines / admissions process (before academic "dat" catch-all)
+      if (
+        normalizedKey.includes('deadline') ||
+        normalizedKey.includes('applicant') ||
+        normalizedKey.includes('acceptance') ||
+        normalizedKey.includes('admission') ||
+        normalizedKey.includes('interview') ||
+        normalizedKey.includes('casper') ||
+        normalizedKey.includes('letter') ||
+                        normalizedKey.includes('canadian') ||
+        normalizedKey.includes('nonus') ||
+        normalizedKey.includes('additionalinfo')
+      ) {
+        categories.admissions.items.push([prettyLabel(key), displayVal]);
+        return;
+      }
+
+      if (
+        normalizedKey.includes('length') ||
+        normalizedKey.includes('publicprivate') ||
+        normalizedKey.includes('publicorprivate') ||
+        normalizedKey.includes('specialty') ||
+        normalizedKey.includes('grading') ||
+        normalizedKey.includes('mission')
+      ) {
+        categories.program.items.push([prettyLabel(key), displayVal]);
+        return;
+      }
+
+      if (
+        normalizedKey.includes('gpa') ||
+        normalizedKey.includes('dat') ||
+        normalizedKey.includes('pat') ||
+        normalizedKey.includes('shadow') ||
+        normalizedKey.includes('score') ||
+        normalizedKey.includes('meants') ||
+        normalizedKey === 'ts'
+      ) {
+        categories.academic.items.push([prettyLabel(key), displayVal]);
+        return;
+      }
+
+      if (
+        normalizedKey.includes('link') ||
+        normalizedKey.includes('url') ||
+        normalizedKey.includes('http')
+      ) {
+        categories.contact.items.push([prettyLabel(key), displayVal]);
+        return;
+      }
+
+      categories.other.items.push([prettyLabel(key), displayVal]);
     });
 
     return categories;
@@ -241,6 +660,13 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
     );
   };
 
+  const activeCourseFilters = useMemo(
+    () => COURSE_REQUIREMENT_FIELDS.filter((f) => filters.courses[f.key] !== 'Any').length,
+    [filters.courses],
+  );
+  const moreFiltersActive =
+    filters.gender !== 'All' || filters.ethnicity !== 'All' || activeCourseFilters > 0;
+
   const resetFilters = () => {
     setFilters({
       state: 'All',
@@ -255,11 +681,21 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
       minClassSize: 0,
       acceptsCanadians: 'All',
       acceptsCC: 'All',
-      hasHousing: 'All',
-      minShadowing: 0
+      acceptsCanadianDat: 'All',
+      gender: 'All',
+      ethnicity: 'All',
+      minShadowing: 0,
+      courses: { ...EMPTY_COURSE_FILTERS },
     });
     setSearch('');
     setSortBy('alphabetical');
+  };
+
+  const setCourseTaken = (key: CourseRequirementKey, value: CourseTakenFilter) => {
+    setFilters((prev) => ({
+      ...prev,
+      courses: { ...prev.courses, [key]: value },
+    }));
   };
 
   if (loading) {
@@ -332,173 +768,317 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
 
       <div className="space-y-6">
         {/* Top Filters Section */}
-        <Card className="border-slate-800 bg-slate-900 p-5 space-y-5">
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 z-10" />
-            <Input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by school name, state, or keywords..."
-              className="pl-9 bg-slate-950 border-slate-800"
-            />
-          </div>
+        <Card className="relative overflow-hidden border-slate-800/80 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 p-0 shadow-xl shadow-black/20">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
+          <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-indigo-500/10 blur-3xl" />
+          <div className="pointer-events-none absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-violet-500/5 blur-3xl" />
 
-          {/* Filter Controls Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-            {/* Location & Type */}
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">Location</label>
-                <SelectMenu
-                  value={filters.state}
-                  onChange={(v) => setFilters({...filters, state: v})}
-                  options={states.map(s => ({ value: s, label: s }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">School Type</label>
-                <SelectMenu
-                  value={filters.type}
-                  onChange={(v) => setFilters({...filters, type: v})}
-                  options={[
-                    { value: 'All', label: 'All Types' },
-                    { value: 'Public', label: 'Public' },
-                    { value: 'Private', label: 'Private' },
-                  ]}
-                />
-              </div>
+          <div className="relative space-y-4 p-4 sm:p-5">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-indigo-400/80" />
+              <Input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by school name, state, or keywords..."
+                className="h-11 rounded-xl border-slate-800/80 bg-slate-950/80 pl-10 shadow-inner shadow-black/20 focus:border-indigo-500/50"
+              />
             </div>
 
-            {/* GPA & DAT */}
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest flex justify-between">
-                  Min cGPA <span>{filters.minCGPA.toFixed(2)}</span>
-                </label>
-                <input 
-                  type="range"
-                  min="0"
-                  max="4"
-                  step="0.01"
-                  value={filters.minCGPA}
-                  onChange={(e) => setFilters({...filters, minCGPA: parseFloat(e.target.value)})}
-                  className="w-full accent-indigo-600"
-                />
+            {/* Filter Controls Grid */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-12">
+              {/* Location & Type */}
+              <div className="space-y-3 rounded-2xl border border-slate-800/70 bg-slate-950/40 p-3 xl:col-span-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Basics
+                </p>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">
+                    Location
+                  </label>
+                  <SelectMenu
+                    value={filters.state}
+                    onChange={(v) => setFilters({ ...filters, state: v })}
+                    options={states.map((s) => ({ value: s, label: s }))}
+                    className="h-9 rounded-xl border-slate-800 bg-slate-900/80 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">
+                    School Type
+                  </label>
+                  <SelectMenu
+                    value={filters.type}
+                    onChange={(v) => setFilters({ ...filters, type: v })}
+                    options={[
+                      { value: 'All', label: 'All Types' },
+                      { value: 'Public', label: 'Public' },
+                      { value: 'Private', label: 'Private' },
+                    ]}
+                    className="h-9 rounded-xl border-slate-800 bg-slate-900/80 text-xs"
+                  />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest flex justify-between">
-                  Min DAT AA <span>{filters.minDAT}</span>
-                </label>
-                <input 
-                  type="range"
-                  min="0"
-                  max="30"
-                  step="1"
-                  value={filters.minDAT}
-                  onChange={(e) => setFilters({...filters, minDAT: parseInt(e.target.value)})}
-                  className="w-full accent-indigo-600"
-                />
-              </div>
-            </div>
 
-            {/* Acceptance Rates */}
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest flex justify-between">
-                  Min Acceptance <span>{filters.minAcceptance}%</span>
-                </label>
-                <input 
-                  type="range"
-                  min="0"
-                  max="30"
-                  step="0.5"
+              {/* GPA / sGPA / DAT */}
+              <div className="min-w-0 rounded-2xl border border-slate-800/70 bg-slate-950/40 p-3 xl:col-span-4">
+                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Your scores
+                </p>
+                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-3">
+                  <ScoreFilterControl
+                    label="GPA"
+                    tips={[
+                      'Enter your cumulative GPA (cGPA).',
+                      'Schools with a higher minimum accepted cGPA are hidden.',
+                      'Leave at 0 / Any to skip this filter.',
+                    ]}
+                    value={filters.minCGPA}
+                    min={0}
+                    max={4}
+                    step={0.01}
+                    display={filters.minCGPA > 0 ? filters.minCGPA.toFixed(2) : 'Any'}
+                    onChange={(n) => setFilters({ ...filters, minCGPA: n })}
+                  />
+                  <ScoreFilterControl
+                    label="sGPA"
+                    tips={[
+                      'Enter your science GPA (sGPA).',
+                      'Schools with a higher minimum accepted sGPA are hidden.',
+                      'Leave at 0 / Any to skip this filter.',
+                    ]}
+                    value={filters.minSGPA}
+                    min={0}
+                    max={4}
+                    step={0.01}
+                    display={filters.minSGPA > 0 ? filters.minSGPA.toFixed(2) : 'Any'}
+                    onChange={(n) => setFilters({ ...filters, minSGPA: n })}
+                  />
+                  <ScoreFilterControl
+                    label="DAT"
+                    tips={[
+                      'Enter your DAT Academic Average score.',
+                      'Schools with a higher minimum accepted DAT are hidden.',
+                      'Supports the new 3-digit scale up to 600.',
+                    ]}
+                    value={filters.minDAT}
+                    min={0}
+                    max={600}
+                    step={1}
+                    display={filters.minDAT > 0 ? String(filters.minDAT) : 'Any'}
+                    onChange={(n) => setFilters({ ...filters, minDAT: Math.round(n) })}
+                  />
+                </div>
+              </div>
+
+              {/* Acceptance & tuition */}
+              <div className="space-y-3 rounded-2xl border border-slate-800/70 bg-slate-950/40 p-3 xl:col-span-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Acceptance &amp; cost
+                </p>
+                <RangeFilterControl
+                  label="Min Acceptance"
                   value={filters.minAcceptance}
-                  onChange={(e) => setFilters({...filters, minAcceptance: parseFloat(e.target.value)})}
-                  className="w-full accent-indigo-600"
+                  display={`${filters.minAcceptance}%`}
+                  min={0}
+                  max={30}
+                  step={0.5}
+                  onChange={(n) => setFilters({ ...filters, minAcceptance: n })}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest flex justify-between">
-                  Min IS Acceptance <span>{filters.minISAcceptance}%</span>
-                </label>
-                <input 
-                  type="range"
-                  min="0"
-                  max="50"
-                  step="0.5"
+                <RangeFilterControl
+                  label="Min IS Acceptance"
                   value={filters.minISAcceptance}
-                  onChange={(e) => setFilters({...filters, minISAcceptance: parseFloat(e.target.value)})}
-                  className="w-full accent-indigo-600"
+                  display={`${filters.minISAcceptance}%`}
+                  min={0}
+                  max={50}
+                  step={0.5}
+                  onChange={(n) => setFilters({ ...filters, minISAcceptance: n })}
                 />
-              </div>
-            </div>
-
-            {/* OOS & Tuition */}
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest flex justify-between">
-                  Min OOS Acceptance <span>{filters.minOOSAcceptance}%</span>
-                </label>
-                <input 
-                  type="range"
-                  min="0"
-                  max="30"
-                  step="0.5"
+                <RangeFilterControl
+                  label="Min OOS Acceptance"
                   value={filters.minOOSAcceptance}
-                  onChange={(e) => setFilters({...filters, minOOSAcceptance: parseFloat(e.target.value)})}
-                  className="w-full accent-indigo-600"
+                  display={`${filters.minOOSAcceptance}%`}
+                  min={0}
+                  max={30}
+                  step={0.5}
+                  onChange={(n) => setFilters({ ...filters, minOOSAcceptance: n })}
+                />
+                <RangeFilterControl
+                  label="Max Tuition"
+                  value={filters.maxTuition}
+                  display={`$${(filters.maxTuition / 1000).toFixed(0)}k`}
+                  min={0}
+                  max={150000}
+                  step={5000}
+                  onChange={(n) => setFilters({ ...filters, maxTuition: n })}
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest flex justify-between">
-                  Max Tuition <span>${(filters.maxTuition / 1000).toFixed(0)}k</span>
-                </label>
-                <input 
-                  type="range"
-                  min="0"
-                  max="150000"
-                  step="5000"
-                  value={filters.maxTuition}
-                  onChange={(e) => setFilters({...filters, maxTuition: parseInt(e.target.value)})}
-                  className="w-full accent-indigo-600"
+
+              {/* Toggles */}
+              <div className="space-y-2 rounded-2xl border border-slate-800/70 bg-slate-950/40 p-3 xl:col-span-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Eligibility
+                </p>
+                <FilterToggle
+                  label="Accepts Canadians"
+                  active={filters.acceptsCanadians === 'Yes'}
+                  onToggle={() =>
+                    setFilters({
+                      ...filters,
+                      acceptsCanadians: filters.acceptsCanadians === 'Yes' ? 'All' : 'Yes',
+                    })
+                  }
+                />
+                <FilterToggle
+                  label="Accepts CC Credits"
+                  active={filters.acceptsCC === 'Yes'}
+                  onToggle={() =>
+                    setFilters({
+                      ...filters,
+                      acceptsCC: filters.acceptsCC === 'Yes' ? 'All' : 'Yes',
+                    })
+                  }
+                />
+                <FilterToggle
+                  label="Accepts Canadian DAT"
+                  active={filters.acceptsCanadianDat === 'Yes'}
+                  onToggle={() =>
+                    setFilters({
+                      ...filters,
+                      acceptsCanadianDat:
+                        filters.acceptsCanadianDat === 'Yes' ? 'All' : 'Yes',
+                    })
+                  }
                 />
               </div>
             </div>
 
-            {/* Toggles */}
-            <div className="flex flex-col justify-center space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Accepts Canadians</span>
-                <button 
-                  type="button"
-                  onClick={() => setFilters({...filters, acceptsCanadians: filters.acceptsCanadians === 'Yes' ? 'All' : 'Yes'})}
-                  className={`w-10 h-5 rounded-full transition-all relative ${filters.acceptsCanadians === 'Yes' ? 'bg-indigo-600' : 'bg-slate-800'}`}
-                >
-                  <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${filters.acceptsCanadians === 'Yes' ? 'left-6' : 'left-1'}`} />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Accepts CC Credits</span>
-                <button 
-                  type="button"
-                  onClick={() => setFilters({...filters, acceptsCC: filters.acceptsCC === 'Yes' ? 'All' : 'Yes'})}
-                  className={`w-10 h-5 rounded-full transition-all relative ${filters.acceptsCC === 'Yes' ? 'bg-indigo-600' : 'bg-slate-800'}`}
-                >
-                  <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${filters.acceptsCC === 'Yes' ? 'left-6' : 'left-1'}`} />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Campus Housing</span>
-                <button 
-                  type="button"
-                  onClick={() => setFilters({...filters, hasHousing: filters.hasHousing === 'Yes' ? 'All' : 'Yes'})}
-                  className={`w-10 h-5 rounded-full transition-all relative ${filters.hasHousing === 'Yes' ? 'bg-indigo-600' : 'bg-slate-800'}`}
-                >
-                  <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${filters.hasHousing === 'Yes' ? 'left-6' : 'left-1'}`} />
-                </button>
-              </div>
+            {/* Expandable student profile filters */}
+            <div className="overflow-hidden rounded-2xl border border-slate-800/70 bg-slate-950/40">
+              <button
+                type="button"
+                onClick={() => setMoreFiltersOpen((o) => !o)}
+                className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-900/40"
+              >
+                <span className="inline-flex flex-wrap items-center gap-2 text-sm font-medium text-slate-200">
+                  <SlidersHorizontal className="h-4 w-4 text-slate-500" />
+                  Filter more
+                  <span className="text-xs font-normal text-slate-500">
+                    Gender, ethnicity &amp; courses
+                  </span>
+                  {moreFiltersActive && (
+                    <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                      {(filters.gender !== 'All' ? 1 : 0) +
+                        (filters.ethnicity !== 'All' ? 1 : 0) +
+                        activeCourseFilters}{' '}
+                      active
+                    </Badge>
+                  )}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    'h-4 w-4 text-slate-500 transition-transform',
+                    moreFiltersOpen && 'rotate-180',
+                  )}
+                />
+              </button>
+
+              <AnimatePresence initial={false}>
+                {moreFiltersOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-4 border-t border-slate-800/80 px-4 py-4">
+                      <div className="flex flex-wrap items-end gap-3">
+                        <div className="w-[7.5rem] space-y-1.5">
+                          <label className="text-[10px] font-medium uppercase tracking-widest text-slate-500">
+                            Gender
+                          </label>
+                          <SelectMenu
+                            value={filters.gender}
+                            onChange={(v) =>
+                              setFilters({ ...filters, gender: v as GenderFilter })
+                            }
+                            options={[
+                              { value: 'All', label: 'Any' },
+                              { value: 'male', label: 'Male' },
+                              { value: 'female', label: 'Female' },
+                            ]}
+                            className="h-8 rounded-lg border-slate-800 bg-slate-900/90 px-2.5 text-xs"
+                          />
+                        </div>
+                        <div className="w-[8.5rem] space-y-1.5">
+                          <label className="text-[10px] font-medium uppercase tracking-widest text-slate-500">
+                            Ethnicity
+                          </label>
+                          <SelectMenu
+                            value={filters.ethnicity}
+                            onChange={(v) =>
+                              setFilters({ ...filters, ethnicity: v as EthnicityFilter })
+                            }
+                            options={[
+                              { value: 'All', label: 'Any' },
+                              { value: 'white', label: 'White' },
+                              { value: 'black', label: 'Black' },
+                              { value: 'hispanic', label: 'Hisp.' },
+                              { value: 'asian', label: 'Asian' },
+                              { value: 'international', label: 'Intl.' },
+                            ]}
+                            className="h-8 rounded-lg border-slate-800 bg-slate-900/90 px-2.5 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-slate-300">
+                            Classes the student has taken
+                          </p>
+                          {activeCourseFilters > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFilters((prev) => ({
+                                  ...prev,
+                                  courses: { ...EMPTY_COURSE_FILTERS },
+                                }))
+                              }
+                              className="cursor-pointer text-[11px] font-medium text-indigo-400 hover:text-indigo-300"
+                            >
+                              Clear courses
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                          {COURSE_REQUIREMENT_FIELDS.map((field) => (
+                            <div
+                              key={field.key}
+                              className="space-y-1.5 rounded-xl border border-slate-800/70 bg-slate-950/50 p-2"
+                            >
+                              <label className="block truncate text-[10px] font-medium uppercase tracking-widest text-slate-500">
+                                {field.label}
+                              </label>
+                              <SelectMenu
+                                value={filters.courses[field.key]}
+                                onChange={(v) =>
+                                  setCourseTaken(field.key, v as CourseTakenFilter)
+                                }
+                                options={COURSE_TAKEN_OPTIONS}
+                                className="h-8 rounded-lg border-slate-800 bg-slate-900/90 px-2.5 text-xs"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </Card>
@@ -582,41 +1162,56 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
 
                         {/* Stats Grid */}
                         <div className={`grid ${isMentorView ? 'grid-cols-3' : 'grid-cols-2'} gap-2 shrink-0`}>
-                          {[
-                            { label: 'Mean cGPA', value: school.cgpa, color: 'text-white' },
-                            ...(isMentorView ? [{ label: 'Min cGPA', value: school.minCgpa5th, color: 'text-indigo-400' }] : []),
-                            { label: 'DAT AA', value: school.datAA, color: 'text-white' },
-                            ...(isMentorView ? [{ label: 'Min DAT', value: school.minDat5th, color: 'text-indigo-400' }] : []),
-                            { label: 'Acceptance', value: school.acceptanceRate ? `${school.acceptanceRate}%` : 'N/A', color: 'text-emerald-400' },
-                            { label: 'Class Size', value: school.classSize, color: 'text-white' },
-                            ...(!isMentorView
-                              ? [
-                                  {
-                                    label: 'Length of School',
-                                    value: school.lengthOfSchool ? `${school.lengthOfSchool} yrs` : 'N/A',
-                                    color: 'text-white',
-                                  },
-                                  {
-                                    label: 'Public/Private',
-                                    value: school.type || 'N/A',
-                                    color: 'text-white',
-                                  },
-                                  {
-                                    label: 'Acc. Canadian DAT',
-                                    value: school.acceptsCanadianDat ? 'Yes' : 'No',
-                                    color: school.acceptsCanadianDat ? 'text-emerald-400' : 'text-rose-400',
-                                  },
-                                  {
-                                    label: 'Accepts Canadians',
-                                    value: school.canadians ? 'Yes' : 'No',
-                                    color: school.canadians ? 'text-emerald-400' : 'text-rose-400',
-                                  },
-                                ]
-                              : []),
-                          ].map((stat, idx) => (
-                            <div key={idx} className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/50 min-h-[58px] flex flex-col justify-center">
-                              <p className="text-[9px] font-medium text-slate-500 uppercase tracking-widest mb-1 truncate">{stat.label}</p>
-                              <p className={`text-sm font-semibold truncate ${stat.color}`}>{stat.value || 'N/A'}</p>
+                          {(isMentorView
+                            ? [
+                                { label: 'Avg cGPA', value: school.cgpa || 'N/A', color: 'text-white' },
+                                { label: 'Avg sGPA', value: school.sgpa || 'N/A', color: 'text-white' },
+                                { label: 'Avg DAT AA', value: school.datAA || 'N/A', color: 'text-white' },
+                                { label: 'Min cGPA', value: school.minCgpa5th || 'N/A', color: 'text-indigo-400' },
+                                { label: 'Min sGPA', value: school.minSgpa5th || 'N/A', color: 'text-indigo-400' },
+                                { label: 'Min DAT AA', value: school.minDat5th || 'N/A', color: 'text-indigo-400' },
+                              ]
+                            : [
+                                { label: 'Mean cGPA', value: school.cgpa || 'N/A', color: 'text-white' },
+                                { label: 'DAT AA', value: school.datAA || 'N/A', color: 'text-white' },
+                                {
+                                  label: 'Acceptance',
+                                  value: school.acceptanceRate ? `${school.acceptanceRate}%` : 'N/A',
+                                  color: 'text-emerald-400',
+                                },
+                                { label: 'Class Size', value: school.classSize || 'N/A', color: 'text-white' },
+                                {
+                                  label: 'Length of School',
+                                  value: school.lengthOfSchool ? `${school.lengthOfSchool} yrs` : 'N/A',
+                                  color: 'text-white',
+                                },
+                                {
+                                  label: 'Public/Private',
+                                  value: school.type || 'N/A',
+                                  color: 'text-white',
+                                },
+                                {
+                                  label: 'Acc. Canadian DAT',
+                                  value: school.acceptsCanadianDat ? 'Yes' : 'No',
+                                  color: school.acceptsCanadianDat ? 'text-emerald-400' : 'text-rose-400',
+                                },
+                                {
+                                  label: 'Accepts Canadians',
+                                  value: school.canadians ? 'Yes' : 'No',
+                                  color: school.canadians ? 'text-emerald-400' : 'text-rose-400',
+                                },
+                              ]
+                          ).map((stat, idx) => (
+                            <div
+                              key={idx}
+                              className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/50 min-h-[58px] flex flex-col items-center justify-center text-center"
+                            >
+                              <p className="text-[9px] font-medium text-slate-500 uppercase tracking-widest mb-1 truncate w-full">
+                                {stat.label}
+                              </p>
+                              <p className={`text-sm font-semibold truncate w-full ${stat.color}`}>
+                                {stat.value}
+                              </p>
                             </div>
                           ))}
                         </div>
@@ -642,6 +1237,47 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                             </div>
                             <span className="text-sm font-semibold text-white shrink-0">{school.oosAcceptanceRate ? `${school.oosAcceptanceRate}%` : 'N/A'}</span>
                           </div>
+
+                          {filters.gender !== 'All' && (
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 shrink-0">
+                                  <Users className="w-3.5 h-3.5" />
+                                </div>
+                                <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider truncate">
+                                  {filters.gender === 'male' ? 'Male' : 'Female'} Accepted
+                                </span>
+                              </div>
+                              <span className="text-sm font-semibold text-violet-300 shrink-0">
+                                {schoolGenderPct(school, filters.gender) || 'N/A'}
+                              </span>
+                            </div>
+                          )}
+
+                          {filters.ethnicity !== 'All' && (
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 shrink-0">
+                                  <Users className="w-3.5 h-3.5" />
+                                </div>
+                                <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider truncate">
+                                  {filters.ethnicity === 'white'
+                                    ? 'White'
+                                    : filters.ethnicity === 'black'
+                                      ? 'Black'
+                                      : filters.ethnicity === 'hispanic'
+                                        ? 'Hispanic'
+                                        : filters.ethnicity === 'asian'
+                                          ? 'Asian'
+                                          : 'International'}{' '}
+                                  Accepted
+                                </span>
+                              </div>
+                              <span className="text-sm font-semibold text-cyan-300 shrink-0">
+                                {schoolEthnicityPct(school, filters.ethnicity) || 'N/A'}
+                              </span>
+                            </div>
+                          )}
 
                           <div className="pt-3 border-t border-slate-800/50 flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
@@ -778,6 +1414,13 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                           const valStr = val?.toString() || '';
                           const isLink = valStr.startsWith('http://') || valStr.startsWith('https://');
                           const isEmail = (COL_MAP.email as readonly string[]).includes(key) || (valStr.includes('@') && valStr.includes('.') && !valStr.includes(' '));
+                          const ynLabel = formatYesNo(valStr);
+                          const isYn =
+                            !isLink &&
+                            !isEmail &&
+                            (ynLabel === 'Yes' || ynLabel === 'No') &&
+                            /^(y|n|yes|no)$/i.test(valStr.trim());
+                          const display = isYn ? ynLabel : valStr;
                           
                           return (
                             <td 
@@ -795,7 +1438,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                                   rel="noopener noreferrer"
                                   className="text-indigo-400 hover:text-indigo-300 hover:underline inline-flex items-center gap-1"
                                 >
-                                  {val}
+                                  {display}
                                   <ExternalLink className="w-3 h-3 flex-shrink-0" />
                                 </a>
                               ) : isEmail ? (
@@ -803,11 +1446,11 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                                   href={`mailto:${valStr}`}
                                   className="text-indigo-400 hover:text-indigo-300 hover:underline inline-flex items-center gap-1"
                                 >
-                                  {val}
+                                  {display}
                                   <Mail className="w-3 h-3 flex-shrink-0" />
                                 </a>
                               ) : (
-                                val
+                                display
                               )}
                             </td>
                           );
@@ -867,35 +1510,53 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                 <div className="grid md:grid-cols-3 gap-6">
                   {/* Stats Overview */}
                   <div className="md:col-span-2 space-y-6">
-                    <div className={`grid gap-2 sm:gap-3 ${isMentorView ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6' : 'grid-cols-2 lg:grid-cols-4'}`}>
+                    <div className={`grid gap-2 sm:gap-3 ${isMentorView ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 lg:grid-cols-4'}`}>
                       <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Mean<br/>cGPA</p>
+                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Avg<br/>cGPA</p>
                         <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.cgpa || 'N/A'}</p>
                       </div>
-                      {isMentorView && (
-                        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                          <p className="text-[9px] sm:text-[10px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-2">Min cGPA<br/>(5%)</p>
-                          <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.minCgpa5th || 'N/A'}</p>
-                        </div>
-                      )}
                       <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Mean<br/>sGPA</p>
+                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Avg<br/>sGPA</p>
                         <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.sgpa || 'N/A'}</p>
                       </div>
                       <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">DAT AA</p>
+                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Avg<br/>DAT AA</p>
                         <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.datAA || 'N/A'}</p>
                       </div>
                       {isMentorView && (
+                        <>
+                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
+                            <p className="text-[9px] sm:text-[10px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-2">Min cGPA<br/>(5%)</p>
+                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.minCgpa5th || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
+                            <p className="text-[9px] sm:text-[10px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-2">Min sGPA<br/>(5%)</p>
+                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.minSgpa5th || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
+                            <p className="text-[9px] sm:text-[10px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-2">Min DAT<br/>(5%)</p>
+                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.minDat5th || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
+                            <p className="text-[9px] sm:text-[10px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-2">Max cGPA<br/>(95%)</p>
+                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.maxCgpa95th || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
+                            <p className="text-[9px] sm:text-[10px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-2">Max sGPA<br/>(95%)</p>
+                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.maxSgpa95th || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
+                            <p className="text-[9px] sm:text-[10px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-2">Max DAT<br/>(95%)</p>
+                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.maxDat95th || 'N/A'}</p>
+                          </div>
+                        </>
+                      )}
+                      {!isMentorView && (
                         <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                          <p className="text-[9px] sm:text-[10px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-2">Min DAT<br/>(5%)</p>
-                          <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.minDat5th || 'N/A'}</p>
+                          <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Acceptance</p>
+                          <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.acceptanceRate ? `${selectedSchool.acceptanceRate}%` : 'N/A'}</p>
                         </div>
                       )}
-                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Acceptance</p>
-                        <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.acceptanceRate ? `${selectedSchool.acceptanceRate}%` : 'N/A'}</p>
-                      </div>
                     </div>
 
                     <div className="space-y-4">
@@ -1209,55 +1870,145 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                       </div>
                     )}
 
-                    {isMentorView && (
-                      <div className="space-y-4">
+                    {selectedSchool.courseRequirements && (
+                      <div className="space-y-3">
                         <h5 className="text-base font-semibold text-white flex items-center gap-2">
-                          <Database className="w-4 h-4 text-indigo-400" /> Full Spreadsheet Data
+                          <BookOpen className="w-4 h-4 text-indigo-400" /> Required coursework
                         </h5>
-                        <div className="space-y-6">
-                          {rawCategories && Object.entries(rawCategories).map(([catKey, category]) => {
-                            if (category.items.length === 0) return null;
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                          {COURSE_REQUIREMENT_FIELDS.map((field) => {
+                            const required = selectedSchool.courseRequirements?.[field.key];
+                            const label = formatYesNo(required);
                             return (
-                              <div key={catKey} className="space-y-3">
-                                <p className="text-xs font-medium text-slate-500 uppercase tracking-widest border-l-2 border-indigo-500 pl-3">{category.label}</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {category.items.map(([key, value]) => {
-                                    const valStr = value?.toString() || '';
-                                    const isLink = valStr.startsWith('http://') || valStr.startsWith('https://');
-                                    const isEmail = valStr.includes('@') && valStr.includes('.') && !valStr.includes(' ');
-                                    
-                                    return (
-                                      <div key={key} className="p-2.5 bg-slate-900/50 rounded-xl border border-slate-800/50">
-                                        <p className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-1">{key}</p>
-                                        {isLink ? (
-                                          <a 
-                                            href={valStr} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 break-all"
-                                          >
-                                            {value}
-                                            <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                                          </a>
-                                        ) : isEmail ? (
-                                          <a 
-                                            href={`mailto:${valStr}`}
-                                            className="text-xs text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 break-all"
-                                          >
-                                            {value}
-                                            <Mail className="w-3 h-3 flex-shrink-0" />
-                                          </a>
-                                        ) : (
-                                          <p className="text-xs text-slate-300 leading-relaxed">{value}</p>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                              <div
+                                key={field.key}
+                                className="rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5 text-center"
+                              >
+                                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500 truncate">
+                                  {field.label}
+                                </p>
+                                <p
+                                  className={cn(
+                                    'mt-1 text-sm font-semibold',
+                                    label === 'Yes' && 'text-emerald-400',
+                                    label === 'No' && 'text-slate-400',
+                                    label === '—' && 'text-slate-600',
+                                  )}
+                                >
+                                  {label}
+                                </p>
                               </div>
                             );
                           })}
                         </div>
+                      </div>
+                    )}
+
+                    {isMentorView && rawCategories && (
+                      <div className="space-y-3">
+                        <h5 className="text-base font-semibold text-white flex items-center gap-2">
+                          <Database className="w-4 h-4 text-indigo-400" /> Spreadsheet details
+                        </h5>
+
+                        {Object.values(rawCategories).every((c) => c.items.length === 0) ? (
+                          <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-6 text-center">
+                            <p className="text-sm text-slate-500">
+                              No spreadsheet fields available for this school.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {Object.entries(rawCategories).map(([catKey, category]) => {
+                              if (category.items.length === 0) return null;
+                              return (
+                                <div
+                                  key={catKey}
+                                  className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50"
+                                >
+                                  <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 bg-slate-900/60 px-4 py-2.5">
+                                    <p className="text-xs font-semibold text-slate-300">
+                                      {category.label}
+                                    </p>
+                                    <span className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-500">
+                                      {category.items.length}
+                                    </span>
+                                  </div>
+                                  <dl className="divide-y divide-slate-800/70">
+                                    {category.items.map(([key, value]) => {
+                                      const valStr = value?.toString() || '';
+                                      const isLink =
+                                        /^https?:\/\//i.test(valStr) ||
+                                        valStr.startsWith('www.');
+                                      const href = isLink
+                                        ? valStr.startsWith('www.')
+                                          ? `https://${valStr}`
+                                          : valStr
+                                        : '';
+                                      const isEmail =
+                                        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valStr);
+                                      const ynLabel = formatYesNo(valStr);
+                                      const isYn =
+                                        !isLink &&
+                                        !isEmail &&
+                                        (ynLabel === 'Yes' || ynLabel === 'No') &&
+                                        /^(y|n|yes|no)$/i.test(valStr.trim());
+                                      const display = isYn ? ynLabel : valStr;
+                                      const isLong = display.length > 80 || display.includes('\n');
+
+                                      return (
+                                        <div
+                                          key={`${catKey}-${key}`}
+                                          className={`grid gap-1 px-4 py-3 sm:grid-cols-[minmax(140px,34%)_1fr] sm:gap-4 ${
+                                            isLong ? 'sm:items-start' : 'sm:items-center'
+                                          }`}
+                                        >
+                                          <dt className="text-xs font-medium text-slate-500 leading-snug">
+                                            {key}
+                                          </dt>
+                                          <dd className="min-w-0 text-sm text-slate-200 leading-relaxed">
+                                            {isLink ? (
+                                              <a
+                                                href={href}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-start gap-1.5 text-indigo-400 hover:text-indigo-300 break-all"
+                                              >
+                                                <span className="line-clamp-2">{valStr}</span>
+                                                <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                              </a>
+                                            ) : isEmail ? (
+                                              <a
+                                                href={`mailto:${valStr}`}
+                                                className="inline-flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 break-all"
+                                              >
+                                                {valStr}
+                                                <Mail className="h-3.5 w-3.5 shrink-0" />
+                                              </a>
+                                            ) : isYn ? (
+                                              <span
+                                                className={
+                                                  ynLabel === 'Yes'
+                                                    ? 'font-semibold text-emerald-400'
+                                                    : 'font-semibold text-slate-400'
+                                                }
+                                              >
+                                                {ynLabel}
+                                              </span>
+                                            ) : (
+                                              <span className={isLong ? 'whitespace-pre-wrap' : ''}>
+                                                {display}
+                                              </span>
+                                            )}
+                                          </dd>
+                                        </div>
+                                      );
+                                    })}
+                                  </dl>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1288,17 +2039,29 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                     <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
                       <h5 className="text-sm font-semibold text-white uppercase tracking-widest">Additional Info</h5>
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center justify-between text-sm gap-3">
                           <span className="text-slate-500">Accepts Canadians</span>
-                          <span className={`font-semibold ${selectedSchool.canadians ? 'text-emerald-400' : 'text-slate-400'}`}>{selectedSchool.canadians ? 'Yes' : 'No'}</span>
+                          <span className={`font-semibold shrink-0 ${selectedSchool.canadians ? 'text-emerald-400' : 'text-slate-400'}`}>{selectedSchool.canadians ? 'Yes' : 'No'}</span>
                         </div>
-                        <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-start justify-between text-sm gap-3">
+                          <span className="text-slate-500 leading-snug">Accepts Non-U.S. &amp; Non-Canadian Applicants</span>
+                          <span className={`font-semibold shrink-0 ${selectedSchool.acceptsNonUsNonCanadian ? 'text-emerald-400' : 'text-slate-400'}`}>
+                            {selectedSchool.acceptsNonUsNonCanadian ? 'Yes' : 'No'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm gap-3">
                           <span className="text-slate-500">Class Size</span>
-                          <span className="text-white font-semibold">{selectedSchool.classSize}</span>
+                          <span className="text-white font-semibold shrink-0">{selectedSchool.classSize || 'N/A'}</span>
                         </div>
-                        <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center justify-between text-sm gap-3">
                           <span className="text-slate-500">Applicants</span>
-                          <span className="text-white font-semibold">{selectedSchool.applicants.toLocaleString()}</span>
+                          <span className="text-white font-semibold shrink-0">{selectedSchool.applicants ? selectedSchool.applicants.toLocaleString() : 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm gap-3">
+                          <span className="text-slate-500">Acceptance rate</span>
+                          <span className="text-emerald-400 font-semibold shrink-0">
+                            {selectedSchool.acceptanceRate ? `${selectedSchool.acceptanceRate}%` : 'N/A'}
+                          </span>
                         </div>
                       </div>
                       
@@ -1309,7 +2072,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                         </div>
                       )}
 
-                      {isMentorView && (selectedSchool.links || selectedSchool.website) && (
+                      {(selectedSchool.links || selectedSchool.website) && (
                         <div className="pt-4 space-y-2">
                           {selectedSchool.links && (
                             <Button
@@ -1319,7 +2082,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                               leftIcon={<ExternalLink className="w-3 h-3" />}
                               onClick={() => window.open(selectedSchool.links, '_blank', 'noopener,noreferrer')}
                             >
-                              Visit School Website
+                              Video Tour
                             </Button>
                           )}
                           {selectedSchool.website && selectedSchool.website !== selectedSchool.links && (
@@ -1371,7 +2134,11 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                       {isAlreadyAdded(selectedSchool) ? 'Already added' : 'Select'}
                     </Button>
                   )}
-                  <Button onClick={() => setSelectedSchool(null)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedSchool(null)}
+                  >
                     Close Details
                   </Button>
                 </div>

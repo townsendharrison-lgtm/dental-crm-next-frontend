@@ -553,7 +553,6 @@ export const DroppableCategory = ({
   schoolsCount, 
   onRemove,
   onAdd,
-  onViewSchools,
   isDefault 
 }: { 
   category: SchoolCategory, 
@@ -561,7 +560,6 @@ export const DroppableCategory = ({
   schoolsCount: number, 
   onRemove: (id: string) => void,
   onAdd?: (id: string) => void,
-  onViewSchools?: (id: string) => void,
   isDefault: boolean 
 }) => {
   const { setNodeRef } = useDroppable({ id: category.id });
@@ -584,17 +582,6 @@ export const DroppableCategory = ({
           <span className="rounded-full border border-slate-800 bg-slate-900 px-2 py-0.5 text-xs font-medium text-slate-500">
             {schoolsCount}
           </span>
-          {onViewSchools && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-[10px] font-semibold uppercase tracking-wide"
-              onClick={() => onViewSchools(category.id)}
-            >
-              View schools
-            </Button>
-          )}
           {onAdd && (
             <Button
               type="button"

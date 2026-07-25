@@ -70,6 +70,14 @@ export const studentsApi = {
   },
 
   /**
+   * Create a shell student (no invite email) for school-selection plans
+   * for customers without a dashboard login.
+   */
+  createExternal: async (payload: { name: string; email?: string }): Promise<Student> => {
+    return await apiPost<Student>("/api/students/external", payload);
+  },
+
+  /**
    * Update student profile.
    * Supports modifying profile fields (e.g. readiness, progress) as well as main user fields (name, avatar).
    */

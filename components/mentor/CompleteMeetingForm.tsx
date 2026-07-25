@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -28,6 +28,8 @@ import {
   resolveStudentTimezone,
   zonedDateTimeToUtcIso,
 } from "@/lib/utils/dateUtils";
+import { usePlatformConfig } from "@/lib/hooks/usePlatformConfig";
+import { DEFAULT_MEETING_TYPES } from "@/lib/api/adminSettings";
 
 interface CompleteMeetingFormProps {
   student: Student;
@@ -59,18 +61,6 @@ export interface CompleteMeetingData {
   duration: number;
 }
 
-const MEETING_TYPES = [
-  "Introductory Call",
-  "DAT Strategy & Planning",
-  "Application Review",
-  "Personal Statement Workshop",
-  "Interview Preparation",
-  "Post-Interview Debrief",
-  "Other",
-];
-
-const MEETING_TYPE_OPTIONS = MEETING_TYPES.map((type) => ({ value: type, label: type }));
-
 const PRIORITY_OPTIONS = [
   { value: "HIGH", label: "High" },
   { value: "MEDIUM", label: "Medium" },
@@ -87,22 +77,9 @@ const TIMEZONE_OPTIONS = [
   { value: "UTC", label: "UTC" },
 ];
 
-const SUMMARY_TEMPLATES: Record<string, string> = {
-  "Introductory Call":
-    "Hi {name}, it was great meeting you today! We covered your background and set some initial goals. I've assigned a few tasks to get us started. Looking forward to our next session!",
-  "DAT Strategy & Planning":
-    "Hi {name}, great work on our DAT strategy session today. We've identified your target scores and a study timeline. Make sure to check the resources I've attached to your new tasks.",
-  "Application Review":
-    "Hi {name}, we made good progress on your application review. Focus on the sections we discussed, especially the experiences descriptions. I'll review your next draft soon.",
-  "Personal Statement Workshop":
-    "Hi {name}, your personal statement is coming along well. Focus on the 'why dentistry' narrative we brainstormed. I'm looking forward to seeing the revised version.",
-  "Interview Preparation":
-    "Hi {name}, you did well in our mock interview. Remember to keep your answers concise and focus on specific examples. Practice the 'Tell me about yourself' pitch we refined.",
-  "Post-Interview Debrief":
-    "Hi {name}, thanks for sharing how your interview went. It sounds like you handled the ethical questions well. Now we wait for the next steps!",
-  Other:
-    "Hi {name}, thanks for our meeting today. We discussed {notes}. I've updated your action items accordingly.",
-};
+const FALLBACK_OTHER_TEMPLATE =
+  DEFAULT_MEETING_TYPES.find((t) => t.label === "Other")?.summaryTemplate ||
+  "Hi {name}, thanks for our meeting today. We discussed {notes}. I've updated your action items accordingly.";
 
 function parseMentorActionItems(raw?: string): string[] {
   if (!raw) return [];
@@ -125,13 +102,58 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   embedded = false,
 }) => {
   const studentTz = resolveStudentTimezone(student);
+  const platformConfig = usePlatformConfig();
+
+  const meetingTypes = useMemo(() => {
+    const types =
+      platformConfig.meetingTypes?.length > 0
+        ? platformConfig.meetingTypes
+        : DEFAULT_MEETING_TYPES;
+    const hasOther = types.some((t) => t.label.trim().toLowerCase() === "other");
+    return hasOther
+      ? types
+      : [
+          ...types,
+          {
+            id: "other",
+            label: "Other",
+            summaryTemplate: FALLBACK_OTHER_TEMPLATE,
+          },
+        ];
+  }, [platformConfig.meetingTypes]);
+
+  const meetingTypeLabels = useMemo(
+    () => meetingTypes.map((t) => t.label),
+    [meetingTypes],
+  );
+  const meetingTypeOptions = useMemo(
+    () => meetingTypeLabels.map((type) => ({ value: type, label: type })),
+    [meetingTypeLabels],
+  );
+  const summaryByLabel = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const t of meetingTypes) map[t.label] = t.summaryTemplate;
+    return map;
+  }, [meetingTypes]);
+
+  const defaultType = meetingTypeLabels[0] || "Other";
 
   const [notes, setNotes] = useState(meeting?.notes || "");
-  const [meetingType, setMeetingType] = useState(meeting?.meetingType || MEETING_TYPES[0]);
+  const [meetingType, setMeetingType] = useState(
+    meeting?.meetingType && meetingTypeLabels.includes(meeting.meetingType)
+      ? meeting.meetingType
+      : meeting?.meetingType && !meetingTypeLabels.includes(meeting.meetingType)
+        ? "Other"
+        : defaultType,
+  );
   const [meetingDate, setMeetingDate] = useState(
     meeting?.date ? meeting.date.split("T")[0] : new Date().toISOString().split("T")[0],
   );
-  const [otherType, setOtherType] = useState("");
+  const [otherType, setOtherType] = useState(
+    meeting?.meetingType && !meetingTypeLabels.includes(meeting.meetingType)
+      ? meeting.meetingType
+      : "",
+  );
   const [studentActionItems, setStudentActionItems] = useState<
     CompleteMeetingData["studentActionItems"]
   >([]);
@@ -142,7 +164,9 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     meeting?.nextMeetingScheduled ? "SCHEDULE" : "DEFER",
   );
   const [nextMeetingType, setNextMeetingType] = useState(
-    meeting?.nextMeetingType || MEETING_TYPES[0],
+    meeting?.nextMeetingType && meetingTypeLabels.includes(meeting.nextMeetingType)
+      ? meeting.nextMeetingType
+      : defaultType,
   );
   const [nextMeetingDateOnly, setNextMeetingDateOnly] = useState("");
   const [nextMeetingTime, setNextMeetingTime] = useState("12:00");
@@ -163,9 +187,21 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     : [...TIMEZONE_OPTIONS, { value: nextMeetingTimezone, label: nextMeetingTimezone }];
 
   useEffect(() => {
-    let template = SUMMARY_TEMPLATES[meetingType] || SUMMARY_TEMPLATES.Other;
-    template = template.replace("{name}", student.name.split(" ")[0]);
-    template = template.replace("{notes}", notes || "our discussion");
+    if (!meetingTypeLabels.includes(meetingType)) {
+      setMeetingType(defaultType);
+    }
+    if (nextMeetingType && !meetingTypeLabels.includes(nextMeetingType)) {
+      setNextMeetingType(defaultType);
+    }
+  }, [meetingTypeLabels, meetingType, nextMeetingType, defaultType]);
+
+  useEffect(() => {
+    let template =
+      summaryByLabel[meetingType] ||
+      summaryByLabel.Other ||
+      FALLBACK_OTHER_TEMPLATE;
+    template = template.replace(/\{name\}/g, student.name.split(" ")[0]);
+    template = template.replace(/\{notes\}/g, notes || "our discussion");
 
     const validItems = studentActionItems.filter((item) => item.task.trim() !== "");
     if (validItems.length > 0) {
@@ -176,7 +212,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     }
 
     setSummaryMessage(template);
-  }, [meetingType, otherType, student.name, notes, studentActionItems]);
+  }, [meetingType, otherType, student.name, notes, studentActionItems, summaryByLabel]);
 
   const addStudentAction = () => {
     setStudentActionItems([
@@ -326,7 +362,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                   <SelectMenu
                     value={meetingType}
                     onChange={setMeetingType}
-                    options={MEETING_TYPE_OPTIONS}
+                    options={meetingTypeOptions}
                     className="w-full"
                   />
                 </FormField>
@@ -424,7 +460,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                     <SelectMenu
                       value={nextMeetingType}
                       onChange={setNextMeetingType}
-                      options={MEETING_TYPE_OPTIONS}
+                      options={meetingTypeOptions}
                       className="w-full"
                     />
                   </FormField>

@@ -18,6 +18,7 @@ import {
   Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import {
@@ -39,6 +40,10 @@ import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import { usePlatformConfig } from "@/lib/hooks/usePlatformConfig";
 import { useStudentSchools } from "@/lib/hooks/useStudentSchools";
 import { useSchoolCategories } from "@/lib/hooks/useSchoolCategories";
+import { studentsApi } from "@/lib/api/students";
+import { studentSchoolsApi } from "@/lib/api/studentSchools";
+import { schoolCategoriesApi } from "@/lib/api/schoolCategories";
+import { queryKeys } from "@/lib/api/queryKeys";
 import SchoolSelectionTab from "@/components/student/hub/SchoolSelectionTab";
 import { DEFAULT_CATEGORIES } from "@/components/student/hub/hubShared";
 import type {
@@ -101,6 +106,10 @@ const TABS: { id: Tab; label: string; icon: typeof Target }[] = [
   { id: "manual", label: "Manual Plan", icon: Target },
   { id: "ai", label: "AI Plan", icon: Wand2 },
 ];
+
+function isExternalStudentEmail(email?: string | null) {
+  return !!email && email.toLowerCase().endsWith("@school-selection.local");
+}
 
 const EMPTY_DRAFT = (): PlanDraft => ({
   snapshot: "",
@@ -638,12 +647,14 @@ function PlanPreviewBody({
 
 
 export default function SchoolSelectionView() {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("manual");
   const [studentId, setStudentId] = useState("");
   const [studentName, setStudentName] = useState("");
   const [draft, setDraft] = useState<PlanDraft>(EMPTY_DRAFT);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
   const [manualSchools, setManualSchools] = useState<HubSchool[]>([]);
   const [manualCategories, setManualCategories] =
     useState<SchoolCategory[]>(DEFAULT_CATEGORIES);
@@ -657,12 +668,16 @@ export default function SchoolSelectionView() {
 
   const studentOptions = useMemo(
     () => [
-      { value: "", label: "None — name only (no dashboard login)" },
+      { value: "", label: "None — create external plan on save" },
       ...[...students]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((s) => ({
           value: s.id,
-          label: s.email ? `${s.name} · ${s.email}` : s.name,
+          label: isExternalStudentEmail(s.email)
+            ? `${s.name} · External`
+            : s.email
+              ? `${s.name} · ${s.email}`
+              : s.name,
         })),
     ],
     [students],
@@ -687,14 +702,21 @@ export default function SchoolSelectionView() {
   useEffect(() => {
     if (!studentId) return;
     if (planLoading) return;
-    setDraft(planToDraft(existingPlan));
+    // Only hydrate from server when a plan exists — avoid wiping an in-progress
+    // draft while an external student is being created/saved.
+    if (existingPlan) setDraft(planToDraft(existingPlan));
   }, [studentId, existingPlan, planLoading]);
 
   const handleStudentSelect = (id: string) => {
     setStudentId(id);
-    if (!id) return;
+    if (!id) {
+      setDraft(EMPTY_DRAFT);
+      return;
+    }
     const match = students.find((s) => s.id === id);
     if (match?.name) setStudentName(match.name);
+    // Clear until the linked plan loads (effect will refill if one exists)
+    setDraft(EMPTY_DRAFT);
   };
 
   const patch = <K extends keyof PlanDraft>(key: K, value: PlanDraft[K]) => {
@@ -702,8 +724,9 @@ export default function SchoolSelectionView() {
   };
 
   const handleSave = async () => {
-    if (!studentId) {
-      toast.error("Link a dashboard student to save. For name-only customers, use Preview → Download PDF.");
+    const name = studentName.trim() || selectedStudent?.name?.trim() || "";
+    if (!name) {
+      toast.error("Enter a student name before saving.");
       return;
     }
     if (!draft.snapshot.trim()) {
@@ -712,10 +735,37 @@ export default function SchoolSelectionView() {
     }
 
     const cleanList = (items: string[]) => items.map((s) => s.trim()).filter(Boolean);
+    setSavingPlan(true);
 
     try {
+      let targetStudentId = studentId;
+      let createdExternal = false;
+
+      // External (name-only): create a shell student so the plan can be stored
+      if (!targetStudentId) {
+        const created = await studentsApi.createExternal({ name });
+        targetStudentId = created.id;
+        createdExternal = true;
+        setStudentName(created.name || name);
+
+        // Persist any local school board drafted before linking
+        if (manualCategories.length > 0) {
+          await schoolCategoriesApi.replace(targetStudentId, manualCategories);
+        }
+        for (const school of manualSchools) {
+          await studentSchoolsApi.create({
+            studentId: targetStudentId,
+            schoolId: school.id,
+            category: school.type || manualCategories[0]?.id || "Target",
+            notes: typeof school.notes === "string" ? school.notes : undefined,
+          });
+        }
+      }
+
+      const hadPlan = !!existingPlan && !createdExternal;
+
       await upsertPlan.mutateAsync({
-        studentId,
+        studentId: targetStudentId,
         snapshot: draft.snapshot.trim(),
         overallScore: draft.overallScore,
         improvementLeverageScore: draft.improvementLeverageScore,
@@ -731,11 +781,31 @@ export default function SchoolSelectionView() {
         leverageActions: draft.leverageActions.filter((a) => a.title.trim()),
         riskFactors: draft.riskFactors.filter((r) => r.factor.trim()),
       });
+
+      // Link after upsert so the plan query doesn't wipe the draft mid-save
+      if (createdExternal) {
+        setStudentId(targetStudentId);
+        setManualSchools([]);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.students.all() });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.studentSchools.all(targetStudentId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.schoolCategories.all(targetStudentId),
+        });
+      }
+
       toast.success(
-        existingPlan ? "Strategic selection plan updated" : "Strategic selection plan created",
+        createdExternal
+          ? "External student plan created"
+          : hadPlan
+            ? "Strategic selection plan updated"
+            : "Strategic selection plan created",
       );
     } catch (err: any) {
       toast.error(err?.message || "Failed to save plan");
+    } finally {
+      setSavingPlan(false);
     }
   };
 
@@ -783,17 +853,20 @@ export default function SchoolSelectionView() {
     }
   };
 
+  const saveDisabled = !canEditPlan || savingPlan || upsertPlan.isPending;
+
   usePageHeaderAction(
     tab === "manual"
       ? {
-          label: existingPlan ? "Save plan" : "Create plan",
-          icon: upsertPlan.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          ),
+          label: existingPlan || studentId ? "Save plan" : "Create plan",
+          icon:
+            savingPlan || upsertPlan.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            ),
           onClick: () => void handleSave(),
-          disabled: !studentId || upsertPlan.isPending,
+          disabled: saveDisabled,
         }
       : null,
   );
@@ -844,7 +917,7 @@ export default function SchoolSelectionView() {
             icon={Target}
             iconClass="bg-indigo-500/10 text-indigo-400"
             title="Student"
-            subtitle="Enter a name for any customer. Optionally link a dashboard student to save and manage their school list."
+            subtitle="Enter a name for any customer. Link an internal dashboard student, or leave unlinked to save as an external plan."
             actions={
               canEditPlan ? (
                 <Button
@@ -863,7 +936,7 @@ export default function SchoolSelectionView() {
               <FormField
                 label="Student name"
                 required
-                hint="Shown on the plan and PDF — works for customers without a login"
+                hint="Required — used for external customers and shown on the PDF"
               >
                 <Input
                   value={studentName}
@@ -874,7 +947,7 @@ export default function SchoolSelectionView() {
               </FormField>
               <FormField
                 label="Link dashboard student"
-                hint="Optional — loads/saves their plan and school list"
+                hint="Internal students — optional. Leave empty to save as external."
               >
                 <SelectMenu
                   value={studentId}
@@ -888,9 +961,16 @@ export default function SchoolSelectionView() {
             </div>
             {selectedStudent ? (
               <p className="text-xs text-slate-500">
+                {isExternalStudentEmail(selectedStudent.email)
+                  ? "External plan · "
+                  : "Internal student · "}
                 {existingPlan
                   ? "Existing plan loaded — edits will overwrite on save."
                   : "No saved plan yet — fill in the sections below and create one."}
+              </p>
+            ) : canEditPlan ? (
+              <p className="text-xs text-slate-500">
+                No dashboard student linked — Save will create an external student record for this plan.
               </p>
             ) : null}
           </SectionCard>

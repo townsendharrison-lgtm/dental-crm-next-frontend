@@ -18,17 +18,21 @@ import {
   Users,
   Info,
   ImagePlus,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { useStudent } from "@/lib/hooks/useStudentProfile";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { messagesApi } from "@/lib/api/messages";
 import { queryKeys } from "@/lib/api/queryKeys";
 import { studentsApi } from "@/lib/api/students";
 import { mentorsApi } from "@/lib/api/mentors";
 import { usersApi } from "@/lib/api/users";
-import type { Conversation, Message } from "@/lib/types";
+import type { Conversation, Message, Student } from "@/lib/types";
 import {
   MessageBubbleBody,
   conversationPreviewText,
@@ -112,6 +116,157 @@ function isSameChatDay(a?: string, b?: string) {
   return startOfDay(new Date(a)) === startOfDay(new Date(b));
 }
 
+function studentFullProfileHref(options: {
+  role?: string;
+  studentId: string;
+  mentorId?: string | null;
+}) {
+  const { role, studentId, mentorId } = options;
+  const id = encodeURIComponent(studentId);
+  if (role === "MENTOR") return `/mentor/students?studentId=${id}`;
+  if (role === "ADMIN" && mentorId) {
+    return `/admin/mentors/${encodeURIComponent(mentorId)}/students?studentId=${id}`;
+  }
+  if (role === "MENTOR_MANAGER" && mentorId) {
+    return `/mentor-manager/mentors/${encodeURIComponent(mentorId)}/students?studentId=${id}`;
+  }
+  return null;
+}
+
+function formatDetailValue(value?: string | number | null) {
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
+}
+
+function DetailRow({
+  label,
+  value,
+  last = false,
+}: {
+  label: string;
+  value?: string | number | null;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-start justify-between gap-3 py-2.5 ${
+        last ? "" : "border-b border-slate-800/80"
+      }`}
+    >
+      <span className="text-[11px] text-slate-500 shrink-0 pt-0.5">{label}</span>
+      <span className="text-sm font-medium text-slate-200 text-right break-words min-w-0">
+        {formatDetailValue(value)}
+      </span>
+    </div>
+  );
+}
+
+function formatLocation(student: Student) {
+  const state = student.state || student.profile?.state;
+  const country = student.country || student.profile?.country;
+  return [state, country].filter(Boolean).join(", ") || null;
+}
+
+function StudentDetailsPane({
+  student,
+  loading,
+}: {
+  student?: Student;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-500">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        <p className="text-xs">Loading profile…</p>
+      </div>
+    );
+  }
+
+  if (!student) {
+    return (
+      <div className="py-10 text-center">
+        <p className="text-sm text-slate-400">Couldn’t load this student’s profile.</p>
+      </div>
+    );
+  }
+
+  const profile = student.profile;
+  const rawApplicantType =
+    profile?.applicant_type ||
+    (student.isReapplicant || profile?.is_reapplicant ? "REAPPLICANT" : null);
+  const applicantType =
+    rawApplicantType === "FIRST_TIME"
+      ? "First time"
+      : rawApplicantType === "REAPPLICANT"
+        ? "Reapplicant"
+        : rawApplicantType;
+
+  const gpa = student.gpa ?? profile?.gpa;
+  const dat =
+    student.datScore ?? student.datAA ?? profile?.dat_score ?? profile?.dat_aa;
+  const strength = student.strengthScore ?? profile?.strength_score;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col items-center text-center gap-2.5 pt-1">
+        <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-lg font-semibold text-slate-200 overflow-hidden ring-2 ring-slate-800/80">
+          {student.avatar ? (
+            <img src={student.avatar} className="w-full h-full object-cover" alt="" />
+          ) : (
+            student.name?.[0] || "?"
+          )}
+        </div>
+        <div className="min-w-0 w-full px-1">
+          <p className="text-base font-semibold text-white truncate">{student.name}</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 mt-1">
+            Student
+          </p>
+          <p className="text-xs text-slate-500 mt-1 truncate">{student.email}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: "GPA", value: gpa },
+          { label: "DAT", value: dat },
+          { label: "Strength", value: strength },
+        ].map((metric) => (
+          <div
+            key={metric.label}
+            className="rounded-xl bg-slate-900/70 border border-slate-800/80 px-2 py-2.5 text-center"
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+              {metric.label}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-white tabular-nums">
+              {formatDetailValue(metric.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <p className="text-xs font-medium text-slate-500 mb-1">Personal details</p>
+        <div className="px-0.5">
+          <DetailRow label="Location" value={formatLocation(student)} />
+          <DetailRow
+            label="Ethnicity"
+            value={student.ethnicity ?? profile?.ethnicity}
+          />
+          <DetailRow label="Gender" value={student.gender ?? profile?.gender} />
+          <DetailRow label="Age" value={student.age ?? profile?.age} />
+          <DetailRow
+            label="Cycle"
+            value={student.applicationCycle ?? profile?.application_cycle}
+          />
+          <DetailRow label="Applicant" value={applicantType} last />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
@@ -138,6 +293,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   const [sending, setSending] = useState(false);
 
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [detailsStudentId, setDetailsStudentId] = useState<string | null>(null);
   const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
@@ -388,8 +544,19 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     }
     setMessages([]);
     setIsDetailsOpen(false);
+    setDetailsStudentId(null);
     setIsAddMembersOpen(false);
   }, [selectedConversationId]);
+
+  const { data: detailsStudent, isLoading: detailsStudentLoading } = useStudent(
+    detailsStudentId || "",
+  );
+
+  const canViewStudentProfiles =
+    !isStudent &&
+    (currentUser?.role === "MENTOR" ||
+      currentUser?.role === "ADMIN" ||
+      currentUser?.role === "MENTOR_MANAGER");
 
   const handlePin = async (convId: string) => {
     try {
@@ -610,6 +777,28 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     conversations.find((c) => c.id === selectedConversationId) ||
     (hydratedConversation?.id === selectedConversationId ? hydratedConversation : null);
 
+  const detailsMentorId = useMemo(() => {
+    if (!detailsStudent) return null;
+    const fromProfile =
+      detailsStudent.mentorId || detailsStudent.profile?.mentor_id || null;
+    if (fromProfile) return fromProfile;
+    return (
+      (activeConversation?.participants || []).find((p) => p.role === "MENTOR")?.id ||
+      null
+    );
+  }, [detailsStudent, activeConversation?.participants]);
+
+  const fullProfileHref =
+    detailsStudentId && canViewStudentProfiles
+      ? studentFullProfileHref({
+          role: currentUser?.role,
+          studentId: detailsStudentId,
+          mentorId:
+            detailsMentorId ||
+            (currentUser?.role === "MENTOR" ? currentUser.id : null),
+        })
+      : null;
+
   const displayParticipants = useMemo(() => {
     if (!activeConversation) return [];
     return (activeConversation.participants || []).filter((p) => p.id !== currentUserId);
@@ -652,6 +841,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     setIsRenaming(false);
     setMemberSearch("");
     setIsAddMembersOpen(false);
+    setDetailsStudentId(null);
     setIsDetailsOpen((open) => !open);
   };
 
@@ -1074,10 +1264,24 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
             >
               <div className="w-[300px] h-full flex flex-col">
                 <div className="h-14 px-4 border-b border-slate-800 flex items-center justify-between bg-slate-950 shrink-0">
-                  <p className="text-sm font-semibold text-white">Details</p>
+                  {detailsStudentId ? (
+                    <button
+                      type="button"
+                      onClick={() => setDetailsStudentId(null)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-white hover:text-indigo-300 cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Profile
+                    </button>
+                  ) : (
+                    <p className="text-sm font-semibold text-white">Details</p>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setIsDetailsOpen(false)}
+                    onClick={() => {
+                      setIsDetailsOpen(false);
+                      setDetailsStudentId(null);
+                    }}
                     className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-900 hover:text-white cursor-pointer"
                   >
                     <X className="w-4 h-4" />
@@ -1085,186 +1289,243 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-5">
-                  {/* Name */}
-                  <div className="flex flex-col items-center text-center gap-3 pt-1">
-                    <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-lg font-semibold text-slate-200 overflow-hidden">
-                      {!activeConversation.is_group && displayParticipants[0]?.avatar ? (
-                        <img
-                          src={displayParticipants[0].avatar}
-                          className="w-full h-full object-cover"
-                          alt=""
-                        />
-                      ) : activeConversation.is_group ? (
-                        <Users className="w-7 h-7 text-slate-400" />
-                      ) : (
-                        displayParticipants[0]?.name?.[0] || "?"
-                      )}
-                    </div>
+                  {detailsStudentId && canViewStudentProfiles ? (
+                    <StudentDetailsPane
+                      student={detailsStudent}
+                      loading={detailsStudentLoading}
+                    />
+                  ) : (
+                    <>
+                      {/* Name */}
+                      <div className="flex flex-col items-center text-center gap-3 pt-1">
+                        <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-lg font-semibold text-slate-200 overflow-hidden">
+                          {!activeConversation.is_group && displayParticipants[0]?.avatar ? (
+                            <img
+                              src={displayParticipants[0].avatar}
+                              className="w-full h-full object-cover"
+                              alt=""
+                            />
+                          ) : activeConversation.is_group ? (
+                            <Users className="w-7 h-7 text-slate-400" />
+                          ) : (
+                            displayParticipants[0]?.name?.[0] || "?"
+                          )}
+                        </div>
 
-                    {activeConversation.is_group ? (
-                      canRenameGroup && isRenaming ? (
-                        <div className="w-full space-y-2">
-                          <input
-                            type="text"
-                            value={renameDraft}
-                            onChange={(e) => setRenameDraft(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-white text-center focus:outline-none focus:border-slate-600"
-                            autoFocus
-                            onKeyDown={(e) => e.key === "Enter" && handleRenameGroup()}
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={handleRenameGroup}
-                              className="flex-1 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium cursor-pointer"
-                            >
-                              Save
-                            </button>
+                        {activeConversation.is_group ? (
+                          canRenameGroup && isRenaming ? (
+                            <div className="w-full space-y-2">
+                              <input
+                                type="text"
+                                value={renameDraft}
+                                onChange={(e) => setRenameDraft(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-sm text-white text-center focus:outline-none focus:border-slate-600"
+                                autoFocus
+                                onKeyDown={(e) => e.key === "Enter" && handleRenameGroup()}
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleRenameGroup}
+                                  className="flex-1 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium cursor-pointer"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsRenaming(false);
+                                    setRenameDraft(activeConversation.name || "Group Chat");
+                                  }}
+                                  className="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : canRenameGroup ? (
                             <button
                               type="button"
                               onClick={() => {
-                                setIsRenaming(false);
                                 setRenameDraft(activeConversation.name || "Group Chat");
+                                setIsRenaming(true);
                               }}
-                              className="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium cursor-pointer"
+                              className="group inline-flex items-center gap-1.5 max-w-full cursor-pointer"
                             >
-                              Cancel
+                              <span className="text-base font-semibold text-white truncate">
+                                {activeConversation.name || "Group Chat"}
+                              </span>
+                              <Pencil className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 shrink-0" />
                             </button>
+                          ) : (
+                            <p className="text-base font-semibold text-white truncate px-2">
+                              {activeConversation.name || "Group Chat"}
+                            </p>
+                          )
+                        ) : (
+                          <div>
+                            <p className="text-base font-semibold text-white truncate px-2">
+                              {chatHeaderTitle}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {displayParticipants[0]?.role?.replace(/_/g, " ") ||
+                                "Direct message"}
+                            </p>
                           </div>
-                        </div>
-                      ) : canRenameGroup ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRenameDraft(activeConversation.name || "Group Chat");
-                            setIsRenaming(true);
-                          }}
-                          className="group inline-flex items-center gap-1.5 max-w-full cursor-pointer"
-                        >
-                          <span className="text-base font-semibold text-white truncate">
-                            {activeConversation.name || "Group Chat"}
-                          </span>
-                          <Pencil className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 shrink-0" />
-                        </button>
-                      ) : (
-                        <p className="text-base font-semibold text-white truncate px-2">
-                          {activeConversation.name || "Group Chat"}
-                        </p>
-                      )
-                    ) : (
-                      <div>
-                        <p className="text-base font-semibold text-white truncate px-2">
-                          {chatHeaderTitle}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {displayParticipants[0]?.role?.replace(/_/g, " ") || "Direct message"}
-                        </p>
+                        )}
+
+                        {activeConversation.is_group && !isRenaming && (
+                          <p className="text-xs text-slate-500 -mt-1">
+                            {activeConversation.participant_ids?.length || 0} members
+                          </p>
+                        )}
                       </div>
-                    )}
 
-                    {activeConversation.is_group && !isRenaming && (
-                      <p className="text-xs text-slate-500 -mt-1">
-                        {activeConversation.participant_ids?.length || 0} members
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Members */}
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-slate-500">
-                      Members · {activeConversation.participant_ids?.length || 0}
-                    </p>
-                    <div className="space-y-0.5">
-                      {(activeConversation.participants || []).map((p) => {
-                        const isSelf = p.id === currentUserId;
-                        return (
-                          <div
-                            key={p.id}
-                            className="flex items-center gap-2.5 rounded-xl px-2 py-2 hover:bg-slate-900/70"
-                          >
-                            <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-[11px] font-semibold text-slate-300 overflow-hidden shrink-0">
-                              {p.avatar ? (
-                                <img
-                                  src={p.avatar}
-                                  className="w-full h-full object-cover"
-                                  alt=""
-                                />
-                              ) : (
-                                p.name?.[0] || "?"
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-slate-200 truncate">
-                                {p.name}
-                                {isSelf ? " · You" : ""}
-                              </p>
-                              <p className="text-[11px] text-slate-500 truncate">
-                                {(p.role || "").replace(/_/g, " ")}
-                                {p.email ? ` · ${p.email}` : ""}
-                              </p>
-                            </div>
-                            {activeConversation.is_group && !isSelf && (
-                              <Tooltip content="Remove">
-                                <button
-                                  type="button"
-                                  disabled={memberBusy}
-                                  onClick={() => handleRemoveMember(p.id)}
-                                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 cursor-pointer disabled:opacity-50"
-                                >
-                                  <UserMinus className="w-3.5 h-3.5" />
-                                </button>
-                              </Tooltip>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                      {/* Members */}
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-slate-500">
+                          Members · {activeConversation.participant_ids?.length || 0}
+                        </p>
+                        <div className="space-y-0.5">
+                          {(activeConversation.participants || []).map((p) => {
+                            const isSelf = p.id === currentUserId;
+                            const isStudentMember = p.role === "STUDENT";
+                            const clickable = canViewStudentProfiles && isStudentMember;
+                            return (
+                              <div
+                                key={p.id}
+                                role={clickable ? "button" : undefined}
+                                tabIndex={clickable ? 0 : undefined}
+                                onClick={() => {
+                                  if (clickable) setDetailsStudentId(p.id);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (!clickable) return;
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setDetailsStudentId(p.id);
+                                  }
+                                }}
+                                className={`flex items-center gap-2.5 rounded-xl px-2 py-2 ${
+                                  clickable
+                                    ? "hover:bg-slate-900 cursor-pointer"
+                                    : "hover:bg-slate-900/70"
+                                }`}
+                              >
+                                <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-[11px] font-semibold text-slate-300 overflow-hidden shrink-0">
+                                  {p.avatar ? (
+                                    <img
+                                      src={p.avatar}
+                                      className="w-full h-full object-cover"
+                                      alt=""
+                                    />
+                                  ) : (
+                                    p.name?.[0] || "?"
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-slate-200 truncate">
+                                    {p.name}
+                                    {isSelf ? " · You" : ""}
+                                  </p>
+                                  <p className="text-[11px] text-slate-500 truncate">
+                                    {(p.role || "").replace(/_/g, " ")}
+                                    {p.email ? ` · ${p.email}` : ""}
+                                  </p>
+                                </div>
+                                {clickable && (
+                                  <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
+                                )}
+                                {activeConversation.is_group && !isSelf && (
+                                  <Tooltip content="Remove">
+                                    <button
+                                      type="button"
+                                      disabled={memberBusy}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveMember(p.id);
+                                      }}
+                                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 cursor-pointer disabled:opacity-50"
+                                    >
+                                      <UserMinus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </Tooltip>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Actions */}
                 <div className="p-3 border-t border-slate-800 space-y-2 shrink-0">
-                  {activeConversation.is_group && (
+                  {detailsStudentId && canViewStudentProfiles ? (
                     <button
                       type="button"
                       onClick={() => {
-                        setMemberSearch("");
-                        setIsAddMembersOpen(true);
+                        if (fullProfileHref) {
+                          router.push(fullProfileHref);
+                          return;
+                        }
+                        toast.error(
+                          "This student isn’t linked to a mentor profile path yet.",
+                        );
                       }}
                       className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-3 py-2.5 text-sm font-medium text-white cursor-pointer"
                     >
-                      <UserPlus className="w-4 h-4" />
-                      Add members
+                      <ExternalLink className="w-4 h-4" />
+                      View full profile
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (isActivePinned) await handleUnpin(activeConversation.id);
-                      else await handlePin(activeConversation.id);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-slate-800 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-900 cursor-pointer"
-                  >
-                    <Pin
-                      className={`w-4 h-4 ${
-                        isActivePinned ? "text-amber-400 fill-amber-400" : "text-slate-400"
-                      }`}
-                    />
-                    {isActivePinned ? "Unpin" : "Pin"}
-                  </button>
-                  {canDeleteConversation && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (confirm("Delete this conversation?")) {
-                          await handleDelete(activeConversation.id);
-                        }
-                      }}
-                      className="w-full flex items-center justify-center gap-2 rounded-xl border border-rose-900/30 px-3 py-2.5 text-sm font-medium text-rose-400 hover:bg-rose-950/30 cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete
-                    </button>
+                  ) : (
+                    <>
+                      {activeConversation.is_group && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMemberSearch("");
+                            setIsAddMembersOpen(true);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-3 py-2.5 text-sm font-medium text-white cursor-pointer"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          Add members
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (isActivePinned) await handleUnpin(activeConversation.id);
+                          else await handlePin(activeConversation.id);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 rounded-xl border border-slate-800 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-900 cursor-pointer"
+                      >
+                        <Pin
+                          className={`w-4 h-4 ${
+                            isActivePinned
+                              ? "text-amber-400 fill-amber-400"
+                              : "text-slate-400"
+                          }`}
+                        />
+                        {isActivePinned ? "Unpin" : "Pin"}
+                      </button>
+                      {canDeleteConversation && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (confirm("Delete this conversation?")) {
+                              await handleDelete(activeConversation.id);
+                            }
+                          }}
+                          className="w-full flex items-center justify-center gap-2 rounded-xl border border-rose-900/30 px-3 py-2.5 text-sm font-medium text-rose-400 hover:bg-rose-950/30 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

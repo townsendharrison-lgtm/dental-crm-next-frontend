@@ -17,6 +17,7 @@ export interface AcceptAssignmentPayload {
   assignmentId: string;
   availableTimes?: string[];
   welcomeMessage?: string;
+  timezone?: string;
 }
 
 export const mentorsApi = {

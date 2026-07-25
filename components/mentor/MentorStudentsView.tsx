@@ -21,6 +21,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AcceptAssignmentModal } from "@/components/mentor/AcceptAssignmentModal";
+import { DEFAULT_ASSIGNMENT_WELCOME } from "@/lib/api/adminSettings";
 import { cn } from "@/lib/utils/cn";
 
 interface MentorStudentsViewProps {
@@ -43,13 +44,6 @@ interface MentorStudentsViewProps {
   acceptBusy?: boolean;
   hideTitle?: boolean;
 }
-
-const DEFAULT_WELCOME = `Hi [Mentee Name],
-
-I'm excited to work with you as your mentor! Looking forward to supporting you on your dental school journey.
-
-Best,
-[Mentor Name]`;
 
 type RosterRow = {
   id: string;
@@ -107,7 +101,7 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
   onAcceptAssignment,
   onDeclineAssignment,
   defaultAvailability = [],
-  welcomeMessageTemplate = DEFAULT_WELCOME,
+  welcomeMessageTemplate = DEFAULT_ASSIGNMENT_WELCOME,
   acceptBusy = false,
   hideTitle = false,
 }) => {

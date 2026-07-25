@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   AlertCircle,
@@ -23,7 +23,9 @@ import {
   Activity,
   TrendingUp,
   Check,
+  Video,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   LineChart,
   Line,
@@ -48,6 +50,7 @@ import { ReadinessStatus as RS } from "@/lib/types";
 import {
   parseLocalDate,
   isUpcomingMeetingDate,
+  formatMeetingLocal,
   formatMeetingLocalTime,
 } from "@/lib/utils/dateUtils";
 import { Button } from "@/components/ui/Button";
@@ -58,11 +61,19 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { AcceptAssignmentModal } from "@/components/mentor/AcceptAssignmentModal";
+import { QuickScheduleMeetingModal } from "@/components/mentor/QuickScheduleMeetingModal";
+import { SuggestMeetingTimesModal } from "@/components/mentor/SuggestMeetingTimesModal";
+import type { CreateMeetingPayload } from "@/lib/api/meetings";
 import { cn } from "@/lib/utils/cn";
 
 interface MentorDashboardProps {
   onSelectStudent: (id: string, initialTab?: string) => void;
   onMessageStudent?: (id: string) => void;
+  onQuickCreateMeeting?: (payload: CreateMeetingPayload) => void | Promise<void>;
+  onSendScheduleSuggestMessage?: (
+    studentId: string,
+    message: string,
+  ) => void | Promise<void>;
   onNavigate: (tab: string) => void;
   onUpdateTaskStatus: (id: string, status: "PENDING" | "COMPLETED" | "OVERDUE") => void;
   onUpdateTask: (task: StaffTask) => void;
@@ -89,6 +100,9 @@ interface MentorDashboardProps {
   welcomeMessageTemplate: string;
   defaultAvailability?: string[];
   acceptBusy?: boolean;
+  /** Open the standard Accept modal for this assignment (e.g. from push CTA). */
+  autoOpenAcceptAssignmentId?: string | null;
+  onAutoOpenAcceptConsumed?: () => void;
 }
 
 function studentIdOf(a: { studentId?: string | null; student_id?: string | null }) {
@@ -107,24 +121,32 @@ function assignmentStudentId(a: StudentAssignment) {
   return a.studentId || a.student_id;
 }
 
-function readinessTone(status?: ReadinessStatus | string) {
-  if (status === RS.GREEN || status === "GREEN") {
-    return "bg-emerald-500/15 text-emerald-400 border-emerald-500/20";
-  }
-  if (status === RS.YELLOW || status === "YELLOW") {
-    return "bg-amber-500/15 text-amber-400 border-amber-500/20";
-  }
-  if (status === RS.RED || status === "RED") {
-    return "bg-rose-500/15 text-rose-400 border-rose-500/20";
-  }
-  return "bg-slate-800 text-slate-400 border-slate-700";
+function riskLabel(status?: ReadinessStatus | string) {
+  if (status === RS.GREEN || status === "GREEN") return "Low Risk";
+  if (status === RS.YELLOW || status === "YELLOW") return "Moderate";
+  if (status === RS.RED || status === "RED") return "High Risk";
+  return "Unknown";
 }
 
-function readinessLabel(status?: ReadinessStatus | string) {
-  if (status === RS.GREEN || status === "GREEN") return "Ready";
-  if (status === RS.YELLOW || status === "YELLOW") return "At risk";
-  if (status === RS.RED || status === "RED") return "Critical";
-  return "Unknown";
+/** Same source as Application Journey on the student Profile & Docs page. */
+function journeyProgressOf(student: Student) {
+  return Math.max(
+    0,
+    Math.min(100, Number(student.progress ?? student.profile?.progress ?? 0) || 0),
+  );
+}
+
+function formatShortDate(raw?: string | null) {
+  if (!raw) return "TBD";
+  try {
+    return parseLocalDate(raw).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "TBD";
+  }
 }
 
 type SmartAlert = {
@@ -135,11 +157,14 @@ type SmartAlert = {
   tab: string;
   icon: React.ElementType;
   color: "rose" | "amber" | "indigo";
+  kind: "no-meeting" | "task" | "action";
 };
 
 const MentorDashboard: React.FC<MentorDashboardProps> = ({
   onSelectStudent,
   onMessageStudent,
+  onQuickCreateMeeting,
+  onSendScheduleSuggestMessage,
   onNavigate,
   onUpdateTaskStatus,
   onUpdateTask,
@@ -161,10 +186,17 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
   welcomeMessageTemplate,
   defaultAvailability = [],
   acceptBusy = false,
+  autoOpenAcceptAssignmentId = null,
+  onAutoOpenAcceptConsumed,
 }) => {
   const [studentSearch, setStudentSearch] = useState("");
+  const [riskFilter, setRiskFilter] = useState<"GREEN" | "YELLOW" | "RED" | null>(null);
   const [acceptingAssignment, setAcceptingAssignment] = useState<StudentAssignment | null>(null);
   const [decliningAssignmentId, setDecliningAssignmentId] = useState<string | null>(null);
+  const [scheduleStudent, setScheduleStudent] = useState<Student | null>(null);
+  const [suggestStudent, setSuggestStudent] = useState<Student | null>(null);
+  const [quickScheduleBusy, setQuickScheduleBusy] = useState(false);
+  const [suggestMessageBusy, setSuggestMessageBusy] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [scheduleTab, setScheduleTab] = useState<"weekly" | "upcoming">("upcoming");
@@ -175,6 +207,14 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
     new Date(Date.now() + 86400000).toISOString().split("T")[0],
   );
   const [editingTask, setEditingTask] = useState<StaffTask | null>(null);
+
+  useEffect(() => {
+    if (!autoOpenAcceptAssignmentId) return;
+    const match = pendingAssignments.find((a) => a.id === autoOpenAcceptAssignmentId);
+    if (!match) return;
+    setAcceptingAssignment(match);
+    onAutoOpenAcceptConsumed?.();
+  }, [autoOpenAcceptAssignmentId, pendingAssignments, onAutoOpenAcceptConsumed]);
 
   const pendingIds = useMemo(
     () => new Set(pendingAssignments.map((a) => assignmentStudentId(a)).filter(Boolean)),
@@ -214,11 +254,33 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
     });
   }, [assignedStudents, pendingAssignments, allStudents, pendingIds]);
 
-  const filteredStudents = students.filter(
-    (s) =>
-      s.name.toLowerCase().includes(studentSearch.toLowerCase()) ||
-      s.email?.toLowerCase().includes(studentSearch.toLowerCase()),
+  const searchMatchedStudents = useMemo(() => {
+    const q = studentSearch.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.email?.toLowerCase().includes(q),
+    );
+  }, [students, studentSearch]);
+
+  const riskCounts = useMemo(
+    () => ({
+      GREEN: searchMatchedStudents.filter((s) => s.readiness === RS.GREEN).length,
+      YELLOW: searchMatchedStudents.filter((s) => s.readiness === RS.YELLOW).length,
+      RED: searchMatchedStudents.filter((s) => s.readiness === RS.RED).length,
+    }),
+    [searchMatchedStudents],
   );
+
+  const filteredStudents = useMemo(() => {
+    if (!riskFilter) return searchMatchedStudents;
+    return searchMatchedStudents.filter((s) => s.readiness === riskFilter);
+  }, [searchMatchedStudents, riskFilter]);
+
+  const toggleRiskFilter = (level: "GREEN" | "YELLOW" | "RED") => {
+    setRiskFilter((prev) => (prev === level ? null : level));
+  };
 
   const mentorTasks = staffTasks.filter(
     (t) => (t.assigned_to || t.assignedTo) === mentor.id,
@@ -300,23 +362,33 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
   const latencyHours = useMemo(() => {
     const raw =
       mentor.avgResponseTimeValue ??
-      mentor.profile?.avg_response_time_value ??
-      mentor.avgResponseTime ??
-      mentor.profile?.avg_response_time;
+      mentor.profile?.avg_response_time_value;
     if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-    if (typeof raw === "string") {
-      const n = Number.parseFloat(raw);
-      return Number.isFinite(n) ? n : 0;
+    const fallback =
+      mentor.avgResponseTime ?? mentor.profile?.avg_response_time;
+    if (typeof fallback === "number" && Number.isFinite(fallback)) return fallback;
+    if (typeof fallback === "string") {
+      const trimmed = fallback.trim();
+      if (!trimmed || trimmed === "—") return 0;
+      const minutes = trimmed.match(/^(\d+(?:\.\d+)?)\s*m$/i);
+      if (minutes) return Number.parseFloat(minutes[1]) / 60;
+      const hours = trimmed.match(/^(\d+(?:\.\d+)?)\s*h?$/i);
+      if (hours) return Number.parseFloat(hours[1]);
     }
     return 0;
   }, [mentor]);
 
-  const latencyLabel =
-    typeof mentor.avgResponseTime === "string" && mentor.avgResponseTime.trim()
-      ? mentor.avgResponseTime
-      : latencyHours > 0
-        ? `${Math.round(latencyHours * 10) / 10}h`
-        : "—";
+  const latencyLabel = useMemo(() => {
+    if (latencyHours <= 0) {
+      const raw = mentor.avgResponseTime ?? mentor.profile?.avg_response_time;
+      if (typeof raw === "string" && raw.trim() && raw.trim() !== "—" && raw.trim() !== "4h") {
+        return raw.trim();
+      }
+      return "—";
+    }
+    if (latencyHours < 1) return `${Math.max(1, Math.round(latencyHours * 60))}m`;
+    return `${Math.round(latencyHours * 10) / 10}h`;
+  }, [latencyHours, mentor]);
 
   const complianceScore = Math.min(
     100,
@@ -368,6 +440,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
           tab: "schedule",
           icon: Calendar,
           color: "indigo",
+          kind: "no-meeting",
         });
       }
     });
@@ -390,6 +463,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
           tab: "tasks",
           icon: AlertCircle,
           color: isOverdue ? "rose" : "amber",
+          kind: "task",
         });
       });
 
@@ -415,6 +489,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
           tab: "overview",
           icon: Zap,
           color: isOverdue ? "rose" : "amber",
+          kind: "action",
         });
       });
 
@@ -424,17 +499,47 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
     );
   }, [students, pendingIds, mentorMeetings, mentorTasks, actionItems]);
 
-  const getNextMeetingDate = (sid: string) => {
+  const getNextMeeting = (sid: string) => {
     const now = new Date();
-    const upcoming = mentorMeetings
-      .filter(
-        (m) =>
-          studentIdOf(m) === sid && !m.completed && isUpcomingMeetingDate(m.date, now),
-      )
-      .sort(
-        (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
-      )[0];
-    return upcoming ? parseLocalDate(upcoming.date).toLocaleDateString() : "—";
+    return (
+      mentorMeetings
+        .filter(
+          (m) =>
+            studentIdOf(m) === sid && !m.completed && isUpcomingMeetingDate(m.date, now),
+        )
+        .sort(
+          (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
+        )[0] || null
+    );
+  };
+
+  const getNextMeetingDate = (sid: string) => {
+    const upcoming = getNextMeeting(sid);
+    if (!upcoming?.date) return "Not Scheduled";
+    try {
+      return parseLocalDate(upcoming.date).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return "Not Scheduled";
+    }
+  };
+
+  const getNextMeetingLabel = (sid: string) => {
+    const upcoming = getNextMeeting(sid);
+    if (!upcoming?.date) return "Not Scheduled";
+    try {
+      return formatMeetingLocal(upcoming.date, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    } catch {
+      return getNextMeetingDate(sid);
+    }
   };
 
   const getWeekDays = (offset: number) => {
@@ -552,73 +657,117 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
     return raw.split(" ")[0];
   })();
 
+  const resolveAlertStudent = (studentId: string | null) => {
+    if (!studentId) return null;
+    return (
+      students.find((s) => s.id === studentId) ||
+      allStudents.find((s) => s.id === studentId) ||
+      null
+    );
+  };
+
   return (
-    <div className="space-y-5">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="relative space-y-9 pb-6">
+      {/* Ambient HUD backdrop */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute left-[-10%] top-[-10%] h-[40%] w-[40%] rounded-full bg-indigo-600/5 blur-[120px]" />
+        <div
+          className="absolute bottom-[-10%] right-[-10%] h-[40%] w-[40%] animate-pulse rounded-full bg-slate-600/5 blur-[120px]"
+          style={{ animationDelay: "2s" }}
+        />
+        <div
+          className="absolute left-1/2 top-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 opacity-[0.02]"
+          style={{
+            backgroundImage: "radial-gradient(#64748b 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+          }}
+        />
+      </div>
+
+      <header className="flex flex-col justify-between gap-6 py-2 md:flex-row md:items-end">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            Welcome back, {displayName}
+          <div className="mb-3 flex items-center gap-3">
+            <div className="h-[2px] w-10 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+            <span className="text-[10px] font-black uppercase tracking-[0.5em] text-indigo-400">
+              Operational Command
+            </span>
+          </div>
+          <h2 className="text-4xl font-black leading-none tracking-tighter text-white sm:text-5xl">
+            Mentor{" "}
+            <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-emerald-400 bg-clip-text text-transparent">
+              Command Center
+            </span>
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Your cohort, schedule, and open work in one place.
-          </p>
+          <p className="mt-4 font-medium text-slate-500">Welcome back, {displayName}.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="secondary" size="sm" onClick={() => onNavigate("schedule")}>
-            <Calendar className="w-4 h-4" />
+            <Calendar className="h-4 w-4" />
             Schedule
           </Button>
           <Button variant="secondary" size="sm" onClick={() => onNavigate("students")}>
-            <Users className="w-4 h-4" />
+            <Users className="h-4 w-4" />
             Students
           </Button>
           <Button size="sm" onClick={() => onNavigate("messages")}>
-            <MessageSquare className="w-4 h-4" />
+            <MessageSquare className="h-4 w-4" />
             Messages
           </Button>
         </div>
       </header>
 
       {/* Insight KPI strip — actual cohort / meeting / compliance data */}
-      <div className="grid gap-3 lg:grid-cols-4">
-        <div className="lg:col-span-2 relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-indigo-500/10 blur-3xl" />
-          <div className="relative z-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-            <div className="min-w-0 space-y-4">
+      <div className="grid gap-6 lg:grid-cols-4">
+        <div className="relative flex flex-col justify-between overflow-hidden rounded-[2.5rem] border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/40 lg:col-span-2">
+          <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 rounded-full bg-indigo-500/5 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-0 left-0 h-32 w-32 rounded-full bg-emerald-500/5 blur-3xl" />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:32px_32px] opacity-[0.03]" />
+          <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0 space-y-5">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                    Cohort strength
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
+                    Strategic growth
                   </p>
-                  <div className="mt-1 h-0.5 w-10 rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500" />
+                  <div className="h-0.5 w-10 rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 shadow-[0_0_8px_rgba(99,102,241,0.3)]" />
                 </div>
-                <div
-                  className={cn(
-                    "flex items-center gap-2",
-                    meetingGrowth >= 0 ? "text-emerald-400" : "text-amber-400",
-                  )}
-                >
-                  <Activity className="h-4 w-4" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    {meetingGrowth >= 0 ? "Ascending" : "Cooling"}
-                  </span>
+                <div className="flex items-center gap-3">
+                  <div className="hidden flex-col items-end md:flex">
+                    <span className="text-[8px] font-black uppercase tracking-widest leading-none text-slate-600">
+                      Status
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-bold uppercase",
+                        meetingGrowth >= 0 ? "text-emerald-500" : "text-amber-400",
+                      )}
+                    >
+                      {meetingGrowth >= 0 ? "Ascending" : "Cooling"}
+                    </span>
+                  </div>
+                  <Activity className="h-6 w-6 text-slate-600" />
                 </div>
               </div>
-              <div>
-                <p className="text-4xl font-semibold tracking-tight text-white tabular-nums sm:text-5xl">
-                  {avgStrength != null ? avgStrength : "—"}
-                  {avgStrength != null && (
-                    <span className="ml-1 text-lg font-semibold text-slate-500">/100</span>
-                  )}
-                </p>
-                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-2">
+                  <p className="text-6xl font-black tracking-tight text-white tabular-nums sm:text-7xl">
+                    {avgStrength != null ? avgStrength : "—"}
+                    {avgStrength != null && (
+                      <span className="ml-1 text-2xl font-black tracking-normal text-slate-500 sm:text-3xl">
+                        /100
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
                   Avg strength score
                 </p>
-                <p className="mt-2 max-w-xs text-xs text-slate-500">
-                  Live average across your assigned students. Chart shows completed meetings by month.
+                <p className="max-w-[220px] text-[10px] font-medium leading-relaxed text-slate-500">
+                  Live average across your assigned cohort. Chart shows completed meetings by month.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
                 <div className="flex -space-x-2">
                   {assignedStudents.slice(0, 3).map((s) => (
                     <Avatar
@@ -626,38 +775,55 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                       name={s.name}
                       src={s.avatar}
                       size="sm"
-                      className="ring-2 ring-slate-900"
+                      className="shadow-lg ring-2 ring-slate-900"
                     />
                   ))}
                 </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-400">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase tracking-widest leading-none text-indigo-400">
                     Monitoring
-                  </p>
-                  <p className="text-[10px] text-slate-500">
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-600">
                     {assignedStudents.length} active · {readyCount} ready · {atRiskCount} at risk
-                  </p>
+                  </span>
                 </div>
               </div>
             </div>
-            <div className="h-[140px] w-full min-w-0 md:max-w-[240px]">
+            <div className="relative mt-2 h-[180px] w-full min-w-0 md:mt-0 md:max-w-[260px]">
+              <div className="absolute inset-0 rounded-3xl bg-indigo-500/5 blur-2xl" />
               {assignedStudents.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={activityByMonth}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#1e293b"
+                      opacity={0.5}
+                    />
                     <XAxis
                       dataKey="month"
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fill: "#64748b", fontSize: 10 }}
+                      tick={{ fill: "#475569", fontSize: 10, fontWeight: "bold" }}
                     />
                     <YAxis hide allowDecimals={false} domain={[0, "auto"]} />
                     <RechartsTooltip
                       contentStyle={{
                         backgroundColor: "#0f172a",
                         border: "1px solid #1e293b",
-                        borderRadius: 12,
-                        fontSize: 11,
+                        borderRadius: 16,
+                        boxShadow: "0 10px 25px -5px rgba(0,0,0,0.5)",
+                      }}
+                      itemStyle={{
+                        fontSize: 10,
+                        fontWeight: "bold",
+                        textTransform: "uppercase",
+                      }}
+                      labelStyle={{
+                        color: "#64748b",
+                        fontSize: 10,
+                        marginBottom: 4,
+                        fontWeight: 900,
                       }}
                     />
                     <Line
@@ -665,14 +831,15 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                       dataKey="meetings"
                       name="Meetings done"
                       stroke="#6366f1"
-                      strokeWidth={2}
-                      dot={{ r: 3, fill: "#6366f1", strokeWidth: 0 }}
+                      strokeWidth={3}
+                      dot={false}
                       activeDot={{ r: 4, strokeWidth: 0 }}
+                      animationDuration={2500}
                     />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex h-full items-center justify-center text-xs text-slate-600">
+                <div className="flex h-full items-center justify-center text-xs font-medium text-slate-600">
                   Assign students to see activity
                 </div>
               )}
@@ -680,84 +847,107 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
           </div>
         </div>
 
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-5">
+        <div className="group relative flex flex-col justify-between overflow-hidden rounded-[2.5rem] border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/40">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent" />
           <div>
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <div className="mb-10 flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
                   Latency
                 </p>
-                <div className="mt-1 h-0.5 w-8 rounded-full bg-indigo-500" />
+                <div className="h-0.5 w-10 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
               </div>
-              <Clock className="h-4 w-4 text-slate-600" />
+              <Clock className="h-6 w-6 text-slate-600 transition-colors duration-500 group-hover:text-indigo-400" />
             </div>
-            <div className="flex items-baseline gap-2">
-              <p className="text-4xl font-semibold tracking-tight text-white tabular-nums">
+            <div className="space-y-2">
+              <p className="text-5xl font-black tracking-tight text-white tabular-nums transition-colors duration-700 group-hover:text-indigo-400 sm:text-6xl">
                 {latencyLabel}
               </p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                Avg reply to student messages
+              </p>
             </div>
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              Avg response window
-            </p>
             <div
               className={cn(
-                "mt-3 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-semibold",
-                latencyHours <= 12
-                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                  : "border-amber-500/20 bg-amber-500/10 text-amber-400",
+                "mt-4 inline-flex items-center gap-2 text-[10px] font-black",
+                latencyHours <= 0
+                  ? "text-slate-500"
+                  : latencyHours <= 12
+                    ? "text-emerald-400"
+                    : "text-amber-400",
               )}
             >
-              <TrendingUp className="h-3 w-3" />
+              <div
+                className={cn(
+                  "rounded-md p-1",
+                  latencyHours <= 0
+                    ? "bg-slate-500/10"
+                    : latencyHours <= 12
+                      ? "bg-emerald-500/10"
+                      : "bg-amber-500/10",
+                )}
+              >
+                <TrendingUp className="h-3 w-3" />
+              </div>
               {latencyHours <= 0
-                ? "No latency data yet"
+                ? "No reply latency yet"
                 : latencyHours <= 12
                   ? "Within 12h SLA"
                   : "Above 12h SLA"}
             </div>
           </div>
-          <div className="mt-6 grid h-10 grid-cols-12 items-end gap-1">
-            {latencyBars.map((h, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "rounded-sm transition-colors",
-                  i === latencyBars.length - 1 ? "bg-indigo-500" : "bg-slate-800",
-                )}
-                style={{ height: `${h}%` }}
-                title="Meetings scheduled that week"
-              />
-            ))}
-          </div>
-          <p className="mt-2 text-[10px] text-slate-600">Weekly meetings (last 12 weeks)</p>
-        </div>
-
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <div>
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  Compliance
-                </p>
-                <div className="mt-1 h-0.5 w-8 rounded-full bg-emerald-500" />
-              </div>
-              <Check className="h-4 w-4 text-slate-600" />
+          <div className="mt-10 space-y-3">
+            <div className="grid h-10 grid-cols-12 items-end gap-1.5">
+              {latencyBars.map((h, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "rounded-full transition-colors duration-500",
+                    i === latencyBars.length - 1
+                      ? "bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+                      : "bg-slate-800 group-hover:bg-slate-700",
+                  )}
+                  style={{ height: `${h}%` }}
+                  title="Meetings that week"
+                />
+              ))}
             </div>
-            <div className="flex items-baseline gap-2">
-              <p className="text-4xl font-semibold tracking-tight text-white tabular-nums">
-                {complianceScore}%
-              </p>
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
-                Score
-              </span>
-            </div>
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              Target threshold: 95%
+            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
+              Weekly meetings · last 12 weeks
             </p>
           </div>
-          <div className="mt-6 space-y-3">
-            <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-950 ring-1 ring-slate-800">
+        </div>
+
+        <div className="group relative flex flex-col justify-between overflow-hidden rounded-[2.5rem] border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/40">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent" />
+          <div>
+            <div className="mb-10 flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
+                  Compliance
+                </p>
+                <div className="h-0.5 w-10 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+              </div>
+              <Check className="h-6 w-6 text-slate-600 transition-colors duration-500 group-hover:text-emerald-400" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-baseline gap-2">
+                <p className="text-5xl font-black tracking-tight text-white tabular-nums transition-colors duration-700 group-hover:text-emerald-400 sm:text-6xl">
+                  {complianceScore}%
+                </p>
+                <span className="text-sm font-black uppercase tracking-widest text-slate-600 transition-colors duration-500 group-hover:text-emerald-500/70">
+                  Score
+                </span>
+              </div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                Target threshold: 95%
+              </p>
+            </div>
+          </div>
+          <div className="mt-10 space-y-5">
+            <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-slate-950 shadow-inner ring-1 ring-slate-800">
               <div
-                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400"
+                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-shadow duration-500 group-hover:shadow-[0_0_20px_rgba(52,211,153,0.55)]"
                 style={{ width: `${complianceScore}%` }}
               />
             </div>
@@ -765,21 +955,21 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
-                    "h-1.5 w-1.5 rounded-full",
+                    "h-2 w-2 rounded-full",
                     complianceScore >= 95
-                      ? "bg-emerald-500"
+                      ? "bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.5)]"
                       : complianceScore >= 85
                         ? "bg-amber-500"
                         : "bg-rose-500",
                   )}
                 />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  Status
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
+                  System status
                 </span>
               </div>
               <span
                 className={cn(
-                  "text-[10px] font-semibold uppercase tracking-wider",
+                  "text-[10px] font-black uppercase tracking-[0.3em]",
                   complianceScore >= 95
                     ? "text-emerald-400"
                     : complianceScore >= 85
@@ -790,75 +980,178 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                 {complianceStatus}
               </span>
             </div>
-            <p className="text-[10px] text-slate-600">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
               {completedMeetings}/{totalMeetings || 0} meetings completed
             </p>
           </div>
         </div>
       </div>
 
+      {/* Notifications & surveys — below KPI cards */}
+      {(unreadNotifications.length > 0 || surveys.length > 0) && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="h-[2px] w-8 rounded-full bg-indigo-500/70" />
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">
+              Action required
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {unreadNotifications.map((notif) => (
+              <button
+                key={notif.id}
+                type="button"
+                onClick={() => onMarkNotificationRead?.(notif.id)}
+                className={cn(
+                  "flex items-start gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-slate-900/80",
+                  notif.type === "URGENT"
+                    ? "border-rose-500/25 bg-rose-500/5 text-rose-200"
+                    : notif.type === "WARNING"
+                      ? "border-amber-500/25 bg-amber-500/5 text-amber-200"
+                      : "border-indigo-500/25 bg-indigo-500/5 text-indigo-200",
+                )}
+              >
+                <div className="mt-0.5 shrink-0">
+                  {notif.type === "URGENT" ? (
+                    <AlertCircle className="h-4 w-4" />
+                  ) : (
+                    <Info className="h-4 w-4" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="truncate text-sm font-semibold text-white">{notif.title}</h4>
+                  <p className="mt-0.5 text-xs opacity-80">{notif.message}</p>
+                </div>
+              </button>
+            ))}
+            {surveys.map((survey) => (
+              <div
+                key={survey.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/80 bg-slate-900/70 p-3.5"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="shrink-0 rounded-lg bg-indigo-500/10 p-2 text-indigo-400">
+                    <ClipboardList className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="truncate text-sm font-semibold text-white">{survey.title}</h4>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Feedback required
+                    </p>
+                  </div>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => onTakeSurvey(survey.id)}>
+                  Take survey
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Alerts + Assignments */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-3">
-          <SectionTitle icon={Zap} tone="amber" title="Priority alerts" />
+      <div className="grid gap-7 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <SectionTitle icon={Zap} tone="amber" title="Priority Intelligence" />
           {smartAlerts.length > 0 ? (
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid gap-5 sm:grid-cols-2">
               {smartAlerts.slice(0, 4).map((alert) => {
                 const Icon = alert.icon;
+                const isNoMeeting = alert.kind === "no-meeting" && !!alert.studentId;
                 return (
-                  <button
+                  <div
                     key={alert.id}
-                    type="button"
-                    onClick={() => {
-                      if (alert.studentId) onSelectStudent(alert.studentId, alert.tab);
-                      else onNavigate(alert.tab);
-                    }}
                     className={cn(
-                      "text-left rounded-xl border bg-slate-900 p-4 transition-colors hover:border-indigo-500/30",
+                      "group relative flex flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-xl",
                       alert.color === "rose"
                         ? "border-rose-500/20"
                         : alert.color === "amber"
                           ? "border-amber-500/20"
-                          : "border-slate-800",
+                          : "border-indigo-500/25",
                     )}
                   >
-                    <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (alert.studentId) onSelectStudent(alert.studentId, alert.tab);
+                        else onNavigate(alert.tab);
+                      }}
+                      className="flex w-full flex-1 items-start gap-3 p-4 text-left"
+                    >
                       <div
                         className={cn(
-                          "p-2 rounded-lg shrink-0",
+                          "shrink-0 rounded-xl border border-current/10 p-2.5",
                           alert.color === "rose"
-                            ? "bg-rose-500/10 text-rose-400"
+                            ? "bg-rose-500/10 text-rose-500"
                             : alert.color === "amber"
-                              ? "bg-amber-500/10 text-amber-400"
-                              : "bg-indigo-500/10 text-indigo-400",
+                              ? "bg-amber-500/10 text-amber-500"
+                              : "bg-indigo-500/10 text-indigo-500",
                         )}
                       >
-                        <Icon className="w-4 h-4" />
+                        <Icon className="h-4 w-4" />
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-semibold text-white truncate">{alert.title}</h4>
-                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{alert.message}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                            {isNoMeeting ? "Needs scheduling" : "System alert"}
+                          </span>
+                          <span className="rounded-full border border-slate-700/80 bg-slate-800/40 px-2 py-0.5 text-[9px] font-bold text-slate-500">
+                            Priority
+                          </span>
+                        </div>
+                        <h4 className="truncate text-sm font-bold text-white">
+                          {alert.title}
+                        </h4>
+                        <p className="mt-0.5 line-clamp-2 text-xs font-medium text-slate-500">
+                          {alert.message}
+                        </p>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+
+                    {isNoMeeting && (
+                      <div className="flex items-center gap-2 border-t border-slate-800/80 bg-slate-950/40 px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const s = resolveAlertStudent(alert.studentId);
+                            if (s) setScheduleStudent(s);
+                          }}
+                          className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500"
+                        >
+                          <Calendar className="h-3.5 w-3.5 shrink-0" />
+                          Schedule
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const s = resolveAlertStudent(alert.studentId);
+                            if (s) setSuggestStudent(s);
+                          }}
+                          className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-800"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                          Suggest times
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
           ) : (
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-              <EmptyState
-                icon={<CheckCircle2 className="w-8 h-8" />}
-                title="All clear"
-                description="No overdue tasks or missing meetings right now."
-              />
+            <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/50 p-8 text-center">
+              <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-emerald-500/20" />
+              <p className="text-sm font-medium text-slate-500">
+                No critical alerts detected. Systems clear.
+              </p>
             </div>
           )}
         </div>
 
-        <div className="space-y-3">
-          <SectionTitle icon={UserPlus} tone="indigo" title="New assignments" />
+        <div className="space-y-6">
+          <SectionTitle icon={UserPlus} tone="indigo" title="New Assignments" />
           {pendingAssignments.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {pendingAssignments.map((assignment) => {
                 const sid = assignmentStudentId(assignment);
                 const student =
@@ -868,19 +1161,20 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                 return (
                   <div
                     key={assignment.id}
-                    className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4 space-y-3"
+                    className="flex flex-col gap-4 rounded-3xl border border-indigo-500/20 bg-indigo-600/5 p-5"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                       <Avatar
                         src={student?.avatar || undefined}
                         name={student?.name || "Student"}
                         size="md"
+                        className="rounded-2xl ring-2 ring-indigo-500/20"
                       />
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">
+                        <p className="truncate font-bold text-white">
                           {student?.name || "Student"}
                         </p>
-                        <p className="text-[10px] text-indigo-300 uppercase tracking-wider">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400/60">
                           Pending acceptance
                         </p>
                       </div>
@@ -929,7 +1223,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               })}
             </div>
           ) : (
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+            <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/50 p-6">
               <EmptyState
                 icon={<Users className="w-8 h-8" />}
                 title="No new assignments"
@@ -940,77 +1234,20 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         </div>
       </div>
 
-      {/* Notifications & surveys */}
-      {(unreadNotifications.length > 0 || surveys.length > 0) && (
-        <div className="grid md:grid-cols-2 gap-3">
-          {unreadNotifications.map((notif) => (
-            <button
-              key={notif.id}
-              type="button"
-              onClick={() => onMarkNotificationRead?.(notif.id)}
-              className={cn(
-                "text-left rounded-xl border p-4 flex items-start gap-3 transition-colors hover:opacity-90",
-                notif.type === "URGENT"
-                  ? "bg-rose-500/10 border-rose-500/20 text-rose-300"
-                  : notif.type === "WARNING"
-                    ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
-                    : "bg-indigo-500/10 border-indigo-500/20 text-indigo-300",
-              )}
-            >
-              <div className="mt-0.5">
-                {notif.type === "URGENT" ? (
-                  <AlertCircle className="w-4 h-4" />
-                ) : (
-                  <Info className="w-4 h-4" />
-                )}
-              </div>
-              <div className="min-w-0">
-                <h4 className="text-sm font-semibold text-white">{notif.title}</h4>
-                <p className="text-xs opacity-80 mt-0.5">{notif.message}</p>
-                <p className="text-[10px] mt-2 uppercase tracking-wider opacity-60">
-                  Click to mark read
-                </p>
-              </div>
-            </button>
-          ))}
-          {surveys.map((survey) => (
-            <div
-              key={survey.id}
-              className="rounded-xl border border-slate-800 bg-slate-900 p-4 flex items-center justify-between gap-3"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
-                  <ClipboardList className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="text-sm font-semibold text-white truncate">{survey.title}</h4>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">
-                    Feedback required
-                  </p>
-                </div>
-              </div>
-              <Button size="sm" onClick={() => onTakeSurvey(survey.id)}>
-                Take survey
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Schedule + Tasks */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900 p-4 sm:p-5 flex flex-col">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <div className="grid gap-7 lg:grid-cols-3">
+        <div className="flex flex-col rounded-[2rem] border border-slate-800 bg-slate-900 p-5 shadow-2xl shadow-black/20 sm:p-6 lg:col-span-2">
+          <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
-                <Calendar className="w-4 h-4" />
+              <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-2.5 text-indigo-400">
+                <Calendar className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">
-                  {scheduleTab === "weekly" ? "Weekly schedule" : "Upcoming meetings"}
+                <h3 className="text-sm font-black uppercase tracking-[0.25em] text-white">
+                  {scheduleTab === "weekly" ? "Weekly Schedule" : "Upcoming Meetings"}
                 </h3>
                 {scheduleTab === "weekly" && (
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
                     {weekDays[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
                     –{" "}
                     {weekDays[6].toLocaleDateString("en-US", {
@@ -1306,14 +1543,17 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                   const timeLabel = meeting.date.includes("T")
                     ? formatMeetingLocalTime(meeting.date)
                     : "All day";
+                  const joinLink = meeting.link?.trim() || "";
                   return (
-                    <button
+                    <div
                       key={meeting.id}
-                      type="button"
-                      onClick={() => sid && onSelectStudent(sid, "schedule")}
-                      className="group w-full flex items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-800 hover:border-indigo-500/40 bg-slate-950/50 hover:bg-slate-950 transition-colors text-left"
+                      className="group w-full flex items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-800 hover:border-indigo-500/40 bg-slate-950/50 hover:bg-slate-950 transition-colors"
                     >
-                      <div className="flex items-center gap-3.5 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => sid && onSelectStudent(sid, "schedule")}
+                        className="flex items-center gap-3.5 min-w-0 flex-1 text-left cursor-pointer"
+                      >
                         <div className="w-14 h-14 rounded-xl border border-slate-700/80 bg-slate-900 flex flex-col items-center justify-center shrink-0">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 leading-none">
                             {mDate.toLocaleDateString([], { month: "short" })}
@@ -1333,9 +1573,35 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                             <span className="truncate">{meeting.title}</span>
                           </p>
                         </div>
+                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant={joinLink ? "primary" : "secondary"}
+                          className="h-8 px-2.5"
+                          leftIcon={<Video className="w-3.5 h-3.5" />}
+                          onClick={() => {
+                            if (!joinLink) {
+                              toast.error(
+                                "No meeting link yet. Add one when you schedule or edit this meeting.",
+                              );
+                              return;
+                            }
+                            window.open(joinLink, "_blank", "noopener,noreferrer");
+                          }}
+                        >
+                          Join
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => sid && onSelectStudent(sid, "schedule")}
+                          className="p-1.5 rounded-lg text-slate-600 hover:text-indigo-400 hover:bg-slate-900 cursor-pointer transition-colors"
+                          aria-label="Open student schedule"
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-indigo-400 shrink-0 transition-colors" />
-                    </button>
+                    </div>
                   );
                 })
               )}
@@ -1344,15 +1610,17 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         </div>
 
         {/* Tasks */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 sm:p-5 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col rounded-[2rem] border border-slate-800 bg-slate-900 p-5 shadow-2xl shadow-black/20 sm:p-6">
+          <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                <ClipboardList className="w-4 h-4" />
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-emerald-400">
+                <ClipboardList className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">Active tasks</h3>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                <h3 className="text-sm font-black uppercase tracking-[0.25em] text-white">
+                  Active Tasks
+                </h3>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
                   {pendingTaskCount} pending
                 </p>
               </div>
@@ -1486,124 +1754,287 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         </div>
       </div>
 
-      {/* Student roster */}
-      <section className="space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <SectionTitle icon={Users} tone="indigo" title="Student roster" />
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <Input
-              className="pl-9"
-              placeholder="Search students…"
-              value={studentSearch}
-              onChange={(e) => setStudentSearch(e.target.value)}
-            />
+      {/* Student Roster — matches original mentor dashboard table */}
+      <section className="relative z-10 space-y-6">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-2">
+              <Users className="h-5 w-5 text-indigo-400" />
+            </div>
+            <h3 className="text-xl font-black uppercase tracking-[0.2em] text-white">
+              Student Roster
+            </h3>
+          </div>
+
+          <div className="flex max-w-md flex-1 items-center gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search students..."
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                className="w-full rounded-2xl border border-slate-800 bg-slate-900/50 py-2.5 pl-11 pr-4 text-sm text-white transition-all focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                title="Filter low risk"
+                onClick={() => toggleRiskFilter("GREEN")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors",
+                  riskFilter === "GREEN"
+                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                    : "border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700 hover:text-slate-300",
+                )}
+              >
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                {riskCounts.GREEN}
+              </button>
+              <button
+                type="button"
+                title="Filter moderate risk"
+                onClick={() => toggleRiskFilter("YELLOW")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors",
+                  riskFilter === "YELLOW"
+                    ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
+                    : "border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700 hover:text-slate-300",
+                )}
+              >
+                <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                {riskCounts.YELLOW}
+              </button>
+              <button
+                type="button"
+                title="Filter high risk"
+                onClick={() => toggleRiskFilter("RED")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors",
+                  riskFilter === "RED"
+                    ? "border-rose-500/40 bg-rose-500/15 text-rose-300"
+                    : "border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700 hover:text-slate-300",
+                )}
+              >
+                <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                {riskCounts.RED}
+              </button>
+            </div>
           </div>
         </div>
 
-        {filteredStudents.length === 0 ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-            <EmptyState
-              icon={<Users className="w-8 h-8" />}
-              title="No students found"
-              description={
-                studentSearch
-                  ? "Try a different search."
-                  : "Accept an assignment or wait for a match."
-              }
-            />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filteredStudents.map((student) => {
-              const isPending = pendingIds.has(student.id);
-              const nextAction = actionItems.find(
-                (a) => studentIdOf(a) === student.id && a.status !== "COMPLETED",
-              );
-              return (
-                <div
-                  key={student.id}
-                  className="rounded-xl border border-slate-800 bg-slate-900 p-4 hover:border-indigo-500/30 transition-colors"
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                    <button
-                      type="button"
-                      className="flex items-center gap-3 min-w-0 flex-1 text-left"
-                      onClick={() => onSelectStudent(student.id)}
-                    >
-                      <Avatar src={student.avatar} name={student.name} size="md" />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-white truncate">
-                            {student.name}
-                          </p>
-                          {isPending && (
-                            <Badge className="bg-indigo-500/15 text-indigo-300 border-indigo-500/20 text-[9px]">
-                              Pending
-                            </Badge>
-                          )}
-                          <span
-                            className={cn(
-                              "inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-semibold uppercase tracking-wider border",
-                              readinessTone(student.readiness),
+        <div className="overflow-x-auto rounded-[2.5rem] border border-slate-800 bg-slate-900/50 shadow-2xl backdrop-blur-xl">
+          <table className="w-full min-w-[1100px] border-collapse text-left">
+            <thead className="border-b border-slate-800 bg-slate-950/30">
+              <tr>
+                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Student
+                </th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Status &amp; Risk
+                </th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Stats
+                </th>
+                <th className="px-6 py-5 text-center text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Strength
+                </th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Readiness
+                </th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Next Meeting
+                </th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Last / Next Session
+                </th>
+                <th className="px-6 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/50">
+              {filteredStudents.map((student) => {
+                const isPending = pendingIds.has(student.id);
+                const journey = journeyProgressOf(student);
+                const nextMeetingLabel = getNextMeetingLabel(student.id);
+                const prevSession =
+                  student.lastMeetingDate || student.lastContactDate || null;
+
+                return (
+                  <tr
+                    key={student.id}
+                    onClick={() => onSelectStudent(student.id, "overview")}
+                    className="group cursor-pointer transition-colors hover:bg-slate-800/40"
+                  >
+                    <td className="px-6 py-4 align-middle">
+                      <div className="flex items-center gap-4">
+                        <Avatar
+                          src={student.avatar}
+                          name={student.name}
+                          size="lg"
+                          className="rounded-2xl ring-2 ring-slate-800 transition-all group-hover:ring-indigo-500/50"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold tracking-tight text-white transition-colors group-hover:text-indigo-400">
+                              {student.name}
+                            </h4>
+                            {isPending && (
+                              <span className="shrink-0 rounded border border-indigo-500/30 bg-indigo-500/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-indigo-400">
+                                Pending
+                              </span>
                             )}
-                          >
-                            {readinessLabel(student.readiness)}
-                          </span>
+                          </div>
                         </div>
-                        <p className="text-xs text-slate-500 mt-0.5 truncate">
-                          {student.email || "—"}
-                          {student.undergradInstitution
-                            ? ` · ${student.undergradInstitution}`
-                            : ""}
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 align-middle">
+                      <div>
+                        <div
+                          className={cn(
+                            "mb-1 w-fit rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-widest",
+                            student.readiness === RS.GREEN
+                              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                              : student.readiness === RS.YELLOW
+                                ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
+                                : "border-rose-500/20 bg-rose-500/10 text-rose-400",
+                          )}
+                        >
+                          {riskLabel(student.readiness)}
+                        </div>
+                        <p className="whitespace-nowrap text-[10px] font-medium text-slate-500">
+                          {student.applicationCycle || "—"}
                         </p>
                       </div>
-                    </button>
+                    </td>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:gap-6 text-xs lg:shrink-0">
-                      <Meta label="GPA" value={student.gpa != null ? String(student.gpa) : "—"} />
-                      <Meta
-                        label="DAT"
-                        value={student.datScore != null ? String(student.datScore) : "—"}
-                      />
-                      <Meta
-                        label="Strength"
-                        value={
-                          student.strengthScore != null ? String(student.strengthScore) : "—"
-                        }
-                      />
-                      <Meta label="Next meeting" value={getNextMeetingDate(student.id)} />
-                    </div>
+                    <td className="px-6 py-4 align-middle">
+                      <div>
+                        <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                          GPA:{" "}
+                          <span className="ml-1 text-sm text-white">
+                            {student.gpa != null ? student.gpa : "N/A"}
+                          </span>
+                        </p>
+                        <p className="text-[10px] font-medium text-slate-500">
+                          DAT: {student.datScore != null ? student.datScore : "N/A"}
+                        </p>
+                      </div>
+                    </td>
 
-                    <div className="flex items-center gap-2 lg:shrink-0">
-                      {!isPending && (
-                        <Button
-                          size="icon"
-                          variant="secondary"
-                          className="h-9 w-9"
-                          title="Message"
-                          onClick={() => onMessageStudent?.(student.id)}
+                    <td className="px-6 py-4 text-center align-middle">
+                      <div className="inline-block rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-center shadow-inner">
+                        <p className="mb-0.5 text-[8px] font-black uppercase tracking-widest text-indigo-400">
+                          Strength
+                        </p>
+                        <p className="text-lg font-black leading-none text-white">
+                          {student.strengthScore != null ? student.strengthScore : "—"}
+                        </p>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 align-middle">
+                      <button
+                        type="button"
+                        title="Open Application Journey"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectStudent(student.id, "records");
+                        }}
+                        className="flex w-full max-w-[120px] items-center gap-3"
+                      >
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${journey}%`,
+                              backgroundColor:
+                                journey >= 80
+                                  ? "#10b981"
+                                  : journey >= 50
+                                    ? "#f59e0b"
+                                    : "#f43f5e",
+                            }}
+                          />
+                        </div>
+                        <span className="shrink-0 text-xs font-bold text-white">
+                          {journey}%
+                        </span>
+                      </button>
+                    </td>
+
+                    <td className="px-6 py-4 align-middle">
+                      <div className="flex max-w-[200px] items-center gap-3">
+                        <div className="shrink-0 rounded-lg bg-indigo-500/10 p-1.5">
+                          <Calendar className="h-4 w-4 text-indigo-400" />
+                        </div>
+                        <span className="line-clamp-2 text-[10px] font-medium text-slate-300">
+                          {nextMeetingLabel}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 align-middle">
+                      <div className="whitespace-nowrap">
+                        <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                          Prev:{" "}
+                          <span className="ml-1 font-medium capitalize text-slate-300">
+                            {formatShortDate(prevSession)}
+                          </span>
+                        </p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400">
+                          Next:{" "}
+                          <span className="ml-1 font-bold capitalize">
+                            {getNextMeetingDate(student.id)}
+                          </span>
+                        </p>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 align-middle">
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          title="Send Message"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMessageStudent?.(student.id);
+                          }}
+                          className="rounded-xl border border-slate-700 bg-slate-800 p-2.5 text-slate-400 shadow-lg transition-all hover:border-indigo-500 hover:bg-indigo-600 hover:text-white"
                         >
-                          <MessageSquare className="w-4 h-4" />
-                        </Button>
-                      )}
-                      <Button size="sm" onClick={() => onSelectStudent(student.id)}>
-                        Manage
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                  {nextAction && (
-                    <p className="mt-3 text-xs text-slate-500 border-t border-slate-800 pt-3">
-                      Next step:{" "}
-                      <span className="text-slate-300">{nextAction.task}</span>
+                          <MessageSquare className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectStudent(student.id, "overview");
+                          }}
+                          className="whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-all group-hover:border-indigo-500 group-hover:bg-indigo-600"
+                        >
+                          Profile
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredStudents.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-20 text-center">
+                    <Users className="mx-auto mb-4 h-12 w-12 text-slate-800 opacity-20" />
+                    <p className="text-xs font-medium uppercase tracking-widest text-slate-500">
+                      No students found matching your search
                     </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <AcceptAssignmentModal
@@ -1624,6 +2055,46 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
           setAcceptingAssignment(null);
         }}
       />
+
+      <QuickScheduleMeetingModal
+        open={!!scheduleStudent}
+        student={scheduleStudent}
+        mentorId={mentor.id}
+        isSubmitting={quickScheduleBusy}
+        onClose={() => {
+          if (!quickScheduleBusy) setScheduleStudent(null);
+        }}
+        onSubmit={async (payload) => {
+          if (!onQuickCreateMeeting) return;
+          setQuickScheduleBusy(true);
+          try {
+            await onQuickCreateMeeting(payload);
+            setScheduleStudent(null);
+          } finally {
+            setQuickScheduleBusy(false);
+          }
+        }}
+      />
+
+      <SuggestMeetingTimesModal
+        open={!!suggestStudent}
+        student={suggestStudent}
+        mentorName={mentor.name || "Mentor"}
+        isSubmitting={suggestMessageBusy}
+        onClose={() => {
+          if (!suggestMessageBusy) setSuggestStudent(null);
+        }}
+        onSend={async (message) => {
+          if (!suggestStudent || !onSendScheduleSuggestMessage) return;
+          setSuggestMessageBusy(true);
+          try {
+            await onSendScheduleSuggestMessage(suggestStudent.id, message);
+            setSuggestStudent(null);
+          } finally {
+            setSuggestMessageBusy(false);
+          }
+        }}
+      />
     </div>
   );
 };
@@ -1638,27 +2109,26 @@ function SectionTitle({
   tone: "indigo" | "amber";
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3">
       <div
         className={cn(
-          "p-1.5 rounded-lg border",
+          "rounded-xl border p-2",
           tone === "amber"
-            ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-            : "bg-indigo-500/10 border-indigo-500/20 text-indigo-400",
+            ? "border-amber-500/20 bg-amber-500/10 text-amber-500"
+            : "border-indigo-500/20 bg-indigo-500/10 text-indigo-500",
         )}
       >
-        <Icon className="w-3.5 h-3.5" />
+        <Icon
+          className={cn("h-4 w-4", tone === "amber" && "animate-pulse")}
+        />
       </div>
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
-    </div>
-  );
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[9px] text-slate-500 uppercase tracking-wider">{label}</p>
-      <p className="text-sm font-medium text-slate-200 mt-0.5">{value}</p>
+      <h3 className="text-sm font-black uppercase tracking-[0.3em] text-white">{title}</h3>
+      <div
+        className={cn(
+          "h-px flex-1 bg-gradient-to-r to-transparent",
+          tone === "amber" ? "from-amber-500/20" : "from-indigo-500/20",
+        )}
+      />
     </div>
   );
 }

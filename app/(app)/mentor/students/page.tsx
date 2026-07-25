@@ -29,19 +29,16 @@ import { queryKeys } from "@/lib/api/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-const DEFAULT_WELCOME = `Hi [Mentee Name],
-
-I'm excited to work with you as your mentor! Looking forward to supporting you on your dental school journey.
-
-Best,
-[Mentor Name]`;
+import { DEFAULT_ASSIGNMENT_WELCOME } from "@/lib/api/adminSettings";
 
 function MentorStudentsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studentId = searchParams.get("studentId") || "";
+  const initialTab = searchParams.get("tab") || undefined;
   const platformConfig = usePlatformConfig();
+  const welcomeMessageTemplate =
+    platformConfig.welcomeTemplateAssignment || DEFAULT_ASSIGNMENT_WELCOME;
   const queryClient = useQueryClient();
 
   const { user } = useAuth();
@@ -164,6 +161,7 @@ function MentorStudentsContent() {
           onBack={() => router.push("/mentor/students")}
           messages={[]}
           onSendMessage={() => {}}
+          initialTab={initialTab}
           currentUserId={user.id}
           actionItems={filteredActionItems}
           meetings={filteredMeetings}
@@ -228,7 +226,7 @@ function MentorStudentsContent() {
         meetings={meetings}
         hideTitle
         defaultAvailability={mentor?.defaultAvailability || mentor?.profile?.default_availability || []}
-        welcomeMessageTemplate={DEFAULT_WELCOME}
+        welcomeMessageTemplate={welcomeMessageTemplate}
         acceptBusy={acceptAssignmentMutation.isPending}
         onSelectStudent={(id) => router.push(`/mentor/students?studentId=${id}`)}
         onMessageStudent={async (id) => {
@@ -239,11 +237,11 @@ function MentorStudentsContent() {
             toast.error(err?.message || "Could not open conversation");
           }
         }}
-        onAcceptAssignment={(assignmentId, availableTimes, _timezone, welcomeMessage) => {
+        onAcceptAssignment={(assignmentId, availableTimes, timezone, welcomeMessage) => {
           acceptAssignmentMutation.mutate(
-            { assignmentId, availableTimes, welcomeMessage },
+            { assignmentId, availableTimes, welcomeMessage, timezone },
             {
-              onSuccess: () => toast.success("Assignment accepted"),
+              onSuccess: () => toast.success("Assignment accepted — welcome message sent"),
               onError: (err: any) => toast.error(err?.message || "Failed to accept assignment"),
             },
           );

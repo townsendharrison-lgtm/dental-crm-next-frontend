@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Student, ActionItem, StaffTask, Message, Meeting, Experience, ImprovementGoal, LetterOfRecommendationRequest, OptimizationPlan, School, StudentDocument, Application, PlatformConfig } from '@/lib/types';
 import CompleteMeetingForm, { CompleteMeetingData } from './CompleteMeetingForm';
@@ -189,6 +189,9 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
 
 
   const [activeTab, setActiveTab] = useState<PrimaryTab>(() => mapInitialTab(initialTab));
+  useEffect(() => {
+    if (initialTab) setActiveTab(mapInitialTab(initialTab));
+  }, [initialTab]);
   const [activitySubTab, setActivitySubTab] = useState<"meetings" | "tasks" | "history">("meetings");
   const [meetingFilter, setMeetingFilter] = useState<"all" | "upcoming" | "completed">("all");
   const [taskFilter, setTaskFilter] = useState<"all" | "upcoming" | "completed">("all");

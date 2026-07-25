@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
-  Plus, School as SchoolIcon, PartyPopper, Sparkles, Clock, Star, Save, Heart
+  Plus, School as SchoolIcon, PartyPopper, Sparkles, Clock, Star, Save
 } from 'lucide-react';
 import {
   DndContext,
@@ -269,8 +269,8 @@ export default function SchoolSelectionTab({
     setIsSchoolSelectorOpen(true);
   };
 
-  const openFavoritesBrowser = () => {
-    setSelectorFavoritesOnly(true);
+  const openAddSchoolsBrowser = () => {
+    setSelectorFavoritesOnly(false);
     setAddToCategoryId(schoolCategories[0]?.id || 'Strong Fit');
     setIsSchoolSelectorOpen(true);
   };
@@ -634,10 +634,10 @@ export default function SchoolSelectionTab({
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <Button
               variant="secondary"
-              leftIcon={<Heart size={16} />}
-              onClick={openFavoritesBrowser}
+              leftIcon={<Plus size={16} />}
+              onClick={openAddSchoolsBrowser}
             >
-              Favorites
+              Add Schools
             </Button>
             <Button variant="secondary" leftIcon={<Plus size={16} />} onClick={() => setIsAddingCategory(true)}>
               New Category
@@ -745,7 +745,6 @@ export default function SchoolSelectionTab({
                   schoolsCount={schools.filter(s => s.type === category.id).length}
                   onRemove={(id) => void handleRemoveCategory(id)}
                   onAdd={openAddSchoolForCategory}
-                  onViewSchools={openAddSchoolForCategory}
                   isDefault={['Reach', 'Target', 'Strong Fit'].includes(category.id)}
                 >
                   <SortableContext
@@ -774,7 +773,7 @@ export default function SchoolSelectionTab({
                         <EmptyState
                           icon={<SchoolIcon size={24} />}
                           title="No schools yet"
-                          description="Use View schools or + to add, or drag one here."
+                          description="Use Add Schools or + to add, or drag one here."
                           className="min-h-[120px] border-slate-800 py-4"
                         />
                       )}

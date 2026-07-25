@@ -104,7 +104,7 @@ export function Tooltip({
         createPortal(
           <div
             className={cn(
-              "absolute z-[9999] whitespace-nowrap rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground shadow-lg pointer-events-none",
+              "absolute z-[9999] max-w-[240px] whitespace-normal rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium leading-relaxed text-foreground shadow-lg pointer-events-none",
               "animate-in fade-in zoom-in-95 duration-100",
               className,
             )}

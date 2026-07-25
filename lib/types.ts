@@ -920,6 +920,13 @@ export interface OptimizationPlan {
   expertTips?: string[];
 }
 
+/** Mentor complete-meeting session type + summary DM preset (Rules Engine). */
+export interface MeetingTypeConfig {
+  id: string;
+  label: string;
+  summaryTemplate: string;
+}
+
 export interface AdminSettings {
   id: number;
   platform_name: string;
@@ -931,9 +938,13 @@ export interface AdminSettings {
   auto_reply_rate_limit_minutes?: number;
   welcome_template_student?: string | null;
   welcome_template_mentor?: string | null;
+  /** Mentor → student DM preset when a mentor accepts an assignment */
+  welcome_template_assignment?: string | null;
   accepted_message?: string | null;
   interview_message?: string | null;
   waitlist_message?: string | null;
+  /** Complete-meeting type catalog + summary presets */
+  meeting_types?: MeetingTypeConfig[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -1131,6 +1142,10 @@ export interface PlatformConfig {
   waitlistMessage: string;
   welcomeTemplateStudent?: string;
   welcomeTemplateMentor?: string;
+  /** Mentor → student assignment welcome (Accept modal default) */
+  welcomeTemplateAssignment?: string;
+  /** Mentor complete-meeting types + summary presets */
+  meetingTypes: MeetingTypeConfig[];
 }
 
 export interface AutoReplySettings {
