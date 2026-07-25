@@ -549,6 +549,8 @@ export interface StudentDocument {
   title: string;
   type: DocumentType;
   url: string;
+  original_filename?: string | null;
+  originalFilename?: string | null;
   status: "Pending Review" | "Reviewed" | "Needs Revision" | "Cancelled";
   comment?: string | null;
   private_note?: string | null;

@@ -30,7 +30,8 @@ import {
   FolderOpen,
   Award,
 } from 'lucide-react';
-import { formatInTimezone, parseLocalDate, resolveStudentTimezone } from '@/lib/utils/dateUtils';
+import { formatMeetingLocal, parseLocalDate } from '@/lib/utils/dateUtils';
+import { applicantTypeLabel, preferredDatScore } from '@/lib/utils/studentMetrics';
 import {
   calculateStrengthScore,
   hoursByCategoryFromExperiences,
@@ -229,7 +230,6 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
       : "Me (Mentor)";
 
   const goToProfile = () => setActiveTab("profile");
-  const studentTimezone = resolveStudentTimezone(student);
 
   const studentStaffTasks = React.useMemo(
     () =>
@@ -633,11 +633,13 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
               <Calendar className="w-3.5 h-3.5 text-indigo-400" />
               <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">
                 Next:{" "}
-                {formatInTimezone(
-                  nextMeeting.date,
-                  nextMeeting.timezone || studentTimezone,
-                  { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
-                )}
+                {formatMeetingLocal(nextMeeting.date, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  timeZoneName: "short",
+                })}
               </span>
             </div>
           )}
@@ -697,11 +699,9 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
 
           <div className="min-w-0 flex-1">
             {(() => {
-              const datValue =
-                student.datScore ?? student.datAA ?? student.profile?.dat_aa ?? null;
+              const datValue = preferredDatScore(student);
               const locationValue = student.state || student.profile?.state || null;
-              const isReapp =
-                student.isReapplicant ?? student.profile?.is_reapplicant ?? false;
+              const statusLabel = applicantTypeLabel(student);
               const strength = Number(displayStrength) || 0;
               const strengthPct = Math.max(0, Math.min(100, strength));
               const strengthTone =
@@ -738,7 +738,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                   key: "status",
                   label: "Status",
                   hint: "Applicant type",
-                  value: isReapp ? "Re-applicant" : "First-time",
+                  value: statusLabel,
                   icon: UserRound,
                   accent: {
                     ring: "#a78bfa",
@@ -1191,19 +1191,15 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
               ) : (
                 <div className="space-y-3">
                   {filteredMeetings.map((meeting) => {
-                    const displayDate = formatInTimezone(
-                      meeting.date,
-                      meeting.timezone || studentTimezone,
-                      {
-                        weekday: "short",
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                        timeZoneName: "short",
-                      },
-                    );
+                    const displayDate = formatMeetingLocal(meeting.date, {
+                      weekday: "short",
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                      timeZoneName: "short",
+                    });
                     const snippet = meeting.summary || meeting.notes;
                     return (
                       <div
@@ -1540,18 +1536,14 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                     {studentMeetings
                       .filter((m) => m.completed)
                       .map((meeting) => {
-                        const displayDate = formatInTimezone(
-                          meeting.date,
-                          meeting.timezone || studentTimezone,
-                          {
-                            month: "long",
-                            day: "numeric",
-                            year: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                            timeZoneName: "short",
-                          },
-                        );
+                        const displayDate = formatMeetingLocal(meeting.date, {
+                          month: "long",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                          timeZoneName: "short",
+                        });
 
                         return (
                           <div
@@ -2036,9 +2028,8 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
         title={selectedMeetingToComplete?.completed ? "Edit Meeting" : "Complete Meeting"}
         description={
           selectedMeetingToComplete
-            ? `Session with ${student.name} • ${formatInTimezone(
+            ? `Session with ${student.name} • ${formatMeetingLocal(
                 selectedMeetingToComplete.date,
-                selectedMeetingToComplete.timezone || studentTimezone,
                 {
                   month: "short",
                   day: "numeric",

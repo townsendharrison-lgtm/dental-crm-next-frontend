@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
-  History, LineChart, BarChart3, Target
+  History, LineChart, BarChart3, Target, Sparkles
 } from 'lucide-react';
 import {
   LineChart as ReLineChart,
@@ -23,6 +23,8 @@ import { Student, Experience, OptimizationPlan } from '@/lib/types';
 import { NATIONAL_BENCHMARKS, parseLocalDate } from './hubShared';
 import { Badge } from '@/components/ui';
 import { useNationalBenchmarks } from '@/lib/hooks/useNationalBenchmarks';
+import { useStudentStrengthHistory } from '@/lib/hooks/useStudentProfile';
+import { normalizeDatToLegacy } from '@/lib/utils/datScale';
 
 interface AnalyticsTabProps {
   student: Student;
@@ -38,8 +40,9 @@ function resolveStudentMetricValue(
 ): number {
   if (key === 'strengthScore') return student.strengthScore || 0;
   if (key === 'avgResponseTime') return Number(student.avgResponseTime) || 0;
-  if (key === 'datAA') return student.datAA || 0;
-  if (key === 'datTS') return student.datTS || 0;
+  // DAT benchmarks are on legacy 1–30; normalize modern 200–600 entries
+  if (key === 'datAA') return normalizeDatToLegacy(student.datAA) || 0;
+  if (key === 'datTS') return normalizeDatToLegacy(student.datTS) || 0;
   if (key === 'shadowing') {
     return (experiences || [])
       .filter((e) => e.category === 'Shadowing')
@@ -86,6 +89,7 @@ export default function AnalyticsTab({
 }: AnalyticsTabProps) {
   const overallScore = optimizationPlan?.overallScore ?? optimizationPlan?.overall_score ?? 0;
   const { data: remoteBenchmarks } = useNationalBenchmarks();
+  const { data: strengthHistory = [] } = useStudentStrengthHistory(student.id);
 
   const benchmarkItems = useMemo(() => {
     if (remoteBenchmarks && remoteBenchmarks.length > 0) {
@@ -103,29 +107,45 @@ export default function AnalyticsTab({
   const overallBenchmark =
     benchmarkItems.find((b) => b.key === 'strengthScore')?.benchmark ?? 85;
 
-  // Real cumulative hours by month (not fake score trending)
-  const hoursHistory = useMemo(() => {
-    const months: { date: Date; month: string; hours: number }[] = [];
+  const currentStrength = Math.round(
+    Number(student.strengthScore ?? student.profile?.strength_score ?? 0) || 0,
+  );
+
+  // Strength score over the last 6 months (last known score at each month end)
+  const strengthScoreHistory = useMemo(() => {
+    const months: { date: Date; month: string }[] = [];
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       months.push({
         date: d,
         month: d.toLocaleString("default", { month: "short" }),
-        hours: 0,
       });
     }
 
-    const allSessions = (experiences || []).flatMap((e) => e.sessions || []);
+    const points = [...strengthHistory]
+      .map((row) => ({
+        at: new Date(row.recorded_at).getTime(),
+        score: Math.round(Number(row.strength_score) || 0),
+      }))
+      .filter((p) => Number.isFinite(p.at))
+      .sort((a, b) => a.at - b.at);
 
-    return months.map((m) => {
+    return months.map((m, idx) => {
       const monthEnd = new Date(m.date.getFullYear(), m.date.getMonth() + 1, 0, 23, 59, 59);
-      const hours = allSessions
-        .filter((s) => parseLocalDate(s.date) <= monthEnd)
-        .reduce((sum, s) => sum + (s.duration || 0), 0);
-      return { month: m.month, hours: Math.round(hours * 10) / 10 };
+      const endMs = monthEnd.getTime();
+      let score = 0;
+      for (const p of points) {
+        if (p.at <= endMs) score = p.score;
+        else break;
+      }
+      // Current month always reflects the live strength score
+      if (idx === months.length - 1) {
+        score = currentStrength;
+      }
+      return { month: m.month, score };
     });
-  }, [experiences]);
+  }, [strengthHistory, currentStrength]);
 
   const momentumData = useMemo(() => {
     const months = [];
@@ -227,33 +247,40 @@ export default function AnalyticsTab({
         <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900 p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <History className="text-indigo-400" size={20} /> Cumulative Hours
+              <History className="text-indigo-400" size={20} /> Strength Score
             </h3>
             <Badge variant="outline">Last 6 months</Badge>
           </div>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={hoursHistory}>
+              <AreaChart data={strengthScoreHistory}>
                 <defs>
-                  <linearGradient id="hoursGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="strengthGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
                     <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis
+                  domain={[0, 100]}
+                  stroke="#64748b"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
                   itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}
                 />
                 <Area
                   type="monotone"
-                  dataKey="hours"
+                  dataKey="score"
+                  name="Strength"
                   stroke="#6366f1"
                   strokeWidth={2}
                   fillOpacity={1}
-                  fill="url(#hoursGradient)"
+                  fill="url(#strengthGradient)"
                 />
               </AreaChart>
             </ResponsiveContainer>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Search, X } from "lucide-react";
 import { useDentalSchoolsCatalog } from "@/lib/hooks/useDentalSchoolsCatalog";
 import type { ConsideringSchoolEntry } from "@/lib/profile/profileOptions";
@@ -14,6 +15,8 @@ interface SchoolMultiPickerProps {
   placeholder?: string;
 }
 
+type MenuPos = { top: number; left: number; width: number; maxHeight: number };
+
 export function SchoolMultiPicker({
   value,
   onChange,
@@ -22,6 +25,9 @@ export function SchoolMultiPicker({
 }: SchoolMultiPickerProps) {
   const { schools, loading, error } = useDentalSchoolsCatalog();
   const [query, setQuery] = useState("");
+  const inputWrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<MenuPos | null>(null);
 
   const selectedIds = useMemo(() => new Set(value.map((s) => s.id)), [value]);
 
@@ -36,6 +42,68 @@ export function SchoolMultiPicker({
       )
       .slice(0, 8);
   }, [schools, query, selectedIds]);
+
+  const menuOpen = query.trim().length > 0 && !disabled && !loading;
+
+  /** Position using the menu's real height so short lists sit flush to the input. */
+  const measure = (): MenuPos | null => {
+    const el = inputWrapRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const preferredMax = 224;
+    const estimatedContent =
+      error || suggestions.length === 0
+        ? 44
+        : Math.min(preferredMax, suggestions.length * 52 + 12);
+    const measured = menuRef.current?.offsetHeight;
+    const contentHeight =
+      measured && measured > 0 ? Math.min(preferredMax, measured) : estimatedContent;
+    const spaceBelow = window.innerHeight - rect.bottom - 12;
+    const spaceAbove = rect.top - 12;
+    const openUp = spaceBelow < contentHeight + 8 && spaceAbove > spaceBelow;
+    const maxHeight = Math.min(preferredMax, openUp ? spaceAbove : spaceBelow);
+    const usedHeight = Math.min(contentHeight, maxHeight);
+    return {
+      top: openUp ? Math.max(8, rect.top - usedHeight - 6) : rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    };
+  };
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      setPos(null);
+      return;
+    }
+    // First pass with estimate, then refine with rendered height.
+    setPos(measure());
+    const id = requestAnimationFrame(() => setPos(measure()));
+    return () => cancelAnimationFrame(id);
+  }, [menuOpen, suggestions.length, query, error]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onScrollOrResize = () => setPos(measure());
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (inputWrapRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setQuery("");
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setQuery("");
+    };
+    window.addEventListener("resize", onScrollOrResize);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen, suggestions.length, error]);
 
   const add = (school: { id: string; name: string; location: string }) => {
     onChange([...value, { id: school.id, name: school.name, location: school.location }]);
@@ -71,7 +139,7 @@ export function SchoolMultiPicker({
         </div>
       )}
 
-      <div className="relative">
+      <div ref={inputWrapRef} className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
         <Input
           value={query}
@@ -81,8 +149,23 @@ export function SchoolMultiPicker({
           className="pl-9"
           autoComplete="off"
         />
-        {query.trim() && (
-          <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-xl">
+      </div>
+
+      {menuOpen &&
+        pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="listbox"
+            style={{
+              top: pos.top,
+              left: pos.left,
+              width: pos.width,
+              maxHeight: pos.maxHeight,
+            }}
+            className="fixed z-[300] overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-2xl shadow-black/50"
+          >
             {error ? (
               <p className="px-3 py-2 text-sm text-rose-300">Could not load school catalog.</p>
             ) : suggestions.length === 0 ? (
@@ -103,9 +186,9 @@ export function SchoolMultiPicker({
                 </button>
               ))
             )}
-          </div>
+          </div>,
+          document.body,
         )}
-      </div>
     </div>
   );
 }

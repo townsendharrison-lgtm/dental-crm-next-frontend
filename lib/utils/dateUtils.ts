@@ -77,6 +77,76 @@ export function formatInTimezone(
 }
 
 /**
+ * Format a meeting instant in the viewer's device timezone with a short
+ * abbreviation (e.g. "Jul 22, 3:00 PM EDT"). Prefer this for all in-app
+ * meeting displays so mentors/students in different zones never misread a
+ * fixed zone label.
+ */
+export function formatMeetingLocal(
+  dateStr: string,
+  options: Intl.DateTimeFormatOptions = {},
+): string {
+  if (!dateStr) return "—";
+  const date = dateStr.includes("T") ? new Date(dateStr) : parseLocalDate(dateStr);
+  if (Number.isNaN(date.getTime())) return dateStr;
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    ...options,
+  });
+}
+
+/** Time-only local meeting label with zone abbr (e.g. "3:00 PM EDT"). */
+export function formatMeetingLocalTime(
+  dateStr: string,
+  options: Intl.DateTimeFormatOptions = {},
+): string {
+  if (!dateStr) return "—";
+  const date = dateStr.includes("T") ? new Date(dateStr) : parseLocalDate(dateStr);
+  if (Number.isNaN(date.getTime())) return dateStr;
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    ...options,
+  });
+}
+
+/** Wall-clock parts of an instant in an IANA zone (for schedule edit forms). */
+export function getZonedWallClock(
+  dateStr: string,
+  timeZone: string,
+): { date: string; hours24: number; minutes: number } {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) {
+    return { date: "", hours24: 0, minutes: 0 };
+  }
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = formatter.formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value || "0";
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  return {
+    date: `${year}-${month}-${day}`,
+    hours24: Number(get("hour")) % 24,
+    minutes: Number(get("minute")),
+  };
+}
+
+/**
  * Convert a wall-clock date + 24h time in an IANA zone to a UTC ISO string.
  * Example: ("2026-07-22", "14:30", "America/New_York") → ISO instant.
  */

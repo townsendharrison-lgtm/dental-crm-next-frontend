@@ -36,6 +36,7 @@ import {
   Bell,
   Plus,
   X,
+  Globe,
 } from "lucide-react";
 import { MOCK_MENTORS } from "@/lib/data";
 import ApplicationTracker from "./ApplicationTracker";
@@ -45,7 +46,7 @@ import { Textarea, FormField, Input } from "@/components/ui/Form";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import { renderBadgeIcon } from "@/lib/utils/badgeIcons";
-import { parseLocalDate } from "@/lib/utils/dateUtils";
+import { formatMeetingLocal, parseLocalDate } from "@/lib/utils/dateUtils";
 
 interface StudentDashboardProps {
   student: Student;
@@ -239,10 +240,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const mentorId = student.mentorId || student.profile?.mentor_id;
   const mentor = MOCK_MENTORS.find((m) => m.id === mentorId);
   const nextTask = studentTasks.find((t) => t.status !== "COMPLETED") || studentTasks[0];
-  const timezone =
-    student.timezone ||
-    student.profile?.timezone ||
-    Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   usePageHeaderAction({
     label: "Mentor Assistant",
@@ -285,20 +282,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return `${format(startDate)} - ${format(endDate)}`;
   };
 
-  const formatMeetingDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: timezone || undefined,
-        timeZoneName: "short",
-      });
-    } catch {
-      return dateStr;
-    }
+  const formatMeetingDate = (dateStr: string) => formatMeetingLocal(dateStr);
+
+  /** Needs attention: only meetings starting within the next 24h (or up to 1h overdue). */
+  const isWithinNext24Hours = (dateStr: string) => {
+    const t = new Date(dateStr).getTime();
+    if (Number.isNaN(t)) return false;
+    const now = Date.now();
+    return t >= now - 60 * 60 * 1000 && t <= now + 24 * 60 * 60 * 1000;
   };
+  const attentionMeeting =
+    nextMeeting && isWithinNext24Hours(nextMeeting.date) ? nextMeeting : undefined;
+  const attentionWebinar =
+    upcomingWebinar && isWithinNext24Hours(upcomingWebinar.date)
+      ? upcomingWebinar
+      : undefined;
 
   const openMeetingLink = (meeting?: Meeting, emptyMessage?: string) => {
     const link = meeting?.link;
@@ -373,7 +371,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   }, [notifications]);
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-300 pb-12">
+    <div className="space-y-8 animate-in fade-in duration-300 pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <p className="text-lg font-semibold text-white">
@@ -394,13 +392,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </Button>
       </div>
 
-      {(nextMeeting || upcomingWebinar || surveys.length > 0) && (
-        <section className="space-y-3">
+      {(attentionMeeting || attentionWebinar || surveys.length > 0) && (
+        <section className="space-y-4">
           <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
             Needs attention
           </h3>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {nextMeeting && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {attentionMeeting && (
               <div className="flex items-center justify-between gap-4 rounded-2xl border border-indigo-500 bg-indigo-600 p-4 shadow-lg shadow-indigo-600/20 animate-in slide-in-from-top-4 duration-500">
                 <div className="flex min-w-0 items-center gap-4">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white">
@@ -408,10 +406,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </div>
                   <div className="min-w-0">
                     <h4 className="truncate text-sm font-bold text-white">
-                      Next Meeting: {nextMeeting.title || "Mentorship Session"}
+                      Next Meeting: {attentionMeeting.title || "Mentorship Session"}
                     </h4>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-100">
-                      {formatMeetingDate(nextMeeting.date)}
+                      {formatMeetingDate(attentionMeeting.date)}
                     </p>
                   </div>
                 </div>
@@ -425,7 +423,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </button>
               </div>
             )}
-            {upcomingWebinar && (
+            {attentionWebinar && (
               <div className="flex items-center justify-between gap-4 rounded-2xl border border-cyan-500/40 bg-cyan-950/50 p-4 shadow-lg shadow-cyan-950/30 animate-in slide-in-from-top-4 duration-500">
                 <div className="flex min-w-0 items-center gap-4">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-500/15 text-cyan-200">
@@ -436,10 +434,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       Upcoming webinar
                     </p>
                     <h4 className="truncate text-sm font-bold text-white">
-                      {upcomingWebinar.title || "Webinar"}
+                      {attentionWebinar.title || "Webinar"}
                     </h4>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-100/80">
-                      {formatMeetingDate(upcomingWebinar.date)}
+                      {formatMeetingDate(attentionWebinar.date)}
                     </p>
                   </div>
                 </div>
@@ -479,7 +477,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       )}
 
       {recentUpdates.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <div className="flex items-end justify-between gap-3">
             <div>
               <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -587,53 +585,53 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
         <Rocket className="pointer-events-none absolute -bottom-8 -right-8 h-40 w-40 text-white opacity-10" />
       </section>
 
-      <div className="grid md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 space-y-4">
-          <section className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <div className="flex justify-between items-center mb-4">
+      <div className="grid items-stretch gap-6 md:grid-cols-3">
+        <div className="flex h-full min-h-0 flex-col gap-6 md:col-span-2">
+          <section className="shrink-0 rounded-xl border border-slate-800 bg-slate-900 p-5">
+            <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-bold text-white">Application Journey</h3>
               <span className="text-2xl font-bold text-indigo-500">{progress}%</span>
             </div>
-            <div className="w-full bg-slate-950 h-2 rounded-full mb-5 overflow-hidden border border-slate-800/30">
+            <div className="mb-5 h-2 w-full overflow-hidden rounded-full border border-slate-800/30 bg-slate-950">
               <div
-                className="bg-indigo-600 h-full rounded-full transition-all duration-1000"
+                className="h-full rounded-full bg-indigo-600 transition-all duration-1000"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               {[
                 {
                   label: "Strength Score",
                   value: student.strengthScore ?? student.profile?.strength_score ?? "—",
-                  icon: <Target className="w-5 h-5 text-indigo-400" />,
+                  icon: <Target className="h-5 w-5 text-indigo-400" />,
                   tone: "bg-indigo-500/10 border-indigo-500/20",
                 },
                 {
                   label: "DAT",
                   value: student.datScore ?? student.profile?.dat_score ?? "—",
-                  icon: <CheckCircle className="w-5 h-5 text-emerald-400" />,
+                  icon: <CheckCircle className="h-5 w-5 text-emerald-400" />,
                   tone: "bg-emerald-500/10 border-emerald-500/20",
                 },
                 {
                   label: "Days Left",
                   value: daysLeft,
-                  icon: <Calendar className="w-5 h-5 text-amber-400" />,
+                  icon: <Calendar className="h-5 w-5 text-amber-400" />,
                   tone: "bg-amber-500/10 border-amber-500/20",
                 },
                 {
                   label: "Apps",
                   value: (student.lorRequired || 0) + 4,
-                  icon: <FileText className="w-5 h-5 text-rose-400" />,
+                  icon: <FileText className="h-5 w-5 text-rose-400" />,
                   tone: "bg-rose-500/10 border-rose-500/20",
                 },
               ].map((stat) => (
                 <div key={stat.label} className="flex flex-col items-center text-center">
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 border ${stat.tone}`}
+                    className={`mb-2 flex h-10 w-10 items-center justify-center rounded-full border ${stat.tone}`}
                   >
                     {stat.icon}
                   </div>
-                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                  <p className="mb-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
                     {stat.label}
                   </p>
                   <p className="text-lg font-bold text-white">{stat.value}</p>
@@ -642,97 +640,136 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
           </section>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Award className="w-4 h-4 text-amber-400" /> Milestone Badges
-              </h3>
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                {earnedBadges.length} Earned
-              </span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {earnedBadges.map((badge) =>
-                badge ? (
-                  <button
-                    key={badge.id}
-                    type="button"
-                    onClick={() => setSelectedBadge(badge)}
-                    className="p-3 bg-slate-950/50 border border-slate-800 rounded-xl text-center group hover:border-indigo-500/40 transition-all cursor-pointer"
-                  >
-                    <div
-                      className={`w-10 h-10 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform ${badge.color || ""}`}
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="flex h-full min-h-[180px] flex-col rounded-xl border border-slate-800 bg-slate-900 p-5">
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 text-base font-bold text-white">
+                  <Award className="h-4 w-4 text-amber-400" /> Milestone Badges
+                </h3>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  {earnedBadges.length} Earned
+                </span>
+              </div>
+              <div className="grid flex-1 grid-cols-2 content-start gap-3">
+                {earnedBadges.map((badge) =>
+                  badge ? (
+                    <button
+                      key={badge.id}
+                      type="button"
+                      onClick={() => setSelectedBadge(badge)}
+                      className="group cursor-pointer rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-center transition-all hover:border-indigo-500/40"
                     >
-                      {renderBadgeIcon(badge.icon, "w-5 h-5")}
-                    </div>
-                    <p className="text-xs font-semibold text-white mb-0.5 truncate">{badge.name}</p>
-                    <p className="text-[9px] text-slate-500 uppercase font-bold">
-                      Earned{" "}
-                      {new Date(badge.earnedAt).toLocaleDateString([], {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </p>
-                  </button>
-                ) : null,
-              )}
-              {earnedBadges.length === 0 && (
-                <div className="col-span-full py-6 text-center border border-dashed border-slate-800 rounded-xl">
-                  <p className="text-sm text-slate-500">No badges earned yet. Keep pushing!</p>
+                      <div
+                        className={`mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 transition-transform group-hover:scale-105 ${badge.color || ""}`}
+                      >
+                        {renderBadgeIcon(badge.icon, "w-5 h-5")}
+                      </div>
+                      <p className="mb-0.5 truncate text-xs font-semibold text-white">{badge.name}</p>
+                      <p className="text-[9px] font-bold uppercase text-slate-500">
+                        Earned{" "}
+                        {new Date(badge.earnedAt).toLocaleDateString([], {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                    </button>
+                  ) : null,
+                )}
+                {earnedBadges.length === 0 && (
+                  <div className="col-span-full flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-800 px-4 py-6 text-center">
+                    <p className="text-sm text-slate-500">No badges earned yet. Keep pushing!</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex h-full min-h-[180px] flex-col rounded-xl border border-cyan-500/25 bg-slate-900 p-5">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/80">
+                    Global event
+                  </p>
+                  {upcomingWebinar ? (
+                    <>
+                      <h4 className="mt-1 truncate text-base font-bold text-white">
+                        {upcomingWebinar.title || "Webinar"}
+                      </h4>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {formatMeetingDate(upcomingWebinar.date)}
+                      </p>
+                    </>
+                  ) : (
+                    <h4 className="mt-1 text-base font-bold text-white">No upcoming webinars</h4>
+                  )}
+                </div>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+                  <Globe className="h-5 w-5" />
+                </div>
+              </div>
+              {upcomingWebinar ? (
+                <button
+                  type="button"
+                  onClick={handleJoinWebinar}
+                  className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-600/30 py-3 text-sm font-bold text-cyan-50 transition-all hover:bg-cyan-600/50"
+                >
+                  <Play className="h-4 w-4 fill-current" /> Join webinar
+                </button>
+              ) : (
+                <div className="mt-auto flex flex-1 items-end">
+                  <p className="text-xs leading-relaxed text-slate-500">
+                    Platform-wide sessions will show up here when scheduled.
+                  </p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 h-full">
-          <div className="bg-[#1E1B4B] border border-indigo-500/20 rounded-[2rem] p-8 shadow-2xl shadow-indigo-950/50 flex flex-col flex-1">
-            <div className="mb-6">
-              <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-500/30 bg-indigo-500/20">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="flex h-full flex-1 flex-col rounded-[2rem] border border-indigo-500/20 bg-[#1E1B4B] p-6 shadow-2xl shadow-indigo-950/50 md:p-7">
+            <div className="mb-5 flex items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-indigo-500/30 bg-indigo-500/20">
                 <Calendar className="h-6 w-6 text-indigo-300" />
               </div>
-              <h3 className="mb-1 text-2xl font-bold text-white">Next Meeting</h3>
-              <p className="font-medium text-indigo-200/60">
-                With {mentor?.name || "Your Mentor"}
-              </p>
+              <div className="min-w-0">
+                <h3 className="text-2xl font-bold leading-tight text-white">Next Meeting</h3>
+                <p className="mt-0.5 truncate font-medium text-indigo-200/60">
+                  With {mentor?.name || "Your Mentor"}
+                </p>
+              </div>
             </div>
 
-            <div className="flex flex-1 flex-col justify-center">
-              <div className="mb-8 rounded-3xl border border-indigo-400/20 bg-[#2D2D7D]/40 p-6 text-center backdrop-blur-sm">
-                {nextMeeting ? (
-                  <>
-                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300/60">
-                      {new Date(nextMeeting.date).toLocaleDateString("en-US", {
-                        weekday: "long",
-                      })}
-                    </p>
-                    <p className="text-xl font-black text-white md:text-2xl">
-                      {new Date(nextMeeting.date).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                      <span className="mx-1 font-light text-indigo-300/40">@</span>
-                      {new Date(nextMeeting.date).toLocaleTimeString("en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: timezone || undefined,
-                      })}
-                    </p>
-                    <p className="mt-2 truncate text-[10px] font-bold uppercase tracking-widest text-indigo-300/40">
-                      {timezone}
-                    </p>
-                  </>
-                ) : (
-                  <p className="font-medium italic text-indigo-300/60">No meeting scheduled</p>
-                )}
-              </div>
+            <div className="mb-5 flex flex-1 flex-col justify-center rounded-3xl border border-indigo-400/20 bg-[#2D2D7D]/40 p-5 text-center backdrop-blur-sm">
+              {nextMeeting ? (
+                <>
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300/60">
+                    {new Date(nextMeeting.date).toLocaleDateString("en-US", {
+                      weekday: "long",
+                    })}
+                  </p>
+                  <p className="text-xl font-black text-white md:text-2xl">
+                    {formatMeetingLocal(nextMeeting.date, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                      timeZoneName: "short",
+                    })}
+                  </p>
+                  <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-indigo-300/40">
+                    Your local time
+                  </p>
+                </>
+              ) : (
+                <p className="font-medium italic text-indigo-300/60">No meeting scheduled</p>
+              )}
             </div>
 
             <button
               type="button"
               onClick={handleJoinMeeting}
               disabled={!nextMeeting}
-              className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 font-black text-indigo-900 shadow-lg shadow-white/10 transition-all hover:bg-indigo-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mb-2.5 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3.5 font-black text-indigo-900 shadow-lg shadow-white/10 transition-all hover:bg-indigo-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Video className="h-5 w-5" /> Join Meeting
             </button>
@@ -740,43 +777,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
               type="button"
               onClick={handleRescheduleClick}
               disabled={!nextMeeting}
-              className="w-full rounded-2xl border border-indigo-400/20 bg-indigo-600/50 py-4 font-black text-white transition-all hover:bg-indigo-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-2xl border border-indigo-400/20 bg-indigo-600/50 py-3.5 font-black text-white transition-all hover:bg-indigo-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Reschedule
             </button>
           </div>
-
-          {upcomingWebinar ? (
-            <div className="rounded-2xl border border-cyan-500/25 bg-slate-900/80 p-5">
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/80">
-                    Other session
-                  </p>
-                  <h4 className="mt-1 truncate text-base font-bold text-white">
-                    {upcomingWebinar.title || "Webinar"}
-                  </h4>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {formatMeetingDate(upcomingWebinar.date)}
-                  </p>
-                </div>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
-                  <Video className="h-5 w-5" />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleJoinWebinar}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-600/30 py-3 text-sm font-bold text-cyan-50 transition-all hover:bg-cyan-600/50"
-              >
-                <Play className="h-4 w-4 fill-current" /> Join webinar
-              </button>
-            </div>
-          ) : null}
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid gap-6 lg:grid-cols-2">
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-5">
           <h3 className="text-base font-bold text-white mb-5 flex items-center gap-2">
             <Target className="w-4 h-4 text-indigo-400" /> Application Journey
@@ -978,8 +987,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       </section>
 
       <section>
-        <h3 className="text-base font-bold text-white mb-3">Resources</h3>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <h3 className="mb-4 text-base font-bold text-white">Resources</h3>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {resources.map((res) => (
             <button
               key={res.id}

@@ -24,7 +24,7 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import {
-  formatInTimezone,
+  formatMeetingLocal,
   resolveStudentTimezone,
   zonedDateTimeToUtcIso,
 } from "@/lib/utils/dateUtils";
@@ -280,10 +280,13 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
             <p className="mt-1 text-xs text-slate-500">
               Session with {student.name}
               {meeting
-                ? ` • ${formatInTimezone(meeting.date, meeting.timezone || studentTz, {
+                ? ` • ${formatMeetingLocal(meeting.date, {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                    timeZoneName: "short",
                   })}`
                 : " • Unscheduled"}
             </p>

@@ -17,6 +17,8 @@ import { Save, RotateCcw, ShieldCheck, AlertCircle, FileText, XCircle } from "lu
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { useDocuments, useUpdateDocument } from "@/lib/hooks/useDocuments";
+import { ADDITIONAL_SCHOOLING_OPTIONS } from "@/lib/profile/profileOptions";
+import type { ApplicantType, DatType } from "@/lib/types";
 
 export type StudentProfileUpdates = Partial<
   StudentProfile & { name?: string; avatar?: string }
@@ -37,12 +39,28 @@ type FormState = {
   country: string;
   timezone: string;
   gpa: string;
+  sgpa: string;
+  major: string;
+  dat_type: DatType | "";
   dat_score: string;
   dat_aa: string;
   dat_ts: string;
+  dat_pat: string;
+  dat_bio: string;
+  dat_gc: string;
+  dat_oc: string;
+  dat_rc: string;
+  dat_qr: string;
+  dat_sns: string;
+  dat_mdt: string;
   dat_verified: boolean;
   gpa_verified: boolean;
   is_reapplicant: boolean;
+  applicant_type: ApplicantType | "";
+  took_online_classes: boolean;
+  took_cc_classes: boolean;
+  additional_schooling: string[];
+  additional_schooling_other: string;
   application_cycle: string;
   status: "Preparing" | "Applying" | "Interviewing";
   readiness: "GREEN" | "YELLOW" | "RED";
@@ -55,15 +73,18 @@ type FormState = {
   undergrad_grad_year: string;
   lor_required: string;
   lor_external_service: boolean;
+  lor_external_collected: string;
   post_bac_enabled: boolean;
   post_bac_institution: string;
   post_bac_degree: string;
   post_bac_year: string;
+  post_bac_gpa: string;
   post_bac_strength: string;
   masters_enabled: boolean;
   masters_institution: string;
   masters_degree: string;
   masters_year: string;
+  masters_gpa: string;
   masters_strength: string;
 };
 
@@ -73,9 +94,24 @@ const SECTION_FIELDS: Record<SectionKey, (keyof FormState)[]> = {
   identity: ["name", "zip_code", "state", "country", "timezone"],
   academics: [
     "gpa",
+    "sgpa",
+    "major",
+    "dat_type",
     "dat_score",
     "dat_aa",
     "dat_ts",
+    "dat_pat",
+    "dat_bio",
+    "dat_gc",
+    "dat_oc",
+    "dat_rc",
+    "dat_qr",
+    "dat_sns",
+    "dat_mdt",
+    "took_online_classes",
+    "took_cc_classes",
+    "additional_schooling",
+    "additional_schooling_other",
     "undergrad_institution",
     "undergrad_degree",
     "undergrad_grad_year",
@@ -83,11 +119,13 @@ const SECTION_FIELDS: Record<SectionKey, (keyof FormState)[]> = {
     "post_bac_institution",
     "post_bac_degree",
     "post_bac_year",
+    "post_bac_gpa",
     "post_bac_strength",
     "masters_enabled",
     "masters_institution",
     "masters_degree",
     "masters_year",
+    "masters_gpa",
     "masters_strength",
   ],
   application: [
@@ -96,11 +134,18 @@ const SECTION_FIELDS: Record<SectionKey, (keyof FormState)[]> = {
     "progress",
     "application_cycle",
     "is_reapplicant",
+    "applicant_type",
     "lor_required",
     "lor_external_service",
+    "lor_external_collected",
   ],
   demographics: ["ethnicity", "gender", "age"],
 };
+
+function strNum(value: unknown): string {
+  if (value == null || value === "") return "";
+  return String(value);
+}
 
 function buildForm(student: Student): FormState {
   const p = student.profile;
@@ -112,6 +157,9 @@ function buildForm(student: Student): FormState {
     typeof student.masters === "object" && student.masters
       ? student.masters
       : p?.masters;
+  const applicantType =
+    (p?.applicant_type as ApplicantType | null | undefined) ||
+    ((student.isReapplicant ?? p?.is_reapplicant) ? "REAPPLICANT" : "");
 
   return {
     name: student.name || "",
@@ -119,38 +167,63 @@ function buildForm(student: Student): FormState {
     state: student.state ?? p?.state ?? "",
     country: student.country ?? p?.country ?? "",
     timezone: student.timezone ?? p?.timezone ?? "",
-    gpa: String(student.gpa ?? p?.gpa ?? ""),
-    dat_score: String(student.datScore ?? p?.dat_score ?? ""),
-    dat_aa: String(student.datAA ?? p?.dat_aa ?? ""),
-    dat_ts: String(student.datTS ?? p?.dat_ts ?? ""),
+    gpa: strNum(student.gpa ?? p?.gpa),
+    sgpa: strNum(p?.sgpa),
+    major: p?.major ?? "",
+    dat_type: (p?.dat_type as DatType | null | undefined) || "",
+    dat_score: strNum(student.datScore ?? p?.dat_score),
+    dat_aa: strNum(student.datAA ?? p?.dat_aa),
+    dat_ts: strNum(student.datTS ?? p?.dat_ts),
+    dat_pat: strNum(p?.dat_pat),
+    dat_bio: strNum(p?.dat_bio),
+    dat_gc: strNum(p?.dat_gc),
+    dat_oc: strNum(p?.dat_oc),
+    dat_rc: strNum(p?.dat_rc),
+    dat_qr: strNum(p?.dat_qr),
+    dat_sns: strNum(p?.dat_sns),
+    dat_mdt: strNum(p?.dat_mdt),
     dat_verified: student.datVerified ?? p?.dat_verified ?? false,
     gpa_verified: student.gpaVerified ?? p?.gpa_verified ?? false,
-    is_reapplicant: student.isReapplicant ?? p?.is_reapplicant ?? false,
+    is_reapplicant:
+      applicantType === "REAPPLICANT" ||
+      (student.isReapplicant ?? p?.is_reapplicant ?? false),
+    applicant_type: applicantType === "FIRST_TIME" || applicantType === "REAPPLICANT"
+      ? applicantType
+      : "",
+    took_online_classes: Boolean(p?.took_online_classes),
+    took_cc_classes: Boolean(p?.took_cc_classes),
+    additional_schooling: Array.isArray(p?.additional_schooling)
+      ? [...p!.additional_schooling!]
+      : [],
+    additional_schooling_other: p?.additional_schooling_other ?? "",
     application_cycle: student.applicationCycle ?? p?.application_cycle ?? "",
     status: (student.status as FormState["status"]) || p?.status || "Preparing",
     readiness: (student.readiness as FormState["readiness"]) || p?.readiness || "YELLOW",
-    progress: String(student.progress ?? p?.progress ?? ""),
+    progress: strNum(student.progress ?? p?.progress),
     ethnicity: student.ethnicity ?? p?.ethnicity ?? "",
     gender: normalizeGender(student.gender ?? p?.gender),
-    age: String(student.age ?? p?.age ?? ""),
+    age: strNum(student.age ?? p?.age),
     undergrad_institution:
       student.undergradInstitution ?? p?.undergrad_institution ?? "",
     undergrad_degree: student.undergradDegree ?? p?.undergrad_degree ?? "",
     undergrad_grad_year:
       student.undergradGradYear ?? p?.undergrad_grad_year ?? "",
-    lor_required: String(student.lorRequired ?? p?.lor_required ?? 4),
+    lor_required: strNum(student.lorRequired ?? p?.lor_required ?? 4),
     lor_external_service:
       student.lorExternalService ?? p?.lor_external_service ?? false,
+    lor_external_collected: strNum(p?.lor_external_collected),
     post_bac_enabled: Boolean(postBac?.enabled),
     post_bac_institution: postBac?.institution ?? "",
     post_bac_degree: postBac?.degreeType ?? "",
     post_bac_year: postBac?.year ?? "",
-    post_bac_strength: String(postBac?.strengthScore ?? ""),
+    post_bac_gpa: strNum(postBac?.gpa),
+    post_bac_strength: strNum(postBac?.strengthScore),
     masters_enabled: Boolean(masters?.enabled),
     masters_institution: masters?.institution ?? "",
     masters_degree: masters?.degreeType ?? "",
     masters_year: masters?.year ?? "",
-    masters_strength: String(masters?.strengthScore ?? ""),
+    masters_gpa: strNum(masters?.gpa),
+    masters_strength: strNum(masters?.strengthScore),
   };
 }
 
@@ -285,7 +358,14 @@ export function StudentProfileEditForm({
 
   const isDirty = (section: SectionKey) => {
     const fields = SECTION_FIELDS[section];
-    return fields.some((key) => form[key] !== baseline[key]);
+    return fields.some((key) => {
+      const a = form[key];
+      const b = baseline[key];
+      if (Array.isArray(a) || Array.isArray(b)) {
+        return JSON.stringify(a) !== JSON.stringify(b);
+      }
+      return a !== b;
+    });
   };
 
   const set =
@@ -300,33 +380,66 @@ export function StudentProfileEditForm({
   };
 
   const buildAcademicsUpdates = (verify: boolean): StudentProfileUpdates => {
-    const gpaChanged = form.gpa !== baseline.gpa;
+    const gpaChanged = form.gpa !== baseline.gpa || form.sgpa !== baseline.sgpa;
     const datChanged =
+      form.dat_type !== baseline.dat_type ||
       form.dat_score !== baseline.dat_score ||
       form.dat_aa !== baseline.dat_aa ||
-      form.dat_ts !== baseline.dat_ts;
+      form.dat_ts !== baseline.dat_ts ||
+      form.dat_pat !== baseline.dat_pat ||
+      form.dat_bio !== baseline.dat_bio ||
+      form.dat_gc !== baseline.dat_gc ||
+      form.dat_oc !== baseline.dat_oc ||
+      form.dat_rc !== baseline.dat_rc ||
+      form.dat_qr !== baseline.dat_qr ||
+      form.dat_sns !== baseline.dat_sns ||
+      form.dat_mdt !== baseline.dat_mdt;
+
+    const hasPostBac =
+      form.post_bac_enabled || form.additional_schooling.includes("POST_BAC");
+    const hasMasters =
+      form.masters_enabled || form.additional_schooling.includes("MASTERS");
 
     return {
       gpa: numOrNull(form.gpa),
-      dat_score: numOrNull(form.dat_score),
+      sgpa: numOrNull(form.sgpa),
+      major: form.major.trim() || null,
+      dat_type: (form.dat_type || null) as DatType | null,
+      dat_score: numOrNull(form.dat_aa) ?? numOrNull(form.dat_score),
       dat_aa: numOrNull(form.dat_aa),
       dat_ts: numOrNull(form.dat_ts),
+      dat_pat: numOrNull(form.dat_pat),
+      dat_bio: numOrNull(form.dat_bio),
+      dat_gc: numOrNull(form.dat_gc),
+      dat_oc: numOrNull(form.dat_oc),
+      dat_rc: numOrNull(form.dat_rc),
+      dat_qr: numOrNull(form.dat_qr),
+      dat_sns: numOrNull(form.dat_sns),
+      dat_mdt: numOrNull(form.dat_mdt),
+      took_online_classes: form.took_online_classes,
+      took_cc_classes: form.took_cc_classes,
+      additional_schooling: form.additional_schooling,
+      additional_schooling_other: form.additional_schooling.includes("OTHER")
+        ? form.additional_schooling_other.trim() || null
+        : null,
       undergrad_institution: form.undergrad_institution || null,
       undergrad_degree: form.undergrad_degree || null,
       undergrad_grad_year: form.undergrad_grad_year || null,
       post_bac: {
-        enabled: form.post_bac_enabled,
+        enabled: hasPostBac,
         institution: form.post_bac_institution,
         degreeType: form.post_bac_degree,
         year: form.post_bac_year,
         strengthScore: numOrNull(form.post_bac_strength) ?? 0,
+        gpa: hasPostBac ? numOrNull(form.post_bac_gpa) : null,
       },
       masters: {
-        enabled: form.masters_enabled,
+        enabled: hasMasters,
         institution: form.masters_institution,
         degreeType: form.masters_degree,
         year: form.masters_year,
         strengthScore: numOrNull(form.masters_strength) ?? 0,
+        gpa: hasMasters ? numOrNull(form.masters_gpa) : null,
       },
       ...(verify
         ? { gpa_verified: true, dat_verified: true }
@@ -353,16 +466,25 @@ export function StudentProfileEditForm({
       }
       case "academics":
         return buildAcademicsUpdates(false);
-      case "application":
+      case "application": {
+        const applicantType: ApplicantType | null =
+          form.applicant_type === "FIRST_TIME" || form.applicant_type === "REAPPLICANT"
+            ? form.applicant_type
+            : form.is_reapplicant
+              ? "REAPPLICANT"
+              : "FIRST_TIME";
         return {
           status: form.status,
           readiness: form.readiness,
           progress: numOrNull(form.progress) ?? 0,
           application_cycle: form.application_cycle || null,
-          is_reapplicant: form.is_reapplicant,
+          is_reapplicant: applicantType === "REAPPLICANT",
+          applicant_type: applicantType,
           lor_required: numOrNull(form.lor_required) ?? 4,
           lor_external_service: form.lor_external_service,
+          lor_external_collected: numOrNull(form.lor_external_collected),
         };
+      }
       case "demographics":
         return {
           ethnicity: form.ethnicity || null,
@@ -602,8 +724,8 @@ export function StudentProfileEditForm({
                             <Badge variant="warning">Needs verify</Badge>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Overall {form.dat_score || "—"} · AA {form.dat_aa || "—"} · TS{" "}
-                            {form.dat_ts || "—"}
+                            {form.dat_type || "DAT"} · AA {form.dat_aa || "—"} · TS{" "}
+                            {form.dat_ts || "—"} · PAT {form.dat_pat || "—"}
                           </p>
                         </div>
                         <Button
@@ -746,12 +868,26 @@ export function StudentProfileEditForm({
                 onChange={(e) => set("gpa")(e.target.value)}
               />
             </FormField>
-            <FormField label="DAT overall">
+            <FormField label="Science GPA">
               <Input
                 type="number"
-                step="0.1"
-                value={form.dat_score}
-                onChange={(e) => set("dat_score")(e.target.value)}
+                step="0.01"
+                value={form.sgpa}
+                onChange={(e) => set("sgpa")(e.target.value)}
+              />
+            </FormField>
+            <FormField label="Major">
+              <Input value={form.major} onChange={(e) => set("major")(e.target.value)} />
+            </FormField>
+            <FormField label="DAT type">
+              <SelectMenu
+                value={form.dat_type || "NOT_TAKEN"}
+                onChange={(v) => set("dat_type")(v as DatType)}
+                options={[
+                  { value: "NOT_TAKEN", label: "Not taken" },
+                  { value: "AMERICAN", label: "American DAT" },
+                  { value: "CANADIAN", label: "Canadian DAT" },
+                ]}
               />
             </FormField>
             <FormField label="DAT AA">
@@ -768,6 +904,41 @@ export function StudentProfileEditForm({
                 step="0.1"
                 value={form.dat_ts}
                 onChange={(e) => set("dat_ts")(e.target.value)}
+              />
+            </FormField>
+            {(
+              [
+                ["dat_pat", "PAT"],
+                ["dat_bio", "BIO"],
+                ["dat_gc", "GC"],
+                ["dat_oc", "OC"],
+                ["dat_rc", "RC"],
+                ["dat_qr", "QR"],
+                ["dat_sns", "SNS"],
+                ["dat_mdt", "MDT"],
+              ] as const
+            ).map(([key, label]) => (
+              <FormField key={key} label={label}>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={form[key]}
+                  onChange={(e) => set(key)(e.target.value)}
+                />
+              </FormField>
+            ))}
+            <FormField label="Online classes">
+              <SelectMenu
+                value={form.took_online_classes ? "yes" : "no"}
+                onChange={(v) => set("took_online_classes")(v === "yes")}
+                options={YES_NO}
+              />
+            </FormField>
+            <FormField label="Community college classes">
+              <SelectMenu
+                value={form.took_cc_classes ? "yes" : "no"}
+                onChange={(v) => set("took_cc_classes")(v === "yes")}
+                options={YES_NO}
               />
             </FormField>
             <FormField label="Undergrad school" className="sm:col-span-2">
@@ -788,6 +959,51 @@ export function StudentProfileEditForm({
                 onChange={(e) => set("undergrad_grad_year")(e.target.value)}
               />
             </FormField>
+          </div>
+
+          <div className="mt-6 border-t border-border pt-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Additional schooling
+            </p>
+            <div className="mb-4 flex flex-wrap gap-2">
+              {ADDITIONAL_SCHOOLING_OPTIONS.map((opt) => {
+                const selected = form.additional_schooling.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      const next = selected
+                        ? form.additional_schooling.filter((v) => v !== opt.value)
+                        : [...form.additional_schooling, opt.value];
+                      setForm((prev) => ({
+                        ...prev,
+                        additional_schooling: next,
+                        post_bac_enabled:
+                          opt.value === "POST_BAC" ? !selected : prev.post_bac_enabled,
+                        masters_enabled:
+                          opt.value === "MASTERS" ? !selected : prev.masters_enabled,
+                      }));
+                    }}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                      selected
+                        ? "border-indigo-500/40 bg-indigo-500/15 text-indigo-200"
+                        : "border-slate-700 bg-slate-950/40 text-slate-400 hover:border-slate-600"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            {form.additional_schooling.includes("OTHER") && (
+              <FormField label="Other schooling details" className="mb-4">
+                <Input
+                  value={form.additional_schooling_other}
+                  onChange={(e) => set("additional_schooling_other")(e.target.value)}
+                />
+              </FormField>
+            )}
           </div>
 
           <div className="mt-6 border-t border-border pt-5">
@@ -827,9 +1043,9 @@ export function StudentProfileEditForm({
                 <Input
                   type="number"
                   step="0.01"
-                  value={form.post_bac_strength}
+                  value={form.post_bac_gpa}
                   disabled={!form.post_bac_enabled}
-                  onChange={(e) => set("post_bac_strength")(e.target.value)}
+                  onChange={(e) => set("post_bac_gpa")(e.target.value)}
                 />
               </FormField>
             </div>
@@ -872,13 +1088,56 @@ export function StudentProfileEditForm({
                 <Input
                   type="number"
                   step="0.01"
-                  value={form.masters_strength}
+                  value={form.masters_gpa}
                   disabled={!form.masters_enabled}
-                  onChange={(e) => set("masters_strength")(e.target.value)}
+                  onChange={(e) => set("masters_gpa")(e.target.value)}
                 />
               </FormField>
             </div>
           </div>
+
+          {(student.profile?.considering_schools?.length ||
+            student.profile?.reapplicant_schools?.length) ? (
+            <div className="mt-6 space-y-4 border-t border-border pt-5">
+              {(student.profile?.considering_schools?.length || 0) > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Schools considering
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {student.profile!.considering_schools!.map((school) => (
+                      <span
+                        key={school.id}
+                        className="rounded-full border border-slate-700 bg-slate-950/50 px-2.5 py-1 text-xs text-slate-300"
+                      >
+                        {school.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(student.profile?.reapplicant_schools?.length || 0) > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Previous application schools
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {student.profile!.reapplicant_schools!.map((school) => (
+                      <span
+                        key={school.schoolId}
+                        className="rounded-full border border-slate-700 bg-slate-950/50 px-2.5 py-1 text-xs text-slate-300"
+                      >
+                        {school.schoolName}
+                        {school.outcomes?.length
+                          ? ` · ${school.outcomes.join(", ")}`
+                          : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
 
           <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
             <Button
@@ -959,11 +1218,21 @@ export function StudentProfileEditForm({
             </FormField>
             <FormField label="Applicant type">
               <SelectMenu
-                value={form.is_reapplicant ? "re" : "first"}
-                onChange={(v) => set("is_reapplicant")(v === "re")}
+                value={
+                  form.applicant_type ||
+                  (form.is_reapplicant ? "REAPPLICANT" : "FIRST_TIME")
+                }
+                onChange={(v) => {
+                  const next = v as ApplicantType;
+                  setForm((prev) => ({
+                    ...prev,
+                    applicant_type: next,
+                    is_reapplicant: next === "REAPPLICANT",
+                  }));
+                }}
                 options={[
-                  { value: "first", label: "First-time" },
-                  { value: "re", label: "Re-applicant" },
+                  { value: "FIRST_TIME", label: "First-time" },
+                  { value: "REAPPLICANT", label: "Re-applicant" },
                 ]}
               />
             </FormField>
@@ -981,6 +1250,16 @@ export function StudentProfileEditForm({
                 options={YES_NO}
               />
             </FormField>
+            {form.lor_external_service && (
+              <FormField label="External LORs collected">
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.lor_external_collected}
+                  onChange={(e) => set("lor_external_collected")(e.target.value)}
+                />
+              </FormField>
+            )}
           </div>
           <SectionActions
             dirty={isDirty("application")}

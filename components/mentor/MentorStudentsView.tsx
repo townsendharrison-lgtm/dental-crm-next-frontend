@@ -12,6 +12,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { parseLocalDate, isUpcomingMeetingDate } from "@/lib/utils/dateUtils";
+import { preferredDatScore } from "@/lib/utils/studentMetrics";
 import type { Student, Meeting, StudentAssignment } from "@/lib/types";
 import { ReadinessStatus } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -127,7 +128,7 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
         readiness: s.readiness,
         strengthScore: s.strengthScore,
         gpa: s.gpa,
-        datScore: s.datScore,
+        datScore: preferredDatScore(s),
         openActionItemsCount: s.openActionItemsCount,
         progress: s.progress,
       });
@@ -150,7 +151,10 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
         readiness: fromList?.readiness ?? existing?.readiness,
         strengthScore: fromList?.strengthScore ?? existing?.strengthScore,
         gpa: fromList?.gpa ?? existing?.gpa,
-        datScore: fromList?.datScore ?? existing?.datScore,
+        datScore:
+          preferredDatScore(fromList) ??
+          preferredDatScore(fromAssignment as Student | undefined) ??
+          existing?.datScore,
         openActionItemsCount: fromList?.openActionItemsCount ?? existing?.openActionItemsCount,
         progress: fromList?.progress ?? existing?.progress,
         pendingAssignment: assignment,
@@ -422,7 +426,7 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
                     <div className="flex shrink-0 items-center gap-4 text-center sm:gap-5">
                       <Metric label="Strength" value={row.strengthScore ?? 0} />
                       <Metric label="GPA" value={row.gpa ?? "N/A"} />
-                      <Metric label="DAT" value={row.datScore ?? 0} />
+                      <Metric label="DAT" value={row.datScore ?? "—"} />
                     </div>
                   )}
 

@@ -73,6 +73,7 @@ import {
   useDeleteStudentDexterity,
   useStudentCredentials,
   useCreateStudentCredential,
+  useUpdateStudentCredential,
   useDeleteStudentCredential,
 } from "@/lib/hooks/useStudentNotesDexterity";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -132,7 +133,7 @@ export function StudentProfileDocumentsView({
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [openingDocId, setOpeningDocId] = useState<string | null>(null);
-  const [snapshotEditOpen, setSnapshotEditOpen] = useState(false);
+  const [profileEditMode, setProfileEditMode] = useState<"personal" | "academic" | null>(null);
   const [lorExternalEnabled, setLorExternalEnabled] = useState(
     student.profile?.lor_external_service || false,
   );
@@ -239,6 +240,7 @@ export function StudentProfileDocumentsView({
   const createDexterityMutation = useCreateStudentDexterity(student.id);
   const deleteDexterityMutation = useDeleteStudentDexterity(student.id);
   const createCredentialMutation = useCreateStudentCredential(student.id);
+  const updateCredentialMutation = useUpdateStudentCredential(student.id);
   const deleteCredentialMutation = useDeleteStudentCredential(student.id);
 
   const persistProfile = (updates: Record<string, unknown>, opts?: { silent?: boolean }) => {
@@ -250,7 +252,8 @@ export function StudentProfileDocumentsView({
     if (!opts?.silent) toast.success("Profile updated");
   };
 
-  const openSnapshotEditor = () => setSnapshotEditOpen(true);
+  const openPersonalEditor = () => setProfileEditMode("personal");
+  const openAcademicEditor = () => setProfileEditMode("academic");
 
   const journeyProgress = Math.max(
     0,
@@ -388,6 +391,7 @@ export function StudentProfileDocumentsView({
   const [dexActivity, setDexActivity] = useState("");
   const [dexDescription, setDexDescription] = useState("");
   const [isAddCredentialOpen, setIsAddCredentialOpen] = useState(false);
+  const [editingCredentialId, setEditingCredentialId] = useState<string | null>(null);
   const [credentialKind, setCredentialKind] = useState<StudentCredentialKind>("LICENSE");
   const [credentialTitle, setCredentialTitle] = useState("");
   const [credentialIssuer, setCredentialIssuer] = useState("");
@@ -596,6 +600,7 @@ export function StudentProfileDocumentsView({
   };
 
   const resetCredentialForm = () => {
+    setEditingCredentialId(null);
     setCredentialKind("LICENSE");
     setCredentialTitle("");
     setCredentialIssuer("");
@@ -603,24 +608,58 @@ export function StudentProfileDocumentsView({
     setCredentialDescription("");
   };
 
-  const handleAddCredential = async () => {
+  const openAddCredential = (kind: StudentCredentialKind = "LICENSE") => {
+    resetCredentialForm();
+    setCredentialKind(kind);
+    setIsAddCredentialOpen(true);
+  };
+
+  const openEditCredential = (item: {
+    id: string;
+    kind: StudentCredentialKind;
+    title: string;
+    issuer?: string | null;
+    year?: string | null;
+    description?: string | null;
+  }) => {
+    setEditingCredentialId(item.id);
+    setCredentialKind(item.kind);
+    setCredentialTitle(item.title || "");
+    setCredentialIssuer(item.issuer || "");
+    setCredentialYear(item.year || "");
+    setCredentialDescription(item.description || "");
+    setIsAddCredentialOpen(true);
+  };
+
+  const handleSaveCredential = async () => {
     if (!credentialTitle.trim()) {
       toast.error("Title is required");
       return;
     }
+    const payload = {
+      kind: credentialKind,
+      title: credentialTitle.trim(),
+      issuer: credentialIssuer.trim(),
+      year: credentialYear.trim(),
+      description: credentialDescription.trim(),
+    };
     try {
-      await createCredentialMutation.mutateAsync({
-        kind: credentialKind,
-        title: credentialTitle.trim(),
-        issuer: credentialIssuer.trim(),
-        year: credentialYear.trim(),
-        description: credentialDescription.trim(),
-      });
+      if (editingCredentialId) {
+        await updateCredentialMutation.mutateAsync({
+          itemId: editingCredentialId,
+          updates: payload,
+        });
+        toast.success(
+          credentialKind === "LICENSE" ? "License updated" : "Achievement updated",
+        );
+      } else {
+        await createCredentialMutation.mutateAsync(payload);
+        toast.success(
+          credentialKind === "LICENSE" ? "License added" : "Achievement added",
+        );
+      }
       resetCredentialForm();
       setIsAddCredentialOpen(false);
-      toast.success(
-        credentialKind === "LICENSE" ? "License added" : "Achievement added",
-      );
     } catch (err: any) {
       toast.error(err?.message || "Failed to save");
     }
@@ -1087,7 +1126,7 @@ export function StudentProfileDocumentsView({
               <h2 className="text-lg font-semibold text-white">Student Snapshot</h2>
               <p className="mt-0.5 text-xs text-slate-500">
                 {canEditOwnProfile
-                  ? "Your identity and progress at a glance. Edit details to update academics too."
+                  ? "Your identity and progress at a glance."
                   : canReviewDocuments
                     ? "Read-only identity snapshot. Academics are in the next section."
                     : "Identity and progress overview."}
@@ -1099,9 +1138,9 @@ export function StudentProfileDocumentsView({
                 variant="outline"
                 size="sm"
                 leftIcon={<Pencil className="h-3.5 w-3.5" />}
-                onClick={openSnapshotEditor}
+                onClick={openPersonalEditor}
               >
-                Edit details
+                Edit personal
               </Button>
             )}
           </div>
@@ -1161,7 +1200,7 @@ export function StudentProfileDocumentsView({
                 variant="outline"
                 size="sm"
                 leftIcon={<Pencil className="h-3.5 w-3.5" />}
-                onClick={openSnapshotEditor}
+                onClick={openAcademicEditor}
               >
                 Edit academics
               </Button>
@@ -1381,7 +1420,7 @@ export function StudentProfileDocumentsView({
               <FileText className="text-indigo-400" size={20} /> Letters of Recommendation
             </h2>
             <div className="flex flex-wrap items-center gap-2">
-              {canEditOwnProfile && (
+              {canEditOwnProfile && !lorExternalEnabled && (
                 <Link
                   href="/student/letters/vault"
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-indigo-500/40 hover:text-white"
@@ -1516,114 +1555,114 @@ export function StudentProfileDocumentsView({
               </div>
             )}
 
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                  Letter Vault requests
-                </h3>
-                {!lorExternalEnabled && (
+            {!lorExternalEnabled && (
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                    Letter Vault requests
+                  </h3>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
                     {vaultReviewedCount} verified
                   </span>
-                )}
-              </div>
-              <div className="grid gap-3">
-                {lorLoading && (
-                  <p className="py-4 text-center text-xs text-slate-500">Loading requests…</p>
-                )}
-                {!lorLoading &&
-                  lorRequests.map((req) => {
-                    const statusLabel =
-                      req.status === "REVIEWED"
-                        ? "Verified"
-                        : req.status === "UPLOADED"
-                          ? "Uploaded — pending review"
-                          : req.status === "DECLINED"
-                            ? "Declined"
-                            : "Requested";
-                    return (
-                      <div
-                        key={req.id}
-                        className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`flex h-10 w-10 items-center justify-center rounded-xl border ${
-                              req.status === "REVIEWED"
-                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                                : req.status === "UPLOADED"
-                                  ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-400"
-                                  : req.status === "DECLINED"
-                                    ? "border-rose-500/30 bg-rose-500/10 text-rose-400"
-                                    : "border-slate-800 bg-slate-900 text-slate-400"
-                            }`}
-                          >
-                            {req.status === "REVIEWED" ? (
-                              <CheckCircle2 size={16} />
-                            ) : (
-                              <User size={16} />
-                            )}
+                </div>
+                <div className="grid gap-3">
+                  {lorLoading && (
+                    <p className="py-4 text-center text-xs text-slate-500">Loading requests…</p>
+                  )}
+                  {!lorLoading &&
+                    lorRequests.map((req) => {
+                      const statusLabel =
+                        req.status === "REVIEWED"
+                          ? "Verified"
+                          : req.status === "UPLOADED"
+                            ? "Uploaded — pending review"
+                            : req.status === "DECLINED"
+                              ? "Declined"
+                              : "Requested";
+                      return (
+                        <div
+                          key={req.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={`flex h-10 w-10 items-center justify-center rounded-xl border ${
+                                req.status === "REVIEWED"
+                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                                  : req.status === "UPLOADED"
+                                    ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-400"
+                                    : req.status === "DECLINED"
+                                      ? "border-rose-500/30 bg-rose-500/10 text-rose-400"
+                                      : "border-slate-800 bg-slate-900 text-slate-400"
+                              }`}
+                            >
+                              {req.status === "REVIEWED" ? (
+                                <CheckCircle2 size={16} />
+                              ) : (
+                                <User size={16} />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-white">{req.writerName}</p>
+                              <p className="text-[10px] text-slate-500">{req.writerEmail}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-white">{req.writerName}</p>
-                            <p className="text-[10px] text-slate-500">{req.writerEmail}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-4 sm:justify-end">
-                          <div className="text-left sm:text-right">
-                            <p className="mb-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-600">
-                              Due
-                            </p>
-                            <p className="text-xs font-bold text-slate-400">
-                              {req.dueDate
-                                ? new Date(req.dueDate).toLocaleDateString()
-                                : "—"}
-                            </p>
-                          </div>
-                          {req.uploadedAt && (
+                          <div className="flex flex-wrap items-center gap-4 sm:justify-end">
                             <div className="text-left sm:text-right">
                               <p className="mb-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-600">
-                                Uploaded
+                                Due
                               </p>
                               <p className="text-xs font-bold text-slate-400">
-                                {new Date(req.uploadedAt).toLocaleDateString()}
+                                {req.dueDate
+                                  ? new Date(req.dueDate).toLocaleDateString()
+                                  : "—"}
                               </p>
                             </div>
-                          )}
-                          <div
-                            className={`rounded-lg border px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
-                              req.status === "REVIEWED"
-                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                                : req.status === "UPLOADED"
-                                  ? "border-indigo-500/20 bg-indigo-500/10 text-indigo-400"
-                                  : req.status === "DECLINED"
-                                    ? "border-rose-500/20 bg-rose-500/10 text-rose-400"
-                                    : "border-amber-500/20 bg-amber-500/10 text-amber-400"
-                            }`}
-                          >
-                            {statusLabel}
+                            {req.uploadedAt && (
+                              <div className="text-left sm:text-right">
+                                <p className="mb-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                                  Uploaded
+                                </p>
+                                <p className="text-xs font-bold text-slate-400">
+                                  {new Date(req.uploadedAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            )}
+                            <div
+                              className={`rounded-lg border px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
+                                req.status === "REVIEWED"
+                                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                                  : req.status === "UPLOADED"
+                                    ? "border-indigo-500/20 bg-indigo-500/10 text-indigo-400"
+                                    : req.status === "DECLINED"
+                                      ? "border-rose-500/20 bg-rose-500/10 text-rose-400"
+                                      : "border-amber-500/20 bg-amber-500/10 text-amber-400"
+                              }`}
+                            >
+                              {statusLabel}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                {!lorLoading && lorRequests.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-800 py-8 text-center">
-                    <p className="text-xs italic text-slate-500">
-                      No Letter Vault requests yet.
-                    </p>
-                    {canEditOwnProfile && (
-                      <Link
-                        href="/student/letters/vault"
-                        className="mt-3 inline-flex text-xs font-semibold text-indigo-400 hover:text-indigo-300"
-                      >
-                        Request a letter in Letter Vault →
-                      </Link>
-                    )}
-                  </div>
-                )}
+                      );
+                    })}
+                  {!lorLoading && lorRequests.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-800 py-8 text-center">
+                      <p className="text-xs italic text-slate-500">
+                        No Letter Vault requests yet.
+                      </p>
+                      {canEditOwnProfile && (
+                        <Link
+                          href="/student/letters/vault"
+                          className="mt-3 inline-flex text-xs font-semibold text-indigo-400 hover:text-indigo-300"
+                        >
+                          Request a letter in Letter Vault →
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </section>
 
@@ -1690,7 +1729,7 @@ export function StudentProfileDocumentsView({
                 variant="secondary"
                 size="sm"
                 leftIcon={<Plus size={14} />}
-                onClick={() => setIsAddCredentialOpen(true)}
+                onClick={() => openAddCredential("LICENSE")}
               >
                 Add
               </Button>
@@ -1709,7 +1748,7 @@ export function StudentProfileDocumentsView({
                     key={item.id}
                     className="flex items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-semibold text-white">{item.title}</p>
                       {(item.issuer || item.year) && (
                         <p className="mt-1 text-xs text-slate-500">
@@ -1721,16 +1760,28 @@ export function StudentProfileDocumentsView({
                       ) : null}
                     </div>
                     {(canEditOwnProfile || canReviewDocuments) && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="text-slate-600 hover:text-rose-400"
-                        onClick={() => void handleDeleteCredential(item.id)}
-                        aria-label="Delete license"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-slate-600 hover:text-indigo-400"
+                          onClick={() => openEditCredential(item)}
+                          aria-label="Edit license"
+                        >
+                          <Pencil size={16} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-slate-600 hover:text-rose-400"
+                          onClick={() => void handleDeleteCredential(item.id)}
+                          aria-label="Delete license"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ))
@@ -1748,7 +1799,7 @@ export function StudentProfileDocumentsView({
                     key={item.id}
                     className="flex items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-semibold text-white">{item.title}</p>
                       {(item.issuer || item.year) && (
                         <p className="mt-1 text-xs text-slate-500">
@@ -1760,16 +1811,28 @@ export function StudentProfileDocumentsView({
                       ) : null}
                     </div>
                     {(canEditOwnProfile || canReviewDocuments) && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="text-slate-600 hover:text-rose-400"
-                        onClick={() => void handleDeleteCredential(item.id)}
-                        aria-label="Delete achievement"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-slate-600 hover:text-indigo-400"
+                          onClick={() => openEditCredential(item)}
+                          aria-label="Edit achievement"
+                        >
+                          <Pencil size={16} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-slate-600 hover:text-rose-400"
+                          onClick={() => void handleDeleteCredential(item.id)}
+                          aria-label="Delete achievement"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ))
@@ -1843,18 +1906,19 @@ export function StudentProfileDocumentsView({
                             key={entry.id}
                             className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/50 p-4"
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="mb-1 flex flex-wrap items-center gap-2">
-                                  {entry.isCurrent && (
-                                    <Badge variant="success">Current</Badge>
-                                  )}
-                                </div>
-                                <h5 className="font-bold text-white">{entry.title}</h5>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                                  {entry.location}
-                                </p>
+                            <div>
+                              <div className="mb-2 flex flex-wrap items-center gap-2">
+                                {entry.isCurrent && (
+                                  <Badge variant="success">
+                                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                                    Current
+                                  </Badge>
+                                )}
                               </div>
+                              <h5 className="font-bold text-white">{entry.title}</h5>
+                              {entry.location && entry.location !== "—" ? (
+                                <p className="mt-0.5 text-sm text-slate-400">{entry.location}</p>
+                              ) : null}
                             </div>
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                               <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5">
@@ -1862,7 +1926,7 @@ export function StudentProfileDocumentsView({
                                   Total Hours
                                 </p>
                                 <p className="text-base font-semibold text-white">
-                                  {entry.totalHours}
+                                  {Number(entry.totalHours.toFixed(1))}
                                 </p>
                               </div>
                               <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5">
@@ -2182,7 +2246,11 @@ export function StudentProfileDocumentsView({
           setIsAddCredentialOpen(false);
           resetCredentialForm();
         }}
-        title="Add License or Achievement"
+        title={
+          editingCredentialId
+            ? "Edit License or Achievement"
+            : "Add License or Achievement"
+        }
         size="md"
         footer={
           <div className="flex justify-end gap-2">
@@ -2198,10 +2266,13 @@ export function StudentProfileDocumentsView({
             </Button>
             <Button
               type="button"
-              onClick={() => void handleAddCredential()}
-              isLoading={createCredentialMutation.isPending}
+              onClick={() => void handleSaveCredential()}
+              isLoading={
+                createCredentialMutation.isPending ||
+                updateCredentialMutation.isPending
+              }
             >
-              Save
+              {editingCredentialId ? "Save changes" : "Save"}
             </Button>
           </div>
         }
@@ -2327,11 +2398,12 @@ export function StudentProfileDocumentsView({
         </form>
       </Modal>
 
-      {canEditOwnProfile && (
+      {canEditOwnProfile && profileEditMode && (
         <ProfileDetailsEditModal
-          open={snapshotEditOpen}
+          open
+          mode={profileEditMode}
           student={student}
-          onClose={() => setSnapshotEditOpen(false)}
+          onClose={() => setProfileEditMode(null)}
         />
       )}
     </div>

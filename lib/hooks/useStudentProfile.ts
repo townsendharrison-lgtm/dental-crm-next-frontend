@@ -37,6 +37,10 @@ export function useUpdateStudent() {
       qc.invalidateQueries({ queryKey: queryKeys.students.detail(updated.id) });
       qc.invalidateQueries({ queryKey: queryKeys.students.datHistory(updated.id) });
       qc.invalidateQueries({ queryKey: queryKeys.students.strengthHistory(updated.id) });
+      qc.invalidateQueries({ queryKey: queryKeys.students.strengthPercentile(updated.id) });
+      // Mentor roster cards (`useMentorStudents`) + any mentor detail lists
+      qc.invalidateQueries({ queryKey: ["mentors", "students"] });
+      qc.invalidateQueries({ queryKey: queryKeys.mentors.all() });
     },
   });
 }

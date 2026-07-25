@@ -69,11 +69,35 @@ export const ICON_MAP: Record<string, React.ReactNode> = {
   'Gem': <Gem size={18} />
 };
 
+/** Left → right: Strong Fit, Target, Reach */
 export const DEFAULT_CATEGORIES: SchoolCategory[] = [
-  { id: 'Reach', name: 'Reach', color: '#f43f5e', icon: 'Target' },
+  { id: 'Strong Fit', name: 'Strong Fit', color: '#10b981', icon: 'TrendingUp' },
   { id: 'Target', name: 'Target', color: '#6366f1', icon: 'CheckCircle2' },
-  { id: 'Strong Fit', name: 'Strong Fit', color: '#10b981', icon: 'TrendingUp' }
+  { id: 'Reach', name: 'Reach', color: '#f43f5e', icon: 'Target' },
 ];
+
+export const DEFAULT_CATEGORY_ORDER = DEFAULT_CATEGORIES.map((c) => c.id);
+
+/** Keep default buckets in Strong Fit → Target → Reach; custom categories follow. */
+export function orderSchoolCategories(categories: SchoolCategory[]): SchoolCategory[] {
+  if (!categories.length) return [...DEFAULT_CATEGORIES];
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const ordered: SchoolCategory[] = [];
+  for (const id of DEFAULT_CATEGORY_ORDER) {
+    const cat = byId.get(id);
+    if (cat) {
+      ordered.push(cat);
+      byId.delete(id);
+    }
+  }
+  for (const cat of categories) {
+    if (byId.has(cat.id)) {
+      ordered.push(cat);
+      byId.delete(cat.id);
+    }
+  }
+  return ordered;
+}
 
 export const AVAILABLE_COLORS = [
   '#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#94a3b8'
@@ -143,11 +167,12 @@ export const SchoolCard = React.forwardRef<HTMLDivElement, {
   onDelete?: (id: string) => void, 
   onUpdateNotes?: (id: string, notes: string) => void,
   onUpdateStatus?: (id: string, status: ApplicationStatus | '') => void,
+  onViewDetails?: (school: School) => void,
   isOverlay?: boolean,
   style?: React.CSSProperties,
   attributes?: any,
   listeners?: any
-}>(({ school, status, onDelete, onUpdateNotes, onUpdateStatus, isOverlay, style, attributes, listeners }, ref) => {
+}>(({ school, status, onDelete, onUpdateNotes, onUpdateStatus, onViewDetails, isOverlay, style, attributes, listeners }, ref) => {
   const stats: { label: string; value: React.ReactNode; tone?: string }[] = [
     { label: 'Avg GPA', value: school.avgGPA ?? 'N/A' },
     { label: 'Avg DAT', value: school.datAvg ?? 'N/A' },
@@ -258,7 +283,7 @@ export const SchoolCard = React.forwardRef<HTMLDivElement, {
       </div>
 
       {onUpdateStatus && (
-        <div className="mb-3 border-t border-slate-800 pt-3">
+        <div className="mb-3 space-y-2 border-t border-slate-800 pt-3">
           <FormField label="Application Status" htmlFor={`status-${school.id}`}>
             <SelectMenu
               value={status || ''}
@@ -268,6 +293,31 @@ export const SchoolCard = React.forwardRef<HTMLDivElement, {
               className="w-full"
             />
           </FormField>
+          {onViewDetails && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => onViewDetails(school)}
+            >
+              View full details
+            </Button>
+          )}
+        </div>
+      )}
+
+      {!onUpdateStatus && onViewDetails && (
+        <div className="mb-3 border-t border-slate-800 pt-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => onViewDetails(school)}
+          >
+            View full details
+          </Button>
         </div>
       )}
 
@@ -289,13 +339,15 @@ export const SortableSchoolCard = ({
   status,
   onDelete, 
   onUpdateNotes,
-  onUpdateStatus
+  onUpdateStatus,
+  onViewDetails,
 }: { 
   school: School, 
   status?: ApplicationStatus,
   onDelete: (id: string) => void, 
   onUpdateNotes: (id: string, notes: string) => void,
-  onUpdateStatus: (id: string, status: ApplicationStatus | '') => void
+  onUpdateStatus: (id: string, status: ApplicationStatus | '') => void,
+  onViewDetails?: (school: School) => void,
 }) => {
   const {
     attributes,
@@ -320,6 +372,7 @@ export const SortableSchoolCard = ({
       onDelete={onDelete}
       onUpdateNotes={onUpdateNotes}
       onUpdateStatus={onUpdateStatus}
+      onViewDetails={onViewDetails}
       style={style}
       attributes={attributes}
       listeners={listeners}
@@ -500,6 +553,7 @@ export const DroppableCategory = ({
   schoolsCount, 
   onRemove,
   onAdd,
+  onViewSchools,
   isDefault 
 }: { 
   category: SchoolCategory, 
@@ -507,6 +561,7 @@ export const DroppableCategory = ({
   schoolsCount: number, 
   onRemove: (id: string) => void,
   onAdd?: (id: string) => void,
+  onViewSchools?: (id: string) => void,
   isDefault: boolean 
 }) => {
   const { setNodeRef } = useDroppable({ id: category.id });
@@ -529,6 +584,17 @@ export const DroppableCategory = ({
           <span className="rounded-full border border-slate-800 bg-slate-900 px-2 py-0.5 text-xs font-medium text-slate-500">
             {schoolsCount}
           </span>
+          {onViewSchools && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[10px] font-semibold uppercase tracking-wide"
+              onClick={() => onViewSchools(category.id)}
+            >
+              View schools
+            </Button>
+          )}
           {onAdd && (
             <Button
               type="button"

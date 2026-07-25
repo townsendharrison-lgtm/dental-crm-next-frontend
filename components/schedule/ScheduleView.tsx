@@ -29,6 +29,12 @@ import { Modal } from "@/components/ui/Modal";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { TimePicker } from "@/components/ui/TimePicker";
+import {
+  formatMeetingLocal,
+  formatMeetingLocalTime,
+  getZonedWallClock,
+  zonedDateTimeToUtcIso,
+} from "@/lib/utils/dateUtils";
 
 function meetingMentorId(m: Meeting) {
   return m.mentor_id || m.mentorId || "";
@@ -413,9 +419,11 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
   );
 
   const openEditMeeting = (meeting: Meeting) => {
-    const d = new Date(meeting.date);
-    let hours = d.getHours();
-    const minutes = d.getMinutes();
+    const tz =
+      meeting.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const wall = getZonedWallClock(meeting.date, tz);
+    let hours = wall.hours24;
+    const minutes = wall.minutes;
     const ampm: "AM" | "PM" = hours >= 12 ? "PM" : "AM";
     hours = hours % 12 || 12;
 
@@ -424,10 +432,10 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
     const sid = meetingStudentId(meeting) || "";
     setNewMeeting({
       title: meeting.title || "",
-      date: toYmd(d),
+      date: wall.date,
       time: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
       ampm,
-      timezone: meeting.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timezone: tz,
       duration: meeting.duration || 30,
       audience,
       counterpartyType:
@@ -477,9 +485,12 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
     let [hours, minutes] = newMeeting.time.split(":").map(Number);
     if (newMeeting.ampm === "PM" && hours < 12) hours += 12;
     if (newMeeting.ampm === "AM" && hours === 12) hours = 0;
-
-    const [y, m, d] = newMeeting.date.split("-").map(Number);
-    const date = new Date(y, m - 1, d, hours, minutes);
+    const time24 = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    const dateIso = zonedDateTimeToUtcIso(
+      newMeeting.date,
+      time24,
+      newMeeting.timezone || "UTC",
+    );
 
     let mentorId = role === "MENTOR" ? currentUserId : newMeeting.mentorId || currentUserId;
     let studentId: string | undefined;
@@ -500,7 +511,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
 
     const payload = {
       title: newMeeting.title,
-      date: date.toISOString(),
+      date: dateIso,
       timezone: newMeeting.timezone,
       duration: newMeeting.duration,
       type: typeForAudience(audience),
@@ -842,10 +853,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                         {isMeetingEventType(event.type) && (
                           <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold shrink-0">
                             <Clock className="w-3 h-3" />{" "}
-                            {new Date((event.data as Meeting).date).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {formatMeetingLocalTime((event.data as Meeting).date)}
                           </div>
                         )}
                       </div>
@@ -926,14 +934,12 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                       <div className="min-w-0">
                         <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">
                           {audienceLabel(meetingAudience(m))} ·{" "}
-                          {new Date(m.date).toLocaleDateString([], {
+                          {formatMeetingLocal(m.date, {
                             month: "short",
                             day: "numeric",
-                          })}{" "}
-                          ·{" "}
-                          {new Date(m.date).toLocaleTimeString([], {
                             hour: "numeric",
                             minute: "2-digit",
+                            timeZoneName: "short",
                           })}
                         </p>
                         <h4 className="font-bold text-white text-sm truncate">{m.title}</h4>
@@ -1022,7 +1028,10 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Timezone">
+            <FormField
+              label="Timezone for this time"
+              hint="Enter the wall-clock time in this zone. Everyone else will see it converted to their local time."
+            >
               <SelectMenu
                 value={newMeeting.timezone}
                 leftIcon={<Globe className="h-4 w-4 text-slate-500" />}
@@ -1271,12 +1280,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
         {deletingMeeting && (
           <p className="text-sm text-slate-300">
             Delete <span className="font-semibold text-white">{deletingMeeting.title}</span> on{" "}
-            {new Date(deletingMeeting.date).toLocaleString([], {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}
+            {formatMeetingLocal(deletingMeeting.date)}
             ?
           </p>
         )}

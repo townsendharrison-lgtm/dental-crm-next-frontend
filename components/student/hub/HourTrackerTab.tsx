@@ -473,16 +473,20 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                       </div>
                     </div>
 
-                    <p className="text-sm text-slate-500 leading-relaxed max-w-3xl mb-4">
-                      {exp.description}
-                    </p>
+                    {exp.description ? (
+                      <p className="mb-4 max-w-3xl text-sm leading-relaxed text-slate-500">
+                        {exp.description}
+                      </p>
+                    ) : null}
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
                         <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
                           Total Hours
                         </p>
-                        <p className="text-xl font-semibold text-white">{exp.totalHours}</p>
+                        <p className="text-xl font-semibold text-white">
+                          {Number(exp.totalHours.toFixed(1))}
+                        </p>
                       </div>
                       <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
                         <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
@@ -698,14 +702,19 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
             />
           </FormField>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+          <div className="space-y-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
             <div>
-              <p className="text-sm font-semibold text-white">Prior hours (optional)</p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Quick-add hours from before you joined — total hours, avg hrs/wk, and/or weeks.
+              <p className="text-sm font-semibold text-white">
+                Prior hours before signup{" "}
+                <span className="font-normal text-slate-500">(optional)</span>
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Enter total hours, avg hrs/wk, and/or weeks — we&apos;ll log them so your timeline
+                and averages stay accurate. Category, title, and start date are the only required
+                fields above.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <FormField label="Total hours">
                 <Input
                   type="number"

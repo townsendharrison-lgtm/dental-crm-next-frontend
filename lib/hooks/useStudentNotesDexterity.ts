@@ -8,6 +8,7 @@ import {
   type CreateDexterityPayload,
   type UpdateDexterityPayload,
   type CreateCredentialPayload,
+  type UpdateCredentialPayload,
 } from "@/lib/api/students";
 import { queryKeys } from "@/lib/api/queryKeys";
 import type { StudentNote, ManualDexterity, StudentCredential } from "@/lib/types";
@@ -104,6 +105,22 @@ export function useCreateStudentCredential(studentId: string) {
   return useMutation({
     mutationFn: (payload: CreateCredentialPayload) =>
       studentsApi.createCredential(studentId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.students.credentials(studentId) });
+    },
+  });
+}
+
+export function useUpdateStudentCredential(studentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      itemId,
+      updates,
+    }: {
+      itemId: string;
+      updates: UpdateCredentialPayload;
+    }) => studentsApi.updateCredential(studentId, itemId, updates),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.students.credentials(studentId) });
     },

@@ -47,9 +47,22 @@ interface SchoolFilterViewProps {
   onSelectSchool?: (school: DentalSchool) => void;
   isModal?: boolean;
   isMentorView?: boolean;
+  /** Start with the favorites-only filter on. */
+  favoritesOnly?: boolean;
+  /** Open the full-details panel for this catalog school id (or name match). */
+  initialSelectedSchoolId?: string | null;
+  /** Catalog ids and/or names already on the board — Select is disabled for these. */
+  alreadyAddedSchoolKeys?: string[];
 }
 
-const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isModal = false, isMentorView = false }) => {
+const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
+  onSelectSchool,
+  isModal = false,
+  isMentorView = false,
+  favoritesOnly = false,
+  initialSelectedSchoolId = null,
+  alreadyAddedSchoolKeys = [],
+}) => {
   const { schools, loading, error, refetch } = useDentalSchoolsCatalog();
   const [favorites, setFavorites] = useState<string[]>(() => {
     const saved = localStorage.getItem('dsg_favorites');
@@ -58,6 +71,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
 
   // Filter States
   const [search, setSearch] = useState('');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(favoritesOnly);
   const [filters, setFilters] = useState({
     state: 'All',
     type: 'All',
@@ -83,14 +97,29 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
   }, [favorites]);
 
   useEffect(() => {
+    setShowFavoritesOnly(favoritesOnly);
+  }, [favoritesOnly]);
+
+  useEffect(() => {
     if (error) {
       toast.error('Failed to load school data');
     }
   }, [error]);
 
+  useEffect(() => {
+    if (!initialSelectedSchoolId || !schools.length) return;
+    const match =
+      schools.find((s) => s.id === initialSelectedSchoolId) ||
+      schools.find(
+        (s) => s.name.toLowerCase() === String(initialSelectedSchoolId).toLowerCase(),
+      );
+    if (match) setSelectedSchool(match);
+  }, [initialSelectedSchoolId, schools]);
+
   // Derived Data
   const filteredSchools = useMemo(() => {
     return schools.filter(s => {
+      const matchesFavorite = !showFavoritesOnly || favorites.includes(s.id);
       const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) || 
                            s.location.toLowerCase().includes(search.toLowerCase());
       const matchesState = filters.state === 'All' || s.location.includes(filters.state);
@@ -111,7 +140,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
                              (filters.hasHousing === 'Yes' ? s.housing : !s.housing);
       const matchesShadowing = s.shadowing >= filters.minShadowing;
 
-      return matchesSearch && matchesState && matchesType && matchesCGPA && 
+      return matchesFavorite && matchesSearch && matchesState && matchesType && matchesCGPA && 
              matchesSGPA && matchesDAT && matchesTuition && matchesAcceptance && 
              matchesISAcceptance && matchesOOSAcceptance &&
              matchesClassSize && matchesCanadians && matchesCC && matchesHousing && matchesShadowing;
@@ -129,7 +158,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
         default: return 0;
       }
     });
-  }, [schools, search, filters, sortBy]);
+  }, [schools, search, filters, sortBy, showFavoritesOnly, favorites]);
 
   // Categorize raw data for the detail view
   const rawCategories = useMemo(() => {
@@ -188,6 +217,23 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
     }));
     return ['All', ...Array.from(s).sort()];
   }, [schools]);
+
+  const addedKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const key of alreadyAddedSchoolKeys) {
+      const k = String(key || '').trim();
+      if (!k) continue;
+      set.add(k);
+      set.add(k.toLowerCase());
+    }
+    return set;
+  }, [alreadyAddedSchoolKeys]);
+
+  const isAlreadyAdded = (school: DentalSchool) =>
+    addedKeys.has(school.id) ||
+    addedKeys.has(school.id.toLowerCase()) ||
+    addedKeys.has(school.name) ||
+    addedKeys.has(school.name.toLowerCase());
 
   const toggleFavorite = (id: string) => {
     setFavorites(prev => 
@@ -460,23 +506,34 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
         {/* Main Content Area (Full Width) */}
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2 w-full sm:w-64">
-              <ArrowUpDown className="w-4 h-4 text-slate-500 shrink-0" />
-              <SelectMenu
-                value={sortBy}
-                onChange={setSortBy}
-                options={[
-                  { value: 'alphabetical', label: 'Sort by: Alphabetical' },
-                  { value: 'highest-gpa', label: 'Sort by: Highest GPA' },
-                  { value: 'lowest-gpa', label: 'Sort by: Lowest GPA' },
-                  { value: 'highest-dat', label: 'Sort by: Highest DAT' },
-                  { value: 'lowest-dat', label: 'Sort by: Lowest DAT' },
-                  { value: 'highest-acceptance', label: 'Sort by: Highest Acceptance' },
-                  { value: 'lowest-acceptance', label: 'Sort by: Lowest Acceptance' },
-                  { value: 'lowest-tuition', label: 'Sort by: Lowest Tuition' },
-                  { value: 'highest-tuition', label: 'Sort by: Highest Tuition' },
-                ]}
-              />
+            <div className="flex flex-wrap items-center gap-2 w-full sm:flex-1">
+              <div className="flex items-center gap-2 w-full sm:w-64">
+                <ArrowUpDown className="w-4 h-4 text-slate-500 shrink-0" />
+                <SelectMenu
+                  value={sortBy}
+                  onChange={setSortBy}
+                  options={[
+                    { value: 'alphabetical', label: 'Sort by: Alphabetical' },
+                    { value: 'highest-gpa', label: 'Sort by: Highest GPA' },
+                    { value: 'lowest-gpa', label: 'Sort by: Lowest GPA' },
+                    { value: 'highest-dat', label: 'Sort by: Highest DAT' },
+                    { value: 'lowest-dat', label: 'Sort by: Lowest DAT' },
+                    { value: 'highest-acceptance', label: 'Sort by: Highest Acceptance' },
+                    { value: 'lowest-acceptance', label: 'Sort by: Lowest Acceptance' },
+                    { value: 'lowest-tuition', label: 'Sort by: Lowest Tuition' },
+                    { value: 'highest-tuition', label: 'Sort by: Highest Tuition' },
+                  ]}
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant={showFavoritesOnly ? 'primary' : 'outline'}
+                leftIcon={<Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-current' : ''}`} />}
+                onClick={() => setShowFavoritesOnly((v) => !v)}
+              >
+                Favorites{favorites.length ? ` (${favorites.length})` : ''}
+              </Button>
             </div>
           </div>
 
@@ -612,12 +669,19 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
                               size="sm"
                               className="flex-1"
                               leftIcon={<Plus className="w-4 h-4" />}
+                              disabled={isAlreadyAdded(school)}
+                              title={
+                                isAlreadyAdded(school)
+                                  ? 'Already on your school list'
+                                  : 'Add to this category'
+                              }
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isAlreadyAdded(school)) return;
                                 onSelectSchool(school);
                               }}
                             >
-                              Select
+                              {isAlreadyAdded(school) ? 'Added' : 'Select'}
                             </Button>
                           )}
                         </div>
@@ -768,7 +832,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
       {/* Detail Modal */}
       <AnimatePresence>
         {selectedSchool && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-slate-950/90 backdrop-blur-md">
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-8 bg-slate-950/90 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, scale: 0.98, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1287,9 +1351,30 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({ onSelectSchool, isM
                 >
                   {favorites.includes(selectedSchool.id) ? 'Favorited' : 'Add to Favorites'}
                 </Button>
-                <Button onClick={() => setSelectedSchool(null)}>
-                  Close Details
-                </Button>
+                <div className="flex items-center gap-2">
+                  {onSelectSchool && (
+                    <Button
+                      size="sm"
+                      leftIcon={<Plus className="w-4 h-4" />}
+                      disabled={isAlreadyAdded(selectedSchool)}
+                      title={
+                        isAlreadyAdded(selectedSchool)
+                          ? 'Already on your school list'
+                          : 'Add to this category'
+                      }
+                      onClick={() => {
+                        if (isAlreadyAdded(selectedSchool)) return;
+                        onSelectSchool(selectedSchool);
+                        setSelectedSchool(null);
+                      }}
+                    >
+                      {isAlreadyAdded(selectedSchool) ? 'Already added' : 'Select'}
+                    </Button>
+                  )}
+                  <Button onClick={() => setSelectedSchool(null)}>
+                    Close Details
+                  </Button>
+                </div>
               </div>
             </motion.div>
           </div>

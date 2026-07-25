@@ -1,7 +1,9 @@
 import type { Experience, ExperienceSession } from "@/lib/types";
 import { parseLocalDate } from "@/lib/utils/dateUtils";
 
-const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SIXTY_DAYS_MS = 60 * DAY_MS;
+const WEEK_MS = 7 * DAY_MS;
 
 export type ExperienceDisplayStats = {
   totalHours: number;
@@ -12,6 +14,13 @@ export type ExperienceDisplayStats = {
   isCurrent: boolean;
   lastSessionDate: string | null;
 };
+
+function toYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 function sessionDateMs(sessions: ExperienceSession[]): number[] {
   return sessions
@@ -25,7 +34,19 @@ function sessionDateMs(sessions: ExperienceSession[]): number[] {
     .filter((t) => Number.isFinite(t));
 }
 
-/** Timeline end label: end date wins; else Current if last session < 60d; else last session date. */
+function weeksBetween(startMs: number, endMs: number): number {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return 1;
+  const span = Math.abs(endMs - startMs);
+  return Math.max(1, Math.round(span / WEEK_MS) || 1);
+}
+
+/**
+ * Timeline end label:
+ * - End date wins (never "Current")
+ * - Else Current if last session within 60 days
+ * - Else last session date
+ * - No sessions + no end date → Current
+ */
 export function experienceTimelineEnd(
   endDate: string | null | undefined,
   sessions: ExperienceSession[],
@@ -59,7 +80,6 @@ export function experienceTimelineEnd(
     };
   }
 
-  // No sessions and no end date — treat as current
   return { label: "Current", isCurrent: true, lastSessionDate: null };
 }
 
@@ -77,15 +97,48 @@ export function computeExperienceStats(exp: Experience): ExperienceDisplayStats 
       /* ignore bad dates */
     }
   });
-  const totalWeeks = Math.max(sessions.length > 0 ? 1 : 0, distinctWeeks.size) || (totalHours > 0 ? 1 : 0);
-  const avgHoursPerWeek = totalWeeks > 0 ? totalHours / totalWeeks : 0;
 
   const startRaw = exp.startDate || exp.start_date || "";
   const endRaw = exp.endDate || exp.end_date || null;
   const times = sessionDateMs(sessions);
+
+  let startMs: number | null = null;
+  if (startRaw) {
+    try {
+      startMs = parseLocalDate(startRaw).getTime();
+    } catch {
+      startMs = null;
+    }
+  }
+  if (times.length > 0) {
+    const minSession = Math.min(...times);
+    startMs = startMs != null ? Math.min(startMs, minSession) : minSession;
+  }
+
+  let endMs: number | null = null;
+  if (endRaw) {
+    try {
+      endMs = parseLocalDate(endRaw).getTime();
+    } catch {
+      endMs = null;
+    }
+  }
+  if (endMs == null && times.length > 0) {
+    endMs = Math.max(...times);
+  }
+
+  const spanWeeks =
+    startMs != null && endMs != null ? weeksBetween(startMs, endMs) : 0;
+  const totalWeeks = Math.max(
+    sessions.length > 0 ? 1 : 0,
+    distinctWeeks.size,
+    spanWeeks,
+  );
+  const avgHoursPerWeek = totalWeeks > 0 ? totalHours / totalWeeks : 0;
+
   const startDate =
-    times.length > 0
-      ? new Date(Math.min(...times))
+    startMs != null
+      ? new Date(startMs)
       : startRaw
         ? parseLocalDate(startRaw)
         : new Date();
@@ -105,7 +158,8 @@ export function computeExperienceStats(exp: Experience): ExperienceDisplayStats 
 
 /**
  * Build synthetic prior sessions from quick-add fields.
- * Prefers total hours; otherwise avg × weeks. Spreads across weeks when weeks > 1.
+ * Prefers total hours; otherwise avg × weeks. Spreads across weeks when weeks > 1
+ * so Timeline / Avg Hrs/Wk / Weeks stay accurate.
  */
 export function buildPriorHourSessions(opts: {
   startDate: string;
@@ -126,29 +180,40 @@ export function buildPriorHourSessions(opts: {
   if (!total && !avg) return [];
 
   const note = "Prior hours (quick add)";
-  const duration = Math.round((total || avg || 0) * 100) / 100;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  // Spread across weeks only for a manageable count; otherwise one bulk session
-  if (weeks && weeks > 1 && weeks <= 26 && avg) {
+  // Spread weekly so stats (weeks / avg) stay correct. Cap spread count; beyond that
+  // use start + end anchors so the date span still reflects the reported weeks.
+  if (weeks && weeks > 1 && avg) {
     const base = parseLocalDate(start);
-    return Array.from({ length: weeks }, (_, i) => {
-      const d = new Date(base);
-      d.setDate(d.getDate() - i * 7);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return {
-        date: `${y}-${m}-${day}`,
-        duration: Math.round(avg! * 100) / 100,
-        notes: note,
-      };
-    });
+    const spreadCount = Math.min(weeks, 104);
+    const perSession = round2(total! / spreadCount);
+
+    if (weeks <= 104) {
+      return Array.from({ length: weeks }, (_, i) => {
+        const d = new Date(base);
+        d.setDate(d.getDate() - i * 7);
+        return {
+          date: toYmd(d),
+          duration: perSession,
+          notes: note,
+        };
+      });
+    }
+
+    const end = new Date(base);
+    end.setDate(end.getDate() - (weeks - 1) * 7);
+    const half = round2(total! / 2);
+    return [
+      { date: toYmd(base), duration: half, notes: `${note} · ${weeks} weeks` },
+      { date: toYmd(end), duration: round2(total! - half), notes: `${note} · ${weeks} weeks` },
+    ];
   }
 
   return [
     {
       date: start,
-      duration,
+      duration: round2(total || avg || 0),
       notes: weeks && weeks > 1 ? `${note} · ${weeks} weeks` : note,
     },
   ];

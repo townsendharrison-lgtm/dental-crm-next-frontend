@@ -1,8 +1,27 @@
 /**
- * Strength score formula (0–100). Keep in sync with backend `services/strengthScore.ts`.
+ * Strength score (0–100) — automatic competitiveness index.
  *
- * GPA and DAT only contribute when staff have verified them (gpaVerified / datVerified).
+ * Keep in sync with backend `services/strengthScore.ts`.
+ *
+ * ## Formula
+ * total = clamp(academics + dat + experience + documents + readiness, 0, 100)
+ *
+ * | Bucket        | Max | Inputs |
+ * |---------------|-----|--------|
+ * | Academics     | 25  | Verified GPA scaled 3.0→0 … 4.0→25 |
+ * | DAT           | 30  | Verified AA (or overall) normalized to legacy 1–30, then 17→0 … 25→30 |
+ * | Experience    | 25  | Shadowing≤8, Volunteering≤6, Dental≤6, Research≤5 (hour-scaled) |
+ * | Documents     | 10  | DAT Report 4, Transcript 3, Resume 2, LOR 1 |
+ * | Readiness     | 10  | Schools/apps + LOR progress (−2 reapplicant penalty if weak DAT) |
+ *
+ * ## DAT dual scale
+ * - Entered ≤ 30 → legacy (1–30)
+ * - Entered > 30 → modern (200–600)
+ * Both are converted to a legacy AA equivalent via ADA concordance before scoring
+ * so old and new scores produce comparable strength points.
  */
+
+import { normalizeDatToLegacy } from "@/lib/utils/datScale";
 
 export type StrengthScoreInputs = {
   gpa?: number | null;
@@ -26,6 +45,8 @@ export type StrengthScoreBreakdown = {
   experience: number;
   documents: number;
   readiness: number;
+  /** Legacy AA used for DAT points (after dual-scale normalize). */
+  datLegacyAa?: number | null;
 };
 
 function clamp(n: number, min: number, max: number) {
@@ -47,9 +68,12 @@ export function calculateStrengthScore(input: StrengthScoreInputs): StrengthScor
   const academics =
     input.gpaVerified && Number.isFinite(gpa) ? Math.round(scale(gpa, 3.0, 4.0, 25)) : 0;
 
-  const dat = Number(input.datAa ?? input.datScore);
+  const rawDat = Number(input.datAa ?? input.datScore);
+  const datLegacy = Number.isFinite(rawDat) ? normalizeDatToLegacy(rawDat) : null;
   const datPts =
-    input.datVerified && Number.isFinite(dat) ? Math.round(scale(dat, 17, 25, 30)) : 0;
+    input.datVerified && datLegacy != null
+      ? Math.round(scale(datLegacy, 17, 25, 30))
+      : 0;
 
   const h = input.hoursByCategory || {};
   const shadowing = Math.round(scale(hours(h, "Shadowing"), 0, 100, 8));
@@ -76,7 +100,11 @@ export function calculateStrengthScore(input: StrengthScoreInputs): StrengthScor
   const lorGot = Number(input.lorReceivedApprox || 0);
   readiness += Math.round(scale(lorGot, 0, lorRequired, 4));
 
-  if (input.isReapplicant && (!input.datVerified || !Number.isFinite(dat) || dat < 20)) {
+  // Mild reapplicant penalty if no compensating verified DAT yet (legacy AA < 20)
+  if (
+    input.isReapplicant &&
+    (!input.datVerified || datLegacy == null || datLegacy < 20)
+  ) {
     readiness = Math.max(0, readiness - 2);
   }
   readiness = clamp(readiness, 0, 10);
@@ -90,6 +118,7 @@ export function calculateStrengthScore(input: StrengthScoreInputs): StrengthScor
     experience,
     documents,
     readiness,
+    datLegacyAa: datLegacy,
   };
 }
 

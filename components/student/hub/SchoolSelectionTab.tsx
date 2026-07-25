@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
-  Plus, School as SchoolIcon, PartyPopper, Sparkles, Clock, Star, Save
+  Plus, School as SchoolIcon, PartyPopper, Sparkles, Clock, Star, Save, Heart
 } from 'lucide-react';
 import {
   DndContext,
@@ -51,12 +51,14 @@ import {
   SchoolCard,
   SortableSchoolCard,
   DroppableCategory,
+  orderSchoolCategories,
 } from './hubShared';
 import { Button, EmptyState, FormField, Input, Modal } from '@/components/ui';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/api/queryKeys';
 import { useSchoolCategories, useReplaceSchoolCategories } from '@/lib/hooks/useSchoolCategories';
+import { useDentalSchoolsCatalog } from '@/lib/hooks/useDentalSchoolsCatalog';
 
 const EMPTY_SCHOOLS: School[] = [];
 const EMPTY_APPLICATIONS: Application[] = [];
@@ -115,11 +117,14 @@ export default function SchoolSelectionTab({
   const [showCelebration, setShowCelebration] = useState<{ type: 'ACCEPTED' | 'INTERVIEWED' | 'WAITLISTED', message: string } | null>(null);
   const [isSchoolSelectorOpen, setIsSchoolSelectorOpen] = useState(false);
   const [addToCategoryId, setAddToCategoryId] = useState<string | null>(null);
+  const [selectorFavoritesOnly, setSelectorFavoritesOnly] = useState(false);
+  const [detailsSchoolId, setDetailsSchoolId] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#6366f1');
   const [newCategoryIcon, setNewCategoryIcon] = useState('SchoolIcon');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const { schools: catalogSchools } = useDentalSchoolsCatalog();
 
   const triggerConfetti = () => {
     const duration = 5 * 1000;
@@ -159,13 +164,14 @@ export default function SchoolSelectionTab({
 
   const normalizeCategories = (categories: any[] | undefined): SchoolCategory[] => {
     if (!categories || categories.length === 0) return DEFAULT_CATEGORIES;
-    return categories.map(c => {
+    const mapped = categories.map((c) => {
       if (typeof c === 'string') {
-        const def = DEFAULT_CATEGORIES.find(d => d.id === c);
+        const def = DEFAULT_CATEGORIES.find((d) => d.id === c);
         return def || { id: c, name: c, color: '#94a3b8', icon: 'SchoolIcon' };
       }
-      return c;
+      return c as SchoolCategory;
     });
+    return orderSchoolCategories(mapped);
   };
 
   const categoriesKey = JSON.stringify(categoriesQueryData ?? student.schoolCategories ?? null);
@@ -258,13 +264,28 @@ export default function SchoolSelectionTab({
   };
 
   const openAddSchoolForCategory = (categoryId: string) => {
+    setSelectorFavoritesOnly(false);
     setAddToCategoryId(categoryId);
+    setIsSchoolSelectorOpen(true);
+  };
+
+  const openFavoritesBrowser = () => {
+    setSelectorFavoritesOnly(true);
+    setAddToCategoryId(schoolCategories[0]?.id || 'Strong Fit');
     setIsSchoolSelectorOpen(true);
   };
 
   const closeSchoolSelector = () => {
     setIsSchoolSelectorOpen(false);
     setAddToCategoryId(null);
+    setSelectorFavoritesOnly(false);
+  };
+
+  const openSchoolDetails = (school: School) => {
+    const match =
+      catalogSchools.find((s) => s.id === school.id) ||
+      catalogSchools.find((s) => s.name.toLowerCase() === school.name.toLowerCase());
+    setDetailsSchoolId(match?.id || school.id || school.name);
   };
 
   const handleAddSchoolFromFilter = (dentalSchool: DentalSchool) => {
@@ -611,6 +632,13 @@ export default function SchoolSelectionTab({
             </p>
           </div>
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            <Button
+              variant="secondary"
+              leftIcon={<Heart size={16} />}
+              onClick={openFavoritesBrowser}
+            >
+              Favorites
+            </Button>
             <Button variant="secondary" leftIcon={<Plus size={16} />} onClick={() => setIsAddingCategory(true)}>
               New Category
             </Button>
@@ -717,6 +745,7 @@ export default function SchoolSelectionTab({
                   schoolsCount={schools.filter(s => s.type === category.id).length}
                   onRemove={(id) => void handleRemoveCategory(id)}
                   onAdd={openAddSchoolForCategory}
+                  onViewSchools={openAddSchoolForCategory}
                   isDefault={['Reach', 'Target', 'Strong Fit'].includes(category.id)}
                 >
                   <SortableContext
@@ -738,13 +767,14 @@ export default function SchoolSelectionTab({
                           onDelete={(id) => void handleDeleteSchool(id)}
                           onUpdateNotes={handleUpdateSchoolNotes}
                           onUpdateStatus={handleUpdateSchoolStatus}
+                          onViewDetails={openSchoolDetails}
                         />
                       ))}
                       {schools.filter(s => s.type === category.id).length === 0 && (
                         <EmptyState
                           icon={<SchoolIcon size={24} />}
                           title="No schools yet"
-                          description="Use + to add a school, or drag one here."
+                          description="Use View schools or + to add, or drag one here."
                           className="min-h-[120px] border-slate-800 py-4"
                         />
                       )}
@@ -774,11 +804,13 @@ export default function SchoolSelectionTab({
       <Modal
         open={isSchoolSelectorOpen}
         onClose={closeSchoolSelector}
-        title="Select School"
+        title={selectorFavoritesOnly ? 'Favorite schools' : 'Select School'}
         description={
-          addToCategoryId
-            ? `Add a school to ${schoolCategories.find((c) => c.id === addToCategoryId)?.name || 'this category'}.`
-            : 'Browse the database and add schools to your strategy.'
+          selectorFavoritesOnly
+            ? `Browse favorites and add one to ${schoolCategories.find((c) => c.id === addToCategoryId)?.name || 'your list'}.`
+            : addToCategoryId
+              ? `Add a school to ${schoolCategories.find((c) => c.id === addToCategoryId)?.name || 'this category'}.`
+              : 'Browse the database and add schools to your strategy.'
         }
         size="full"
         fullHeight
@@ -787,7 +819,26 @@ export default function SchoolSelectionTab({
           onSelectSchool={handleAddSchoolFromFilter}
           isModal={true}
           isMentorView={isMentorView}
+          favoritesOnly={selectorFavoritesOnly}
+          alreadyAddedSchoolKeys={schools.flatMap((s) => [s.id, s.name])}
         />
+      </Modal>
+
+      <Modal
+        open={!!detailsSchoolId}
+        onClose={() => setDetailsSchoolId(null)}
+        title="School details"
+        description="Full catalog profile for this school."
+        size="full"
+        fullHeight
+      >
+        {detailsSchoolId ? (
+          <SchoolFilterView
+            isModal={true}
+            isMentorView={isMentorView}
+            initialSelectedSchoolId={detailsSchoolId}
+          />
+        ) : null}
       </Modal>
 
       <AnimatePresence>

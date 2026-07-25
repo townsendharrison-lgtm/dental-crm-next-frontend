@@ -45,7 +45,11 @@ import type {
   Student,
 } from "@/lib/types";
 import { ReadinessStatus as RS } from "@/lib/types";
-import { parseLocalDate, isUpcomingMeetingDate } from "@/lib/utils/dateUtils";
+import {
+  parseLocalDate,
+  isUpcomingMeetingDate,
+  formatMeetingLocalTime,
+} from "@/lib/utils/dateUtils";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Form";
 import { SelectMenu } from "@/components/ui/SelectMenu";
@@ -1150,10 +1154,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                     const student =
                       students.find((s) => s.id === sid) ||
                       allStudents.find((s) => s.id === sid);
-                    const timeLabel = mDate.toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    });
+                    const timeLabel = formatMeetingLocalTime(meeting.date);
                     return (
                       <div
                         key={`m-${meeting.id}`}
@@ -1303,10 +1304,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                     allStudents.find((s) => s.id === sid);
                   const mDate = parseLocalDate(meeting.date);
                   const timeLabel = meeting.date.includes("T")
-                    ? mDate.toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })
+                    ? formatMeetingLocalTime(meeting.date)
                     : "All day";
                   return (
                     <button
