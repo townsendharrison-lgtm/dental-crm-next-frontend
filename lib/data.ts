@@ -1,5 +1,6 @@
 
 import { Student, Mentor, SetterUser, ReadinessStatus, ActionItem, Resource, Message, Badge, Experience, ManualDexterity, StudentDocument, StudentNote, School, LetterOfRecommendationRequest, LOREmailConfig, Meeting, StaffTask, Survey, SystemNotification, SurveyResponse, OptimizationPlan, StudentAssignment, AutoReplySettings, ApplicationStatus, PlatformConfig, Lead, LeadEmailTemplate, SchoolSelectionProfile, ResearchCase } from './types';
+import { DEFAULT_MEETING_TYPES } from './api/adminSettings';
 
 export const MOCK_SCHOOL_SELECTIONS: SchoolSelectionProfile[] = [
   {
@@ -140,6 +141,7 @@ To get started, please use the link below to schedule a 30-minute meet-and-greet
 Feel free to reach out if you have any questions—we are here to support you every step of the way!
 
 Looking forward to your progress!`,
+  meetingTypes: DEFAULT_MEETING_TYPES,
 };
 
 export const MOCK_AUTO_REPLY_SETTINGS: AutoReplySettings = {
