@@ -44,24 +44,24 @@ export default function AdminBenchmarksPanel() {
     <AdminNationalBenchmarksView
       benchmarks={benchmarks}
       isLoading={isLoading}
-      onCreate={(payload) =>
-        toastAction(createMutation.mutateAsync(payload), {
+      onCreate={(payload) => {
+        void toastAction(createMutation.mutateAsync(payload), {
           loading: "Adding section…",
           success: "Benchmark section added",
-        })
-      }
-      onUpdate={(id, updates) =>
-        toastAction(updateMutation.mutateAsync({ id, updates }), {
+        });
+      }}
+      onUpdate={(id, updates) => {
+        void toastAction(updateMutation.mutateAsync({ id, updates }), {
           loading: "Saving…",
           success: "Benchmark updated",
-        })
-      }
-      onDelete={(id) =>
-        toastAction(deleteMutation.mutateAsync(id), {
+        });
+      }}
+      onDelete={(id) => {
+        void toastAction(deleteMutation.mutateAsync(id), {
           loading: "Removing…",
           success: "Benchmark section removed",
-        })
-      }
+        });
+      }}
     />
   );
 }
