@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useStudent, useStudentStrengthPercentile } from "@/lib/hooks/useStudentProfile";
 import { useBadges, useEarnedBadges, useEvaluateBadges } from "@/lib/hooks/useBadges";
-import { useActionItems, useUpdateActionItem, useCreateActionItem } from "@/lib/hooks/useActionItems";
+import { useActionItems, useUpdateActionItem, useCreateActionItem, useDeleteActionItem } from "@/lib/hooks/useActionItems";
 import { useDeleteNotification, useNotifications } from "@/lib/hooks/useNotifications";
 import type { SystemNotification } from "@/lib/types";
 import { useSurveys, useSubmitSurveyResponse } from "@/lib/hooks/useSurveys";
@@ -20,6 +20,7 @@ import { usePlatformConfig } from "@/lib/hooks/usePlatformConfig";
 import type { Survey } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import { withToastLoading } from "@/lib/utils/toastAction";
+import { messagesApi } from "@/lib/api/messages";
 
 function meetingStudentId(m: { student_id?: string | null; studentId?: string | null }) {
   return m.student_id ?? m.studentId ?? "";
@@ -31,7 +32,10 @@ function surveyTarget(s: Survey) {
 
 function surveyIsActive(s: Survey) {
   if (s.status === "INACTIVE") return false;
-  return s.is_active !== false;
+  if (s.is_active === false) return false;
+  const end = s.endDate ?? s.end_date;
+  if (end && new Date(end).getTime() < Date.now()) return false;
+  return true;
 }
 
 export default function StudentMomentumPage() {
@@ -53,6 +57,7 @@ export default function StudentMomentumPage() {
 
   const updateActionItemMutation = useUpdateActionItem();
   const createActionItemMutation = useCreateActionItem();
+  const deleteActionItemMutation = useDeleteActionItem();
   const submitSurveyMutation = useSubmitSurveyResponse();
 
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
@@ -166,6 +171,17 @@ export default function StudentMomentumPage() {
     );
   };
 
+  const handleDeleteActionItem = (itemId: string) => {
+    if (!subjectId) return;
+    deleteActionItemMutation.mutate(
+      { id: itemId, studentId: subjectId },
+      {
+        onSuccess: () => toast.success("Task deleted"),
+        onError: (err: any) => toast.error(err?.message || "Failed to delete task"),
+      },
+    );
+  };
+
   const handleNavigate = (tab: string) => {
     const map: Record<string, string> = {
       messages: "/student/messages",
@@ -243,11 +259,15 @@ export default function StudentMomentumPage() {
         resources={resources}
         notifications={notifications}
         surveys={pendingSurveys}
-        onSendMessage={() => {}}
+        onSendMessage={async (text, receiverId) => {
+          const conv = await messagesApi.create({ participantIds: [receiverId] });
+          await messagesApi.sendMessage(conv.id, text);
+        }}
         onNavigate={handleNavigate}
         onOpenNotification={handleOpenNotification}
         onToggleActionItem={handleToggleActionItem}
         onAddActionItem={handleAddActionItem}
+        onDeleteActionItem={handleDeleteActionItem}
         onTakeSurvey={handleTakeSurvey}
         onUpdateApplications={() => {}}
         nextMeeting={nextMeeting}

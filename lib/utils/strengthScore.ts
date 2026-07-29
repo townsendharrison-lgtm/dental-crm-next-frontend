@@ -123,13 +123,19 @@ export function calculateStrengthScore(input: StrengthScoreInputs): StrengthScor
 }
 
 export function hoursByCategoryFromExperiences(
-  experiences: Array<{ category?: string; sessions?: Array<{ duration?: number }> }>,
+  experiences: Array<{
+    category?: string;
+    priorHours?: number;
+    prior_hours?: number;
+    sessions?: Array<{ duration?: number }>;
+  }>,
 ): Record<string, number> {
   const map: Record<string, number> = {};
   for (const exp of experiences) {
     const cat = exp.category || "Other";
-    const hrs = (exp.sessions || []).reduce((sum, s) => sum + Number(s.duration || 0), 0);
-    map[cat] = (map[cat] || 0) + hrs;
+    const prior = Number(exp.priorHours ?? exp.prior_hours ?? 0) || 0;
+    const sessionHrs = (exp.sessions || []).reduce((sum, s) => sum + Number(s.duration || 0), 0);
+    map[cat] = (map[cat] || 0) + prior + sessionHrs;
   }
   return map;
 }

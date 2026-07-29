@@ -70,11 +70,12 @@ export const studentsApi = {
   },
 
   /**
-   * Create a shell student (no invite email) for school-selection plans
-   * for customers without a dashboard login.
+   * @deprecated External customers are saved via optimization-plans, not as CRM students.
    */
-  createExternal: async (payload: { name: string; email?: string }): Promise<Student> => {
-    return await apiPost<Student>("/api/students/external", payload);
+  createExternal: async (_payload: { name: string; email?: string }): Promise<Student> => {
+    throw new Error(
+      "External school-selection customers are no longer created as students. Save as an external plan instead.",
+    );
   },
 
   /**

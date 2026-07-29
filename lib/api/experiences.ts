@@ -13,6 +13,10 @@ export interface CreateExperiencePayload {
   endDate?: string | null;
   isOngoing?: boolean;
   dentistType?: "General" | "Specialty" | null;
+  /** Hours completed before logging sessions in the CRM */
+  priorHours?: number;
+  /** Weeks of activity before logging sessions in the CRM */
+  priorWeeks?: number;
 }
 
 export interface CreateSessionPayload {
@@ -62,6 +66,8 @@ export const experiencesApi = {
     if (updates.endDate !== undefined) mappedUpdates.endDate = updates.endDate;
     if (updates.isOngoing !== undefined) mappedUpdates.isOngoing = updates.isOngoing;
     if (updates.dentistType !== undefined) mappedUpdates.dentistType = updates.dentistType;
+    if (updates.priorHours !== undefined) mappedUpdates.priorHours = updates.priorHours;
+    if (updates.priorWeeks !== undefined) mappedUpdates.priorWeeks = updates.priorWeeks;
 
     return await apiPut<Experience>(`/api/experiences/${id}`, mappedUpdates);
   },

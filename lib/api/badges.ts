@@ -6,7 +6,7 @@ export interface CreateBadgePayload {
   description: string;
   icon: string;
   color: string;
-  benchmarkType: "PROGRESS" | "STRENGTH_SCORE" | "DAT" | "TASKS_COMPLETED" | "MEETINGS_ATTENDED";
+  benchmarkType: Badge["benchmark_type"];
   benchmarkValue: number;
 }
 

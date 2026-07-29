@@ -7,6 +7,19 @@ export const PROFILE_ETHNICITIES = [
 
 export const PROFILE_GENDERS = ["Male", "Female"] as const;
 
+/** AADSAS-style cycles for the current calendar year + next 4 (5 total). */
+export function getApplicationCycleOptions(
+  fromDate: Date = new Date(),
+  count = 5,
+): string[] {
+  const startYear = fromDate.getFullYear();
+  return Array.from({ length: count }, (_, i) => {
+    const start = startYear + i;
+    const end = (start + 1) % 100;
+    return `${start}/${String(end).padStart(2, "0")}`;
+  });
+}
+
 export const APPLICANT_TYPES = [
   { value: "FIRST_TIME", label: "First-time applicant" },
   { value: "REAPPLICANT", label: "Reapplicant" },
@@ -15,9 +28,28 @@ export const APPLICANT_TYPES = [
 export const REAPPLICANT_OUTCOMES = [
   "Rejected",
   "Interviewed",
-  "Waitlist",
+  "Waitlisted",
   "Accepted",
 ] as const;
+
+/** Map legacy stored labels (e.g. "Waitlist") to current option values. */
+export function normalizeReapplicantOutcome(outcome: string): string {
+  if (outcome === "Waitlist") return "Waitlisted";
+  return outcome;
+}
+
+export function normalizeReapplicantOutcomes(outcomes: string[] | null | undefined): string[] {
+  if (!Array.isArray(outcomes)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of outcomes) {
+    const next = normalizeReapplicantOutcome(String(raw));
+    if (!next || seen.has(next)) continue;
+    seen.add(next);
+    result.push(next);
+  }
+  return result;
+}
 
 export const ADDITIONAL_SCHOOLING_OPTIONS = [
   { value: "POST_BAC", label: "Post-Bac Program" },

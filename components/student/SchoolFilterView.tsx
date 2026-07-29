@@ -27,6 +27,7 @@ import {
   X,
   ChevronDown,
   SlidersHorizontal,
+  Percent,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -1220,6 +1221,20 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                         <div className="bg-slate-950/40 rounded-xl p-3 border border-slate-800/40 space-y-3 shrink-0">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                                <Percent className="w-3.5 h-3.5" />
+                              </div>
+                              <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider truncate">
+                                Acceptance Rate
+                              </span>
+                            </div>
+                            <span className="text-sm font-semibold text-emerald-400 shrink-0">
+                              {school.acceptanceRate ? `${school.acceptanceRate}%` : 'N/A'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
                               <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
                                 <ArrowUpRight className="w-3.5 h-3.5" />
                               </div>
@@ -1510,51 +1525,51 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                 <div className="grid md:grid-cols-3 gap-6">
                   {/* Stats Overview */}
                   <div className="md:col-span-2 space-y-6">
-                    <div className={`grid gap-2 sm:gap-3 ${isMentorView ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 lg:grid-cols-4'}`}>
-                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Avg<br/>cGPA</p>
-                        <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.cgpa || 'N/A'}</p>
+                    <div className={`grid gap-2 ${isMentorView ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 lg:grid-cols-4'}`}>
+                      <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                        <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg cGPA</p>
+                        <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.cgpa || 'N/A'}</p>
                       </div>
-                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Avg<br/>sGPA</p>
-                        <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.sgpa || 'N/A'}</p>
+                      <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                        <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg sGPA</p>
+                        <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.sgpa || 'N/A'}</p>
                       </div>
-                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                        <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Avg<br/>DAT AA</p>
-                        <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.datAA || 'N/A'}</p>
+                      <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                        <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg DAT AA</p>
+                        <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.datAA || 'N/A'}</p>
                       </div>
                       {isMentorView && (
                         <>
-                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                            <p className="text-[9px] sm:text-[10px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-2">Min cGPA<br/>(5%)</p>
-                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.minCgpa5th || 'N/A'}</p>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-1">Min cGPA (5%)</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.minCgpa5th || 'N/A'}</p>
                           </div>
-                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                            <p className="text-[9px] sm:text-[10px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-2">Min sGPA<br/>(5%)</p>
-                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.minSgpa5th || 'N/A'}</p>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-1">Min sGPA (5%)</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.minSgpa5th || 'N/A'}</p>
                           </div>
-                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                            <p className="text-[9px] sm:text-[10px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-2">Min DAT<br/>(5%)</p>
-                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.minDat5th || 'N/A'}</p>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-1">Min DAT (5%)</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.minDat5th || 'N/A'}</p>
                           </div>
-                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                            <p className="text-[9px] sm:text-[10px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-2">Max cGPA<br/>(95%)</p>
-                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.maxCgpa95th || 'N/A'}</p>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-1">Max cGPA (95%)</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.maxCgpa95th || 'N/A'}</p>
                           </div>
-                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                            <p className="text-[9px] sm:text-[10px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-2">Max sGPA<br/>(95%)</p>
-                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.maxSgpa95th || 'N/A'}</p>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-1">Max sGPA (95%)</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.maxSgpa95th || 'N/A'}</p>
                           </div>
-                          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                            <p className="text-[9px] sm:text-[10px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-2">Max DAT<br/>(95%)</p>
-                            <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.maxDat95th || 'N/A'}</p>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-1">Max DAT (95%)</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.maxDat95th || 'N/A'}</p>
                           </div>
                         </>
                       )}
                       {!isMentorView && (
-                        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-4 text-center flex flex-col items-center justify-center min-h-[90px] sm:min-h-[110px]">
-                          <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-2">Acceptance</p>
-                          <p className="text-lg sm:text-2xl font-semibold text-white">{selectedSchool.acceptanceRate ? `${selectedSchool.acceptanceRate}%` : 'N/A'}</p>
+                        <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                          <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Acceptance</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.acceptanceRate ? `${selectedSchool.acceptanceRate}%` : 'N/A'}</p>
                         </div>
                       )}
                     </div>

@@ -27,7 +27,9 @@ import {
   PROFILE_GENDERS,
   REAPPLICANT_OUTCOMES,
   US_STATES,
+  getApplicationCycleOptions,
   isUnitedStates,
+  normalizeReapplicantOutcomes,
   parseDatScore,
   type ConsideringSchoolEntry,
   type ReapplicantSchoolEntry,
@@ -67,9 +69,11 @@ type FormState = {
   ethnicity: string;
   gender: string;
   age: string;
+  application_cycle: string;
   gpa: string;
   sgpa: string;
   major: string;
+  undergrad_institution: string;
   applicant_type: string;
   took_online_classes: string;
   took_cc_classes: string;
@@ -127,9 +131,13 @@ function buildForm(student: Student): FormState {
     ethnicity: String(p?.ethnicity ?? student.ethnicity ?? ""),
     gender: String(p?.gender ?? student.gender ?? ""),
     age: profileNum(p?.age ?? student.age),
+    application_cycle: String(p?.application_cycle ?? student.applicationCycle ?? ""),
     gpa: profileNum(p?.gpa ?? student.gpa),
     sgpa: profileNum(p?.sgpa),
     major: String(p?.major ?? ""),
+    undergrad_institution: String(
+      p?.undergrad_institution ?? student.undergradInstitution ?? "",
+    ),
     applicant_type:
       p?.applicant_type ||
       (p?.is_reapplicant || student.isReapplicant ? "REAPPLICANT" : ""),
@@ -146,7 +154,10 @@ function buildForm(student: Student): FormState {
       ? (p!.considering_schools as ConsideringSchoolEntry[])
       : [],
     reapplicant_schools: Array.isArray(p?.reapplicant_schools)
-      ? (p!.reapplicant_schools as ReapplicantSchoolEntry[])
+      ? (p!.reapplicant_schools as ReapplicantSchoolEntry[]).map((s) => ({
+          ...s,
+          outcomes: normalizeReapplicantOutcomes(s.outcomes),
+        }))
       : [],
     previous_application_doc_id: p?.previous_application_doc_id ?? null,
   };
@@ -450,6 +461,7 @@ export function ProfileDetailsEditor({
           ethnicity: form.ethnicity || null,
           gender: form.gender || null,
           age: ageRaw === "" ? null : Number(ageRaw),
+          application_cycle: form.application_cycle || null,
         };
         if (canEditName) {
           payload.name = form.name.trim();
@@ -517,6 +529,7 @@ export function ProfileDetailsEditor({
           gpa: gpaRaw === "" ? null : Number(gpaRaw),
           sgpa: sgpaRaw === "" ? null : Number(sgpaRaw),
           major: form.major.trim() || null,
+          undergrad_institution: form.undergrad_institution.trim() || null,
           applicant_type: (form.applicant_type || null) as ApplicantType | null,
           is_reapplicant: form.applicant_type === "REAPPLICANT",
           took_online_classes: yesNo(form.took_online_classes),
@@ -545,7 +558,12 @@ export function ProfileDetailsEditor({
           dat_score: syncedDatScore,
           ...datPayload,
           considering_schools: form.considering_schools,
-          reapplicant_schools: isReapplicant ? form.reapplicant_schools : [],
+          reapplicant_schools: isReapplicant
+            ? form.reapplicant_schools.map((s) => ({
+                ...s,
+                outcomes: normalizeReapplicantOutcomes(s.outcomes),
+              }))
+            : [],
           previous_application_doc_id: isReapplicant ? previousDocId : null,
           ...staffVerifyPatch,
         });
@@ -672,6 +690,24 @@ export function ProfileDetailsEditor({
             />
           </FormField>
         </div>
+        <FormField label="Goal application cycle">
+          <SelectMenu
+            value={form.application_cycle}
+            onChange={(application_cycle) => setForm((f) => ({ ...f, application_cycle }))}
+            options={[
+              { value: "", label: "Select cycle…" },
+              ...(() => {
+                const cycles = getApplicationCycleOptions();
+                const current = form.application_cycle;
+                const opts = cycles.map((c) => ({ value: c, label: c }));
+                if (current && !cycles.includes(current)) {
+                  opts.unshift({ value: current, label: current });
+                }
+                return opts;
+              })(),
+            ]}
+          />
+        </FormField>
       </SectionCard>
     </div>
   ) : (
@@ -681,6 +717,24 @@ export function ProfileDetailsEditor({
         title="Grades & major"
         description="Core academic metrics used across Hub Analytics."
       >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField label="Undergraduate institution">
+            <Input
+              value={form.undergrad_institution}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, undergrad_institution: e.target.value }))
+              }
+              placeholder="e.g. UCLA"
+            />
+          </FormField>
+          <FormField label="What is/was your major?">
+            <Input
+              value={form.major}
+              onChange={(e) => setForm((f) => ({ ...f, major: e.target.value }))}
+              placeholder="e.g. Biology"
+            />
+          </FormField>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField label="GPA">
             <Input
@@ -703,13 +757,6 @@ export function ProfileDetailsEditor({
             />
           </FormField>
         </div>
-        <FormField label="What is/was your major?">
-          <Input
-            value={form.major}
-            onChange={(e) => setForm((f) => ({ ...f, major: e.target.value }))}
-            placeholder="e.g. Biology"
-          />
-        </FormField>
       </SectionCard>
 
       <SectionCard

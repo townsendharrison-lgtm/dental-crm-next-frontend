@@ -15,13 +15,6 @@ export type ExperienceDisplayStats = {
   lastSessionDate: string | null;
 };
 
-function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function sessionDateMs(sessions: ExperienceSession[]): number[] {
   return sessions
     .map((s) => {
@@ -40,16 +33,23 @@ function weeksBetween(startMs: number, endMs: number): number {
   return Math.max(1, Math.round(span / WEEK_MS) || 1);
 }
 
+function numField(exp: Experience, camel: keyof Experience, snake: keyof Experience): number {
+  const raw = exp[camel] ?? exp[snake];
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 /**
  * Timeline end label:
- * - End date wins (never "Current")
- * - Else Current if last session within 60 days
- * - Else last session date
- * - No sessions + no end date → Current
+ * - Explicit end date always wins (never "Current")
+ * - Else "Current" only if a session was logged within the last 60 days
+ * - Else last session date (when last session is older than 60 days)
+ * - No sessions and no end date → "Current" when marked ongoing, else em dash
  */
 export function experienceTimelineEnd(
   endDate: string | null | undefined,
   sessions: ExperienceSession[],
+  opts?: { isOngoing?: boolean },
 ): { label: string; isCurrent: boolean; lastSessionDate: string | null } {
   const times = sessionDateMs(sessions);
   const lastMs = times.length > 0 ? Math.max(...times) : null;
@@ -80,12 +80,19 @@ export function experienceTimelineEnd(
     };
   }
 
-  return { label: "Current", isCurrent: true, lastSessionDate: null };
+  if (opts?.isOngoing) {
+    return { label: "Current", isCurrent: true, lastSessionDate: null };
+  }
+
+  return { label: "—", isCurrent: false, lastSessionDate: null };
 }
 
 export function computeExperienceStats(exp: Experience): ExperienceDisplayStats {
   const sessions = exp.sessions || [];
-  const totalHours = sessions.reduce((sum, s) => sum + Number(s.duration || 0), 0);
+  const priorHours = numField(exp, "priorHours", "prior_hours");
+  const priorWeeks = Math.floor(numField(exp, "priorWeeks", "prior_weeks"));
+  const sessionHours = sessions.reduce((sum, s) => sum + Number(s.duration || 0), 0);
+  const totalHours = priorHours + sessionHours;
 
   const distinctWeeks = new Set<number>();
   sessions.forEach((s) => {
@@ -110,7 +117,7 @@ export function computeExperienceStats(exp: Experience): ExperienceDisplayStats 
       startMs = null;
     }
   }
-  if (times.length > 0) {
+  if (priorWeeks === 0 && times.length > 0) {
     const minSession = Math.min(...times);
     startMs = startMs != null ? Math.min(startMs, minSession) : minSession;
   }
@@ -128,12 +135,26 @@ export function computeExperienceStats(exp: Experience): ExperienceDisplayStats 
   }
 
   const spanWeeks =
-    startMs != null && endMs != null ? weeksBetween(startMs, endMs) : 0;
-  const totalWeeks = Math.max(
-    sessions.length > 0 ? 1 : 0,
-    distinctWeeks.size,
-    spanWeeks,
-  );
+    priorWeeks === 0 && startMs != null && endMs != null
+      ? weeksBetween(startMs, endMs)
+      : 0;
+
+  let sessionWeeks = 0;
+  if (sessions.length > 0) {
+    if (priorWeeks > 0) {
+      // Prior weeks are authoritative; each logged session week adds on top.
+      sessionWeeks = Math.max(1, distinctWeeks.size);
+    } else {
+      sessionWeeks = Math.max(1, distinctWeeks.size, spanWeeks);
+    }
+  }
+
+  const totalWeeks =
+    priorWeeks + sessionWeeks > 0
+      ? priorWeeks + sessionWeeks
+      : totalHours > 0
+        ? 1
+        : 0;
   const avgHoursPerWeek = totalWeeks > 0 ? totalHours / totalWeeks : 0;
 
   const startDate =
@@ -143,7 +164,11 @@ export function computeExperienceStats(exp: Experience): ExperienceDisplayStats 
         ? parseLocalDate(startRaw)
         : new Date();
 
-  const timeline = experienceTimelineEnd(endRaw, sessions);
+  const isOngoingFlag = exp.isOngoing ?? exp.is_ongoing;
+  const isOngoing = isOngoingFlag != null ? !!isOngoingFlag : !endRaw;
+  const timeline = experienceTimelineEnd(endRaw, sessions, {
+    isOngoing: !endRaw && isOngoing,
+  });
 
   return {
     totalHours,
@@ -157,17 +182,14 @@ export function computeExperienceStats(exp: Experience): ExperienceDisplayStats 
 }
 
 /**
- * Build synthetic prior sessions from quick-add fields.
- * Prefers total hours; otherwise avg × weeks. Spreads across weeks when weeks > 1
- * so Timeline / Avg Hrs/Wk / Weeks stay accurate.
+ * Resolve optional prior-hours form fields into stored totals (no session rows).
+ * Prefers total hours; otherwise avg × weeks. Infers the missing value when possible.
  */
-export function buildPriorHourSessions(opts: {
-  startDate: string;
+export function resolvePriorHoursInput(opts: {
   totalHours?: number | null;
   avgHrsPerWeek?: number | null;
   weeks?: number | null;
-}): Array<{ date: string; duration: number; notes: string }> {
-  const start = opts.startDate;
+}): { priorHours: number; priorWeeks: number } {
   let total = opts.totalHours && opts.totalHours > 0 ? opts.totalHours : null;
   let avg = opts.avgHrsPerWeek && opts.avgHrsPerWeek > 0 ? opts.avgHrsPerWeek : null;
   let weeks =
@@ -177,44 +199,12 @@ export function buildPriorHourSessions(opts: {
   if (!avg && total && weeks) avg = total / weeks;
   if (!weeks && total && avg) weeks = Math.max(1, Math.round(total / avg));
 
-  if (!total && !avg) return [];
-
-  const note = "Prior hours (quick add)";
-  const round2 = (n: number) => Math.round(n * 100) / 100;
-
-  // Spread weekly so stats (weeks / avg) stay correct. Cap spread count; beyond that
-  // use start + end anchors so the date span still reflects the reported weeks.
-  if (weeks && weeks > 1 && avg) {
-    const base = parseLocalDate(start);
-    const spreadCount = Math.min(weeks, 104);
-    const perSession = round2(total! / spreadCount);
-
-    if (weeks <= 104) {
-      return Array.from({ length: weeks }, (_, i) => {
-        const d = new Date(base);
-        d.setDate(d.getDate() - i * 7);
-        return {
-          date: toYmd(d),
-          duration: perSession,
-          notes: note,
-        };
-      });
-    }
-
-    const end = new Date(base);
-    end.setDate(end.getDate() - (weeks - 1) * 7);
-    const half = round2(total! / 2);
-    return [
-      { date: toYmd(base), duration: half, notes: `${note} · ${weeks} weeks` },
-      { date: toYmd(end), duration: round2(total! - half), notes: `${note} · ${weeks} weeks` },
-    ];
+  if (!total) {
+    return { priorHours: 0, priorWeeks: 0 };
   }
 
-  return [
-    {
-      date: start,
-      duration: round2(total || avg || 0),
-      notes: weeks && weeks > 1 ? `${note} · ${weeks} weeks` : note,
-    },
-  ];
+  return {
+    priorHours: Math.round(total * 100) / 100,
+    priorWeeks: weeks || 0,
+  };
 }

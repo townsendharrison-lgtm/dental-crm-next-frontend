@@ -42,7 +42,16 @@ export function useUpsertOptimizationPlan() {
   return useMutation({
     mutationFn: (payload: UpsertPlanPayload) => optimizationPlansApi.upsert(payload),
     onSuccess: (newPlan) => {
-      qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.detail(newPlan.student_id) });
+      const sid = newPlan.student_id || newPlan.studentId;
+      const eid = newPlan.external_id || newPlan.externalId;
+      if (sid) {
+        qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.detail(sid) });
+      }
+      if (eid) {
+        qc.invalidateQueries({
+          queryKey: queryKeys.optimizationPlans.detail(`external:${eid}`),
+        });
+      }
       qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.list() });
     },
   });
@@ -54,7 +63,10 @@ export function useUpdateOptimizationPlan() {
     mutationFn: ({ id, updates }: { id: string; updates: Partial<UpsertPlanPayload> }) =>
       optimizationPlansApi.update(id, updates),
     onSuccess: (updated) => {
-      qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.detail(updated.student_id) });
+      const sid = updated.student_id || updated.studentId;
+      if (sid) {
+        qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.detail(sid) });
+      }
       qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.list() });
     },
   });
@@ -63,10 +75,12 @@ export function useUpdateOptimizationPlan() {
 export function useDeleteOptimizationPlan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, studentId }: { id: string; studentId: string }) =>
+    mutationFn: ({ id }: { id: string; studentId?: string }) =>
       optimizationPlansApi.remove(id),
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.detail(vars.studentId) });
+      if (vars.studentId) {
+        qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.detail(vars.studentId) });
+      }
       qc.invalidateQueries({ queryKey: queryKeys.optimizationPlans.list() });
     },
   });

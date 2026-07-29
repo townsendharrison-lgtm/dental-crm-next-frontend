@@ -44,10 +44,38 @@ const COLOR_OPTIONS = [
 const BENCHMARK_OPTIONS: Array<{ value: Badge["benchmark_type"]; label: string }> = [
   { value: "PROGRESS", label: "Progress %" },
   { value: "STRENGTH_SCORE", label: "Strength Score" },
+  { value: "GPA", label: "GPA Score" },
   { value: "DAT", label: "DAT Score" },
+  { value: "LOR_COLLECTED", label: "Letters of Recommendation Collected" },
+  { value: "VOLUNTEER_HOURS", label: "Volunteer Hours" },
+  { value: "SHADOWING_HOURS", label: "Shadowing Hours" },
   { value: "TASKS_COMPLETED", label: "Tasks Completed" },
   { value: "MEETINGS_ATTENDED", label: "Meetings Attended" },
 ];
+
+const BENCHMARK_HINTS: Partial<Record<Badge["benchmark_type"], string>> = {
+  PROGRESS: "Student application progress (0–100).",
+  STRENGTH_SCORE: "Live strength score (0–100).",
+  GPA: "Cumulative GPA on the student profile (e.g. 3.5).",
+  DAT: "DAT AA — use legacy 1–30 or modern 200–600.",
+  LOR_COLLECTED: "Approved vault letters, or external letters marked collected.",
+  VOLUNTEER_HOURS: "Total volunteering hours (including prior hours).",
+  SHADOWING_HOURS: "Total shadowing hours (including prior hours).",
+  TASKS_COMPLETED: "Completed action items / tasks.",
+  MEETINGS_ATTENDED: "Completed 1:1 mentorship meetings.",
+};
+
+function formatBenchmarkLabel(type: Badge["benchmark_type"] | undefined) {
+  return BENCHMARK_OPTIONS.find((o) => o.value === type)?.label || type || "—";
+}
+
+function formatBenchmarkValue(type: Badge["benchmark_type"] | undefined, value: number | undefined) {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  if (type === "PROGRESS") return `${value}%`;
+  if (type === "GPA") return Number(value).toFixed(2);
+  if (type === "VOLUNTEER_HOURS" || type === "SHADOWING_HOURS") return `${value} hrs`;
+  return String(value);
+}
 
 function defaultForm(): BadgeForm {
   return {
@@ -179,13 +207,12 @@ const AdminBadgesView: React.FC<AdminBadgesViewProps> = ({
               </div>
               <h4 className="font-semibold text-white mb-1">{badge.name}</h4>
               <p className="text-sm text-slate-500 line-clamp-2 mb-3">{badge.description}</p>
-              <div className="pt-3 border-t border-slate-800/50 flex items-center justify-between text-xs">
-                <span className="font-medium text-indigo-400 uppercase tracking-wider">
-                  {String(type).replace(/_/g, " ")}
+              <div className="pt-3 border-t border-slate-800/50 flex items-center justify-between gap-3 text-xs">
+                <span className="font-medium text-indigo-400 tracking-wide truncate">
+                  {formatBenchmarkLabel(type)}
                 </span>
-                <span className="font-semibold text-white">
-                  {value}
-                  {type === "PROGRESS" ? "%" : ""}
+                <span className="shrink-0 font-semibold text-white">
+                  {formatBenchmarkValue(type, value)}
                 </span>
               </div>
             </div>
@@ -302,17 +329,33 @@ const AdminBadgesView: React.FC<AdminBadgesViewProps> = ({
                 options={BENCHMARK_OPTIONS}
               />
             </FormField>
-            <FormField label="Value">
+            <FormField label="Minimum Value">
               <Input
                 type="number"
                 step="0.1"
+                min={0}
                 value={form.benchmarkValue}
                 onChange={(e) =>
                   setForm({ ...form, benchmarkValue: Number(e.target.value) })
                 }
+                placeholder={
+                  form.benchmarkType === "GPA"
+                    ? "e.g. 3.5"
+                    : form.benchmarkType === "DAT"
+                      ? "e.g. 22 or 460"
+                      : form.benchmarkType === "VOLUNTEER_HOURS" ||
+                          form.benchmarkType === "SHADOWING_HOURS"
+                        ? "e.g. 100"
+                        : form.benchmarkType === "LOR_COLLECTED"
+                          ? "e.g. 3"
+                          : "e.g. 50"
+                }
               />
             </FormField>
           </div>
+          <p className="text-xs text-slate-500 -mt-2">
+            {BENCHMARK_HINTS[form.benchmarkType]}
+          </p>
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"

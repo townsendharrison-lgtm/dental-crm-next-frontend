@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPatch, apiDelete } from "./client";
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete } from "./client";
 
 export interface SystemNotification {
   id: string;
@@ -20,6 +20,8 @@ export interface BroadcastNotification {
   type: string;
   category?: string;
   related_id?: string | null;
+  end_date?: string | null;
+  endDate?: string | null;
   targetRole?: "STUDENT" | "MENTOR" | "BOTH";
   target_role?: "STUDENT" | "MENTOR" | "BOTH";
   created_at?: string;
@@ -86,8 +88,22 @@ export const notificationsApi = {
     message: string;
     type?: "INFO" | "WARNING" | "URGENT";
     targetRole?: "STUDENT" | "MENTOR" | "BOTH";
+    endDate?: string | null;
   }): Promise<{ success: boolean; notified: number; broadcast: BroadcastNotification | null }> => {
     return apiPost("/api/notifications/broadcast", payload);
+  },
+
+  /** Admin: update a broadcast batch (title/message/type/end date). */
+  updateBroadcast: async (
+    relatedId: string,
+    updates: {
+      title?: string;
+      message?: string;
+      type?: "INFO" | "WARNING" | "URGENT";
+      endDate?: string | null;
+    },
+  ): Promise<{ broadcast: BroadcastNotification }> => {
+    return apiPut(`/api/notifications/broadcasts/${encodeURIComponent(relatedId)}`, updates);
   },
 
   /** Admin: delete a broadcast batch (all recipient rows). */

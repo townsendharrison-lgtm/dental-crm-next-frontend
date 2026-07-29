@@ -4,12 +4,12 @@ import React, { useMemo, useState } from "react";
 import {
   Users,
   Search,
-  Mail,
-  ChevronRight,
-  UserMinus,
+  Calendar,
+  MessageSquare,
   Check,
   X,
   UserPlus,
+  UserMinus,
 } from "lucide-react";
 import { parseLocalDate, isUpcomingMeetingDate } from "@/lib/utils/dateUtils";
 import { preferredDatScore } from "@/lib/utils/studentMetrics";
@@ -54,40 +54,39 @@ type RosterRow = {
   strengthScore?: number | null;
   gpa?: number | string | null;
   datScore?: number | null;
-  openActionItemsCount?: number;
   progress?: number;
+  applicationCycle?: string | null;
+  lastMeetingDate?: string | null;
+  lastContactDate?: string | null;
   pendingAssignment?: StudentAssignment;
 };
 
-function readinessLabel(status?: ReadinessStatus | string) {
-  if (status === ReadinessStatus.GREEN || status === "GREEN") return "Ready";
-  if (status === ReadinessStatus.YELLOW || status === "YELLOW") return "At risk";
-  if (status === ReadinessStatus.RED || status === "RED") return "Critical";
+function riskLabel(status?: ReadinessStatus | string) {
+  if (status === ReadinessStatus.GREEN || status === "GREEN") return "Low Risk";
+  if (status === ReadinessStatus.YELLOW || status === "YELLOW") return "Moderate";
+  if (status === ReadinessStatus.RED || status === "RED") return "High Risk";
   return "Unknown";
-}
-
-function readinessTone(status?: ReadinessStatus | string) {
-  if (status === ReadinessStatus.GREEN || status === "GREEN") {
-    return "bg-emerald-500/15 text-emerald-400 border-emerald-500/20";
-  }
-  if (status === ReadinessStatus.YELLOW || status === "YELLOW") {
-    return "bg-amber-500/15 text-amber-400 border-amber-500/20";
-  }
-  if (status === ReadinessStatus.RED || status === "RED") {
-    return "bg-rose-500/15 text-rose-400 border-rose-500/20";
-  }
-  return "bg-slate-800 text-slate-400 border-slate-700";
-}
-
-function readinessDot(status?: ReadinessStatus | string) {
-  if (status === ReadinessStatus.GREEN || status === "GREEN") return "bg-emerald-500";
-  if (status === ReadinessStatus.YELLOW || status === "YELLOW") return "bg-amber-500";
-  if (status === ReadinessStatus.RED || status === "RED") return "bg-rose-500";
-  return "bg-slate-500";
 }
 
 function assignmentStudentId(a: StudentAssignment) {
   return a.studentId || a.student_id;
+}
+
+function journeyProgressOf(row: RosterRow) {
+  return Math.max(0, Math.min(100, Number(row.progress ?? 0) || 0));
+}
+
+function formatShortDate(raw?: string | null) {
+  if (!raw) return "TBD";
+  try {
+    return parseLocalDate(raw).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "TBD";
+  }
 }
 
 const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
@@ -120,11 +119,13 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
         email: s.email,
         avatar: s.avatar,
         readiness: s.readiness,
-        strengthScore: s.strengthScore,
-        gpa: s.gpa,
+        strengthScore: s.strengthScore ?? s.profile?.strength_score,
+        gpa: s.gpa ?? s.profile?.gpa,
         datScore: preferredDatScore(s),
-        openActionItemsCount: s.openActionItemsCount,
-        progress: s.progress,
+        progress: s.progress ?? s.profile?.progress,
+        applicationCycle: s.applicationCycle ?? s.profile?.application_cycle,
+        lastMeetingDate: s.lastMeetingDate ?? s.profile?.last_meeting_date,
+        lastContactDate: s.lastContactDate ?? s.profile?.last_contact_date,
       });
     });
 
@@ -143,14 +144,28 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
         email: fromList?.email || fromAssignment?.email || existing?.email || "",
         avatar: fromList?.avatar || fromAssignment?.avatar || existing?.avatar || undefined,
         readiness: fromList?.readiness ?? existing?.readiness,
-        strengthScore: fromList?.strengthScore ?? existing?.strengthScore,
-        gpa: fromList?.gpa ?? existing?.gpa,
+        strengthScore:
+          fromList?.strengthScore ??
+          fromList?.profile?.strength_score ??
+          existing?.strengthScore,
+        gpa: fromList?.gpa ?? fromList?.profile?.gpa ?? existing?.gpa,
         datScore:
           preferredDatScore(fromList) ??
           preferredDatScore(fromAssignment as Student | undefined) ??
           existing?.datScore,
-        openActionItemsCount: fromList?.openActionItemsCount ?? existing?.openActionItemsCount,
-        progress: fromList?.progress ?? existing?.progress,
+        progress: fromList?.progress ?? fromList?.profile?.progress ?? existing?.progress,
+        applicationCycle:
+          fromList?.applicationCycle ??
+          fromList?.profile?.application_cycle ??
+          existing?.applicationCycle,
+        lastMeetingDate:
+          fromList?.lastMeetingDate ??
+          fromList?.profile?.last_meeting_date ??
+          existing?.lastMeetingDate,
+        lastContactDate:
+          fromList?.lastContactDate ??
+          fromList?.profile?.last_contact_date ??
+          existing?.lastContactDate,
         pendingAssignment: assignment,
       });
     });
@@ -174,7 +189,34 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
       .sort(
         (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
       )[0];
-    return upcoming ? parseLocalDate(upcoming.date).toLocaleDateString() : "—";
+    return upcoming
+      ? parseLocalDate(upcoming.date).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : "Not Scheduled";
+  };
+
+  const getNextMeetingLabel = (studentId: string) => {
+    const now = new Date();
+    const upcoming = meetings
+      .filter(
+        (m) =>
+          (m.studentId || m.student_id) === studentId &&
+          !m.completed &&
+          isUpcomingMeetingDate(m.date, now),
+      )
+      .sort(
+        (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
+      )[0];
+    if (!upcoming) return "Not Scheduled";
+    const d = parseLocalDate(upcoming.date);
+    const title = upcoming.title?.trim();
+    if (title) {
+      return `${title} · ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+    }
+    return getNextMeetingDate(studentId);
   };
 
   const filtered = roster.filter((row) => {
@@ -188,9 +230,15 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
   });
 
   const pendingCount = pendingAssignments.length;
-  const readyCount = roster.filter((s) => s.readiness === ReadinessStatus.GREEN && !s.pendingAssignment).length;
-  const atRiskCount = roster.filter((s) => s.readiness === ReadinessStatus.YELLOW && !s.pendingAssignment).length;
-  const criticalCount = roster.filter((s) => s.readiness === ReadinessStatus.RED && !s.pendingAssignment).length;
+  const readyCount = roster.filter(
+    (s) => s.readiness === ReadinessStatus.GREEN && !s.pendingAssignment,
+  ).length;
+  const atRiskCount = roster.filter(
+    (s) => s.readiness === ReadinessStatus.YELLOW && !s.pendingAssignment,
+  ).length;
+  const criticalCount = roster.filter(
+    (s) => s.readiness === ReadinessStatus.RED && !s.pendingAssignment,
+  ).length;
   const assignedCount = roster.filter((s) => !s.pendingAssignment).length;
 
   const acceptingName = acceptingAssignment
@@ -220,57 +268,39 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
           value={readyCount}
           hint="Green readiness"
           tone="emerald"
-          valueClass="text-emerald-400"
         />
-        <OverviewStat
-          label="At risk"
-          value={atRiskCount}
-          hint="Yellow readiness"
-          tone="amber"
-          valueClass="text-amber-400"
-        />
+        <OverviewStat label="At risk" value={atRiskCount} hint="Yellow readiness" tone="amber" />
         <OverviewStat
           label="Critical"
           value={criticalCount}
           hint="Red readiness"
           tone="rose"
-          valueClass="text-rose-400"
         />
       </div>
 
-      {pendingCount > 0 && onAcceptAssignment && (
-        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4 space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-300">
-              <UserPlus className="w-4 h-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white">
-                {pendingCount} pending assignment{pendingCount === 1 ? "" : "s"}
-              </p>
-              <p className="text-xs text-indigo-200/80 mt-0.5">
-                Accept to start mentoring. Students stay unlinked until you confirm.
-              </p>
-            </div>
+      {pendingCount > 0 && filterStatus !== "PENDING" && (
+        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-indigo-400" />
+            <h4 className="text-sm font-semibold text-white">
+              Pending assignments ({pendingCount})
+            </h4>
           </div>
-
-          <div className="grid gap-2">
+          <div className="space-y-2">
             {pendingAssignments.map((assignment) => {
               const sid = assignmentStudentId(assignment);
               const row = roster.find((r) => r.id === sid);
-              const name = row?.name || assignment.student?.name || "Student";
-              const email = row?.email || assignment.student?.email || "";
-              const avatar = row?.avatar || assignment.student?.avatar || undefined;
+              if (!row || !sid) return null;
               return (
                 <div
                   key={assignment.id}
-                  className="flex flex-col gap-3 rounded-lg border border-indigo-500/20 bg-slate-950/50 p-3 sm:flex-row sm:items-center"
+                  className="flex flex-col gap-3 rounded-xl border border-indigo-500/20 bg-slate-950/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <Avatar name={name} src={avatar} size="md" />
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar name={row.name} src={row.avatar} size="md" />
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-white">{name}</p>
-                      <p className="truncate text-xs text-slate-500">{email}</p>
+                      <p className="truncate font-semibold text-white">{row.name}</p>
+                      <p className="truncate text-sm text-slate-500">{row.email || "No email"}</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -344,173 +374,311 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
         </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={<Users className="w-8 h-8" />}
-          title={pendingCount > 0 && filterStatus !== "PENDING" ? "No assigned students yet" : "No students found"}
-          description={
-            pendingCount > 0
-              ? "Accept a pending assignment above to add them to your roster."
-              : "Try adjusting your search or filter criteria."
-          }
-        />
-      ) : (
-        <div className="grid gap-2">
-          {filtered.map((row) => {
-            const pending = !!row.pendingAssignment;
-            const readiness = row.readiness || ReadinessStatus.GREEN;
-            return (
-              <div
-                key={row.id}
-                className={cn(
-                  "rounded-xl border bg-slate-900 px-3 py-3 transition-colors sm:px-4",
-                  pending
-                    ? "border-indigo-500/40"
-                    : "border-slate-800 hover:border-indigo-500/30",
-                )}
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div className="relative shrink-0">
-                      <Avatar name={row.name} src={row.avatar} size="md" />
-                      {!pending && (
-                        <span
-                          className={cn(
-                            "absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-slate-900",
-                            readinessDot(readiness),
+      <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/50 shadow-2xl backdrop-blur-xl">
+        <table className="w-full min-w-[1100px] border-collapse text-left">
+          <thead className="border-b border-slate-800 bg-slate-950/30">
+            <tr>
+              <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Student
+              </th>
+              <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Status &amp; Risk
+              </th>
+              <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Stats
+              </th>
+              <th className="px-6 py-5 text-center text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Strength
+              </th>
+              <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Readiness
+              </th>
+              <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Next Meeting
+              </th>
+              <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Last / Next Session
+              </th>
+              <th className="px-6 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/50">
+            {filtered.map((row) => {
+              const pending = !!row.pendingAssignment;
+              const journey = journeyProgressOf(row);
+              const nextMeetingLabel = getNextMeetingLabel(row.id);
+              const prevSession = row.lastMeetingDate || row.lastContactDate || null;
+
+              return (
+                <tr
+                  key={row.id}
+                  onClick={() => {
+                    if (!pending) onSelectStudent(row.id, "overview");
+                  }}
+                  className={cn(
+                    "group transition-colors",
+                    pending
+                      ? "bg-indigo-500/[0.03]"
+                      : "cursor-pointer hover:bg-slate-800/40",
+                  )}
+                >
+                  <td className="px-6 py-4 align-middle">
+                    <div className="flex items-center gap-4">
+                      <Avatar
+                        src={row.avatar}
+                        name={row.name}
+                        size="lg"
+                        className="rounded-2xl ring-2 ring-slate-800 transition-all group-hover:ring-indigo-500/50"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold tracking-tight text-white transition-colors group-hover:text-indigo-400">
+                            {row.name}
+                          </h4>
+                          {pending && (
+                            <span className="shrink-0 rounded border border-indigo-500/30 bg-indigo-500/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-indigo-400">
+                              Pending
+                            </span>
                           )}
-                        />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="mb-0.5 flex flex-wrap items-center gap-2">
-                        <h4 className="truncate font-semibold text-white">{row.name}</h4>
-                        {pending ? (
-                          <span className="rounded-md border border-indigo-500/30 bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-400">
-                            Pending accept
-                          </span>
-                        ) : (
-                          <span
-                            className={cn(
-                              "rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
-                              readinessTone(readiness),
-                            )}
-                          >
-                            {readinessLabel(readiness)}
-                          </span>
-                        )}
+                        </div>
                       </div>
-                      <p className="truncate text-sm text-slate-500">
-                        {row.email || "No email"}
-                        {!pending && (
-                          <>
-                            <span className="text-slate-600"> · </span>
-                            {row.openActionItemsCount ?? 0} actions
-                            <span className="text-slate-600"> · </span>
-                            Next {getNextMeetingDate(row.id)}
-                            <span className="text-slate-600"> · </span>
-                            {row.progress ?? 0}% progress
-                          </>
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4 align-middle">
+                    <div>
+                      <div
+                        className={cn(
+                          "mb-1 w-fit rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-widest",
+                          row.readiness === ReadinessStatus.GREEN || row.readiness === "GREEN"
+                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                            : row.readiness === ReadinessStatus.YELLOW || row.readiness === "YELLOW"
+                              ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
+                              : "border-rose-500/20 bg-rose-500/10 text-rose-400",
                         )}
+                      >
+                        {pending ? "Pending" : riskLabel(row.readiness)}
+                      </div>
+                      <p className="whitespace-nowrap text-[10px] font-medium text-slate-500">
+                        {row.applicationCycle || "—"}
                       </p>
                     </div>
-                  </div>
+                  </td>
 
-                  {!pending && (
-                    <div className="flex shrink-0 items-center gap-4 text-center sm:gap-5">
-                      <Metric label="Strength" value={row.strengthScore ?? 0} />
-                      <Metric label="GPA" value={row.gpa ?? "N/A"} />
-                      <Metric label="DAT" value={row.datScore ?? "—"} />
+                  <td className="px-6 py-4 align-middle">
+                    <div>
+                      <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                        GPA:{" "}
+                        <span className="ml-1 text-sm text-white">
+                          {row.gpa != null && row.gpa !== "" ? row.gpa : "N/A"}
+                        </span>
+                      </p>
+                      <p className="text-[10px] font-medium text-slate-500">
+                        DAT: {row.datScore != null ? row.datScore : "N/A"}
+                      </p>
                     </div>
-                  )}
+                  </td>
 
-                  <div className="flex shrink-0 flex-wrap items-center gap-1.5 lg:justify-end">
-                    {pending && row.pendingAssignment && onAcceptAssignment ? (
-                      decliningId === row.pendingAssignment.id ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => {
-                              onDeclineAssignment?.(row.pendingAssignment!.id);
-                              setDecliningId(null);
+                  <td className="px-6 py-4 text-center align-middle">
+                    <div className="inline-block rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-center shadow-inner">
+                      <p className="mb-0.5 text-[8px] font-black uppercase tracking-widest text-indigo-400">
+                        Strength
+                      </p>
+                      <p className="text-lg font-black leading-none text-white">
+                        {row.strengthScore != null ? row.strengthScore : "—"}
+                      </p>
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4 align-middle">
+                    {pending ? (
+                      <span className="text-xs text-slate-500">—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        title="Open Application Journey"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectStudent(row.id, "records");
+                        }}
+                        className="flex w-full max-w-[120px] items-center gap-3"
+                      >
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${journey}%`,
+                              backgroundColor:
+                                journey >= 80
+                                  ? "#10b981"
+                                  : journey >= 50
+                                    ? "#f59e0b"
+                                    : "#f43f5e",
                             }}
-                          >
-                            Confirm decline
-                          </Button>
-                          <Button size="sm" variant="secondary" onClick={() => setDecliningId(null)}>
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            size="sm"
-                            leftIcon={<Check className="w-3.5 h-3.5" />}
-                            onClick={() => setAcceptingAssignment(row.pendingAssignment!)}
-                          >
-                            Accept
-                          </Button>
-                          {onDeclineAssignment && (
+                          />
+                        </div>
+                        <span className="shrink-0 text-xs font-bold text-white">{journey}%</span>
+                      </button>
+                    )}
+                  </td>
+
+                  <td className="px-6 py-4 align-middle">
+                    <div className="flex max-w-[200px] items-center gap-3">
+                      <div className="shrink-0 rounded-lg bg-indigo-500/10 p-1.5">
+                        <Calendar className="h-4 w-4 text-indigo-400" />
+                      </div>
+                      <span className="line-clamp-2 text-[10px] font-medium text-slate-300">
+                        {pending ? "—" : nextMeetingLabel}
+                      </span>
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4 align-middle">
+                    <div className="whitespace-nowrap">
+                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                        Prev:{" "}
+                        <span className="ml-1 font-medium capitalize text-slate-300">
+                          {pending ? "—" : formatShortDate(prevSession)}
+                        </span>
+                      </p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400">
+                        Next:{" "}
+                        <span className="ml-1 font-bold capitalize">
+                          {pending ? "—" : getNextMeetingDate(row.id)}
+                        </span>
+                      </p>
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4 align-middle">
+                    <div className="flex items-center justify-end gap-2">
+                      {pending && row.pendingAssignment && onAcceptAssignment ? (
+                        decliningId === row.pendingAssignment.id ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeclineAssignment?.(row.pendingAssignment!.id);
+                                setDecliningId(null);
+                              }}
+                            >
+                              Confirm
+                            </Button>
                             <Button
                               size="sm"
                               variant="secondary"
-                              leftIcon={<X className="w-3.5 h-3.5" />}
-                              onClick={() => setDecliningId(row.pendingAssignment!.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDecliningId(null);
+                              }}
                             >
-                              Decline
+                              Cancel
                             </Button>
-                          )}
-                        </>
-                      )
-                    ) : (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          leftIcon={<Mail className="w-3.5 h-3.5" />}
-                          onClick={() =>
-                            onMessageStudent
-                              ? onMessageStudent(row.id)
-                              : onSelectStudent(row.id, "messages")
-                          }
-                        >
-                          Message
-                        </Button>
-                        {onUnassignStudent && (
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            leftIcon={<UserMinus className="w-3.5 h-3.5" />}
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Unassign ${row.name}? They will have no mentor until reassigned.`,
-                                )
-                              ) {
-                                onUnassignStudent(row.id);
-                              }
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              leftIcon={<Check className="w-3.5 h-3.5" />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAcceptingAssignment(row.pendingAssignment!);
+                              }}
+                            >
+                              Accept
+                            </Button>
+                            {onDeclineAssignment && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                leftIcon={<X className="w-3.5 h-3.5" />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDecliningId(row.pendingAssignment!.id);
+                                }}
+                              >
+                                Decline
+                              </Button>
+                            )}
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            title="Send Message"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMessageStudent
+                                ? onMessageStudent(row.id)
+                                : onSelectStudent(row.id, "messages");
                             }}
+                            className="rounded-xl border border-slate-700 bg-slate-800 p-2.5 text-slate-400 shadow-lg transition-all hover:border-indigo-500 hover:bg-indigo-600 hover:text-white"
                           >
-                            Unassign
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          rightIcon={<ChevronRight className="w-3.5 h-3.5" />}
-                          onClick={() => onSelectStudent(row.id, "overview")}
-                        >
-                          View
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                            <MessageSquare className="h-4 w-4" />
+                          </button>
+                          {onUnassignStudent && (
+                            <button
+                              type="button"
+                              title="Unassign student"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (
+                                  window.confirm(
+                                    `Unassign ${row.name}? They will have no mentor until reassigned.`,
+                                  )
+                                ) {
+                                  onUnassignStudent(row.id);
+                                }
+                              }}
+                              className="rounded-xl border border-slate-700 bg-slate-800 p-2.5 text-slate-400 shadow-lg transition-all hover:border-rose-500 hover:bg-rose-600 hover:text-white"
+                            >
+                              <UserMinus className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectStudent(row.id, "overview");
+                            }}
+                            className="whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-all group-hover:border-indigo-500 group-hover:bg-indigo-600"
+                          >
+                            Profile
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-6 py-20 text-center">
+                  <EmptyState
+                    icon={<Users className="h-10 w-10" />}
+                    title={
+                      pendingCount > 0 && filterStatus !== "PENDING"
+                        ? "No assigned students yet"
+                        : "No students found"
+                    }
+                    description={
+                      pendingCount > 0
+                        ? "Accept a pending assignment above to add them to your roster."
+                        : "Try adjusting your search or filter criteria."
+                    }
+                  />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <AcceptAssignmentModal
         open={!!acceptingAssignment}
@@ -547,7 +715,7 @@ function OverviewStat({
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
         <span
-          className={cn("h-2 w-2 rounded-full shrink-0", {
+          className={cn("h-2 w-2 shrink-0 rounded-full", {
             indigo: "bg-indigo-500",
             emerald: "bg-emerald-500",
             amber: "bg-amber-500",
@@ -557,15 +725,6 @@ function OverviewStat({
       </div>
       <p className={cn("text-2xl font-bold tabular-nums text-white", valueClass)}>{value}</p>
       <p className="mt-0.5 text-xs text-slate-500">{hint}</p>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="min-w-[3.25rem]">
-      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="text-sm font-bold tabular-nums text-white">{value}</p>
     </div>
   );
 }

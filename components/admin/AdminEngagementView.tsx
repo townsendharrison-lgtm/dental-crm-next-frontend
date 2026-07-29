@@ -26,7 +26,9 @@ interface AdminEngagementViewProps {
   notifications: SystemNotification[];
   responses: SurveyResponse[];
   onAddSurvey: (survey: Partial<Survey>) => void;
+  onUpdateSurvey: (survey: Survey) => void;
   onAddNotification: (notif: Partial<SystemNotification>) => void;
+  onUpdateNotification: (notif: SystemNotification) => void;
   onDeleteSurvey: (id: string) => void;
   onDeleteNotification: (id: string) => void;
   popups: PopupAdvertisement[];
@@ -54,7 +56,9 @@ const AdminEngagementView: React.FC<AdminEngagementViewProps> = ({
   notifications,
   responses,
   onAddSurvey,
+  onUpdateSurvey,
   onAddNotification,
+  onUpdateNotification,
   onDeleteSurvey,
   onDeleteNotification,
   popups,
@@ -126,7 +130,9 @@ const AdminEngagementView: React.FC<AdminEngagementViewProps> = ({
           notifications={notifications}
           responses={responses}
           onAddSurvey={onAddSurvey}
+          onUpdateSurvey={onUpdateSurvey}
           onAddNotification={onAddNotification}
+          onUpdateNotification={onUpdateNotification}
           onDeleteSurvey={onDeleteSurvey}
           onDeleteNotification={onDeleteNotification}
           hideHeader

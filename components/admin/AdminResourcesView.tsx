@@ -19,7 +19,6 @@ interface AdminResourcesViewProps {
 type ResourceForm = {
   title: string;
   url: string;
-  estimatedTime: string;
   category: string;
   icon: string;
 };
@@ -28,14 +27,9 @@ function defaultForm(): ResourceForm {
   return {
     title: "",
     url: "",
-    estimatedTime: "5m",
     category: "General",
     icon: "BookOpen",
   };
-}
-
-function resourceTime(r: Resource) {
-  return r.estimatedTime || r.estimated_time || "5m";
 }
 
 const AdminResourcesView: React.FC<AdminResourcesViewProps> = ({
@@ -67,7 +61,6 @@ const AdminResourcesView: React.FC<AdminResourcesViewProps> = ({
     setForm({
       title: resource.title,
       url: resource.url,
-      estimatedTime: resourceTime(resource),
       category: resource.category || "General",
       icon: resource.icon || "BookOpen",
     });
@@ -82,8 +75,6 @@ const AdminResourcesView: React.FC<AdminResourcesViewProps> = ({
     const payload = {
       title: form.title.trim(),
       url: form.url.trim(),
-      estimatedTime: form.estimatedTime.trim() || "5m",
-      estimated_time: form.estimatedTime.trim() || "5m",
       category: form.category.trim() || "General",
       icon: form.icon,
     };
@@ -121,7 +112,7 @@ const AdminResourcesView: React.FC<AdminResourcesViewProps> = ({
               <div className="min-w-0">
                 <h4 className="font-semibold text-white truncate">{resource.title}</h4>
                 <p className="text-sm text-slate-500 truncate">
-                  {resource.category} · {resourceTime(resource)} ·{" "}
+                  {resource.category} ·{" "}
                   <span className="text-indigo-400/70">{resource.url}</span>
                 </p>
               </div>
@@ -181,22 +172,13 @@ const AdminResourcesView: React.FC<AdminResourcesViewProps> = ({
               placeholder="/student/letters/vault or https://..."
             />
           </FormField>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Category">
-              <Input
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                placeholder="Study"
-              />
-            </FormField>
-            <FormField label="Estimated Time">
-              <Input
-                value={form.estimatedTime}
-                onChange={(e) => setForm({ ...form, estimatedTime: e.target.value })}
-                placeholder="10m"
-              />
-            </FormField>
-          </div>
+          <FormField label="Category">
+            <Input
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+              placeholder="Study"
+            />
+          </FormField>
 
           <FormField label="Icon">
             <div className="space-y-3">

@@ -22,11 +22,10 @@ import {
   ChevronRight,
   ChevronDown,
   Briefcase,
-  Clock,
+  Target,
   Search,
   MessageSquare,
   History,
-  Tag,
   Download,
   Eye,
   Trash2,
@@ -45,9 +44,9 @@ import Link from "next/link";
 import type {
   Student,
   StudentDocument,
-  StudentNote,
   StudentCredentialKind,
 } from "@/lib/types";
+import { normalizeReapplicantOutcomes } from "@/lib/profile/profileOptions";
 import {
   calculateStrengthScore,
   hoursByCategoryFromExperiences,
@@ -99,8 +98,6 @@ import { usersApi } from "@/lib/api/users";
 import { ProfileDetailsEditModal } from "@/components/student/ProfileDetailsEditModal";
 import { DAT_TYPES, isUnitedStates } from "@/lib/profile/profileOptions";
 
-type NoteTag = StudentNote["tags"][number];
-
 interface StudentProfileDocumentsViewProps {
   student: Student;
   currentUserId: string;
@@ -121,7 +118,8 @@ export function StudentProfileDocumentsView({
   const canWriteNotes =
     user?.role === "ADMIN" ||
     user?.role === "MENTOR_MANAGER" ||
-    user?.role === "MENTOR";
+    user?.role === "MENTOR" ||
+    (!!user && user.id === student.id && user.role === "STUDENT");
   const canEditAvatar = !!user && user.id === student.id;
   /** Students can edit their own snapshot/identity + academic scores (GPA/DAT re-verify silently server-side). */
   const canEditOwnProfile = !!user && user.id === student.id && user.role === "STUDENT";
@@ -387,7 +385,6 @@ export function StudentProfileDocumentsView({
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
-  const [selectedNoteTags, setSelectedNoteTags] = useState<NoteTag[]>([]);
   const [dexActivity, setDexActivity] = useState("");
   const [dexDescription, setDexDescription] = useState("");
   const [isAddCredentialOpen, setIsAddCredentialOpen] = useState(false);
@@ -405,7 +402,7 @@ export function StudentProfileDocumentsView({
     { id: "dexterity", label: "Manual Dexterity", icon: Fingerprint },
     { id: "credentials", label: "Licenses & Achievements", icon: Trophy },
     { id: "experience", label: "Experience Summary", icon: Briefcase },
-    { id: "notes", label: "Mentor Notes", icon: MessageSquare },
+    { id: "notes", label: "Additional Info", icon: MessageSquare },
     { id: "documents", label: "Document Center", icon: Upload },
   ] as const;
 
@@ -537,14 +534,12 @@ export function StudentProfileDocumentsView({
     try {
       await createNoteMutation.mutateAsync({
         content: newNoteContent.trim(),
-        tags: selectedNoteTags,
       });
       setNewNoteContent("");
-      setSelectedNoteTags([]);
       setIsNoteEditorOpen(false);
-      toast.success("Note added");
+      toast.success("Saved");
     } catch (err: any) {
-      toast.error(err?.message || "Failed to add note");
+      toast.error(err?.message || "Failed to save");
     }
   };
 
@@ -552,9 +547,9 @@ export function StudentProfileDocumentsView({
     if (!canWriteNotes) return;
     try {
       await deleteNoteMutation.mutateAsync(noteId);
-      toast.success("Note deleted");
+      toast.success("Removed");
     } catch (err: any) {
-      toast.error(err?.message || "Failed to delete note");
+      toast.error(err?.message || "Failed to remove");
     }
   };
 
@@ -921,17 +916,6 @@ export function StudentProfileDocumentsView({
     [student.id, canReviewDocuments, canEditOwnProfile, reviewingDocId, openingDocId],
   );
 
-  const formatResponseTime = (raw: string | number | undefined | null) => {
-    const hours = typeof raw === "string" ? Number.parseFloat(raw) : Number(raw);
-    if (!Number.isFinite(hours) || hours <= 0) return "—";
-    if (hours < 1) {
-      const mins = Math.max(1, Math.round(hours * 60));
-      return `${mins}m`;
-    }
-    const rounded = Math.round(hours * 10) / 10;
-    return `${rounded}h`;
-  };
-
   const renderStatBlock = (
     label: string,
     value: string | number | undefined | null,
@@ -1163,11 +1147,9 @@ export function StudentProfileDocumentsView({
             {renderStatBlock("Age", student.profile?.age ?? student.age, Calendar)}
             {renderStatBlock("Strength Score", displayStrength, GraduationCap)}
             {renderStatBlock(
-              "Response Time",
-              formatResponseTime(
-                student.avgResponseTime ?? student.profile?.avg_response_time,
-              ),
-              Clock,
+              "Goal Application Cycle",
+              student.profile?.application_cycle || student.applicationCycle || "—",
+              Target,
             )}
             {renderStatBlock(
               "Applicant type",
@@ -1402,7 +1384,7 @@ export function StudentProfileDocumentsView({
                         >
                           <p className="text-sm font-medium text-white">{s.schoolName}</p>
                           <p className="text-xs text-slate-400">
-                            {(s.outcomes || []).join(" · ") || "—"}
+                            {normalizeReapplicantOutcomes(s.outcomes).join(" · ") || "—"}
                           </p>
                         </div>
                       ))}
@@ -1970,12 +1952,17 @@ export function StudentProfileDocumentsView({
           </div>
         </section>
 
-        {/* Mentor Notes Section */}
+        {/* Additional Information */}
         <section id="notes" className="space-y-6 scroll-mt-28">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <MessageSquare className="text-indigo-400" size={20} /> Mentor Notes
-            </h2>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <MessageSquare className="text-indigo-400" size={20} /> Additional Information
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Anything else you want staff to know — context, updates, or notes about your profile.
+              </p>
+            </div>
             {canWriteNotes ? (
               <Button
                 type="button"
@@ -1983,7 +1970,7 @@ export function StudentProfileDocumentsView({
                 leftIcon={<Plus size={14} />}
                 onClick={() => setIsNoteEditorOpen(true)}
               >
-                New Note
+                Add info
               </Button>
             ) : null}
           </div>
@@ -2034,7 +2021,7 @@ export function StudentProfileDocumentsView({
                           size="icon"
                           className="h-8 w-8 text-slate-500 hover:text-rose-400"
                           onClick={() => handleDeleteNote(note.id)}
-                          aria-label="Delete note"
+                          aria-label="Delete entry"
                         >
                           <Trash2 size={14} />
                         </Button>
@@ -2051,7 +2038,12 @@ export function StudentProfileDocumentsView({
               {notes.length === 0 && (
                 <EmptyState
                   icon={<MessageSquare className="h-10 w-10" />}
-                  title="No notes recorded yet."
+                  title="No additional information yet."
+                  description={
+                    canWriteNotes
+                      ? "Add anything that doesn’t fit elsewhere on your profile."
+                      : undefined
+                  }
                 />
               )}
             </div>
@@ -2130,10 +2122,9 @@ export function StudentProfileDocumentsView({
         onClose={() => {
           setIsNoteEditorOpen(false);
           setNewNoteContent("");
-          setSelectedNoteTags([]);
         }}
-        title="New mentor note"
-        description="Notes are visible to staff and the student."
+        title="Add additional information"
+        description="Visible to you and your mentoring team."
         size="lg"
         footer={
           <div className="flex justify-end gap-2">
@@ -2149,41 +2140,18 @@ export function StudentProfileDocumentsView({
               onClick={handleAddNote}
               isLoading={createNoteMutation.isPending}
             >
-              Save Note
+              Save
             </Button>
           </div>
         }
       >
         <div className="space-y-4">
-          <FormField label="Tags">
-            <div className="flex flex-wrap gap-2">
-              {(["Risk", "Strength", "Academic", "Interview"] as const).map((tag) => {
-                const selected = selectedNoteTags.includes(tag);
-                return (
-                  <Button
-                    key={tag}
-                    type="button"
-                    size="sm"
-                    variant={selected ? "primary" : "secondary"}
-                    leftIcon={<Tag size={12} />}
-                    onClick={() => {
-                      setSelectedNoteTags((prev) =>
-                        prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
-                      );
-                    }}
-                  >
-                    {tag}
-                  </Button>
-                );
-              })}
-            </div>
-          </FormField>
-          <FormField label="Note" htmlFor="note-content" required>
+          <FormField label="Details" htmlFor="note-content" required>
             <Textarea
               id="note-content"
               value={newNoteContent}
               onChange={(e) => setNewNoteContent(e.target.value)}
-              placeholder="Start typing your note here..."
+              placeholder="Share any extra context, updates, or details about your application…"
               className="min-h-[140px]"
             />
           </FormField>

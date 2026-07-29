@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Users,
   Activity,
@@ -19,6 +19,8 @@ import {
   Check,
   Zap,
   Download,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   BarChart,
@@ -42,6 +44,25 @@ import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import type { PlatformAnalytics, AnalyticsStudentRow } from "@/lib/api/admin";
 
 const COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
+
+type ExplorerOutcome = "ALL" | "ACCEPTED" | "INTERVIEWED" | "APPLIED" | "PREP";
+
+const EXPLORER_OUTCOME_OPTIONS: Array<{ value: ExplorerOutcome; label: string }> = [
+  { value: "ALL", label: "All Outcomes" },
+  { value: "ACCEPTED", label: "Accepted" },
+  { value: "INTERVIEWED", label: "Interviewed" },
+  { value: "APPLIED", label: "Applied" },
+  { value: "PREP", label: "Prep" },
+];
+
+const EXPLORER_PAGE_SIZE = 10;
+
+function studentExplorerOutcome(s: AnalyticsStudentRow): Exclude<ExplorerOutcome, "ALL"> {
+  if (s.hasAccepted) return "ACCEPTED";
+  if (s.hasInterviewed) return "INTERVIEWED";
+  if (s.hasApplied) return "APPLIED";
+  return "PREP";
+}
 
 const CHART_TOOLTIP = {
   backgroundColor: "#0f172a",
@@ -170,6 +191,8 @@ export default function AdminAnalyticsView({
   const [searchTerm, setSearchTerm] = useState("");
   const [minGpa, setMinGpa] = useState(0);
   const [minDat, setMinDat] = useState(0);
+  const [outcomeFilter, setOutcomeFilter] = useState<ExplorerOutcome>("ALL");
+  const [explorerPage, setExplorerPage] = useState(1);
   const [copied, setCopied] = useState(false);
 
   const [insightFilters, setInsightFilters] = useState({
@@ -271,10 +294,23 @@ export default function AdminAnalyticsView({
         if (q && !s.name.toLowerCase().includes(q)) return false;
         if ((s.gpa ?? 0) < minGpa) return false;
         if ((s.datAA ?? 0) < minDat) return false;
+        if (outcomeFilter !== "ALL" && studentExplorerOutcome(s) !== outcomeFilter) return false;
         return true;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [students, searchTerm, minGpa, minDat]);
+  }, [students, searchTerm, minGpa, minDat, outcomeFilter]);
+
+  const explorerPageCount = Math.max(1, Math.ceil(explorerRows.length / EXPLORER_PAGE_SIZE));
+  const safeExplorerPage = Math.min(explorerPage, explorerPageCount);
+  const pagedExplorerRows = useMemo(() => {
+    const start = (safeExplorerPage - 1) * EXPLORER_PAGE_SIZE;
+    return explorerRows.slice(start, start + EXPLORER_PAGE_SIZE);
+  }, [explorerRows, safeExplorerPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setExplorerPage(1);
+  }, [searchTerm, minGpa, minDat, outcomeFilter]);
 
   const cycleOptions = useMemo(
     () => [
@@ -341,7 +377,7 @@ export default function AdminAnalyticsView({
         <SectionCard
           icon={PieChartIcon}
           iconClass="bg-indigo-600/15 text-indigo-400"
-          title="Interview conversion"
+          title="Interview Conversion"
           subtitle={`${interviewRate}% of applied students interviewed`}
           action={
             <div className="text-right">
@@ -390,7 +426,7 @@ export default function AdminAnalyticsView({
         <SectionCard
           icon={CheckCircle2}
           iconClass="bg-emerald-600/15 text-emerald-400"
-          title="Acceptance rate"
+          title="Acceptance Rate"
           subtitle={`${acceptanceRate}% of applied students accepted`}
           action={
             <div className="text-right">
@@ -438,7 +474,7 @@ export default function AdminAnalyticsView({
       <SectionCard
         icon={TrendingUp}
         iconClass="bg-indigo-600/15 text-indigo-400"
-        title="Application submission timing"
+        title="Application Submission Timing"
         subtitle="Applications by month (applied date)"
       >
         <div className="h-[280px]">
@@ -467,7 +503,7 @@ export default function AdminAnalyticsView({
           <SectionCard
             icon={Sparkles}
             iconClass="bg-violet-600/15 text-violet-400"
-            title="Insight builder"
+            title="Insight Builder"
             subtitle="Generate marketing copy from live cohort filters"
             action={
               <Badge variant="primary">
@@ -593,7 +629,7 @@ export default function AdminAnalyticsView({
         <SectionCard
           icon={Target}
           iconClass="bg-emerald-600/15 text-emerald-400"
-          title="Ideal applicant signals"
+          title="Ideal Applicant Signals"
           subtitle="Derived from accepted vs other students"
         >
           <div className="space-y-3">
@@ -640,7 +676,7 @@ export default function AdminAnalyticsView({
           <SectionCard
             icon={Trophy}
             iconClass="bg-amber-600/15 text-amber-400"
-            title="Top acceptance trends"
+            title="Top Acceptance Trends"
             subtitle="Live cohort combinations"
             className="lg:col-span-2"
           >
@@ -685,7 +721,7 @@ export default function AdminAnalyticsView({
           <SectionCard
             icon={BarChart3}
             iconClass="bg-rose-600/15 text-rose-400"
-            title="Benchmark explorer"
+            title="Benchmark Explorer"
             subtitle="Tune thresholds against live data"
           >
             <div className="space-y-4">
@@ -777,7 +813,7 @@ export default function AdminAnalyticsView({
       <SectionCard
         icon={Clock}
         iconClass="bg-indigo-600/15 text-indigo-400"
-        title="Funnel & timing"
+        title="Funnel & Timing"
         subtitle="Acceptance rate by mentorship duration"
       >
         <div className="h-[260px]">
@@ -820,7 +856,7 @@ export default function AdminAnalyticsView({
         <SectionCard
           icon={SchoolIcon}
           iconClass="bg-sky-600/15 text-sky-400"
-          title="Top schools by interviews"
+          title="Top Schools by Interviews"
           subtitle="Across all student applications"
         >
           {data.schoolPerformance.length === 0 ? (
@@ -862,7 +898,7 @@ export default function AdminAnalyticsView({
         <SectionCard
           icon={Clock}
           iconClass="bg-rose-600/15 text-rose-400"
-          title="Mentor response times"
+          title="Mentor Response Times"
           subtitle="Average reply latency by mentor"
         >
           {data.mentors.length === 0 ? (
@@ -915,7 +951,7 @@ export default function AdminAnalyticsView({
       <SectionCard
         icon={AlertTriangle}
         iconClass="bg-rose-600/15 text-rose-400"
-        title="Compliance & contact alerts"
+        title="Compliance & Contact Alerts"
         subtitle="Students needing outreach attention"
       >
         <div className="grid gap-3 md:grid-cols-3">
@@ -960,15 +996,30 @@ export default function AdminAnalyticsView({
       <SectionCard
         icon={Users}
         iconClass="bg-indigo-600/15 text-indigo-400"
-        title="Student data explorer"
+        title="Student Data Explorer"
         subtitle="Search and filter the live student cohort"
       >
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by name…"
-          />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Search
+            </label>
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by Name…"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Outcome
+            </label>
+            <SelectMenu
+              value={outcomeFilter}
+              onChange={(v) => setOutcomeFilter(v as ExplorerOutcome)}
+              options={EXPLORER_OUTCOME_OPTIONS}
+            />
+          </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
               Min GPA ({minGpa.toFixed(1)})
@@ -1012,7 +1063,7 @@ export default function AdminAnalyticsView({
               </tr>
             </thead>
             <tbody>
-              {explorerRows.slice(0, 50).map((s: AnalyticsStudentRow) => (
+              {pagedExplorerRows.map((s: AnalyticsStudentRow) => (
                 <tr key={s.id} className="border-b border-slate-800/80 hover:bg-slate-900/40">
                   <td className="px-3 py-2.5 font-medium text-white">{s.name}</td>
                   <td className="px-3 py-2.5 tabular-nums text-slate-300">
@@ -1046,8 +1097,40 @@ export default function AdminAnalyticsView({
             </tbody>
           </table>
         </div>
-        {explorerRows.length > 50 && (
-          <p className="text-xs text-slate-500">Showing first 50 of {explorerRows.length} matches.</p>
+
+        {explorerRows.length > 0 && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-slate-500">
+              Showing {(safeExplorerPage - 1) * EXPLORER_PAGE_SIZE + 1}–
+              {Math.min(safeExplorerPage * EXPLORER_PAGE_SIZE, explorerRows.length)} of{" "}
+              {explorerRows.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                leftIcon={<ChevronLeft className="h-4 w-4" />}
+                disabled={safeExplorerPage <= 1}
+                onClick={() => setExplorerPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <span className="min-w-[5.5rem] text-center text-xs font-semibold tabular-nums text-slate-400">
+                Page {safeExplorerPage} / {explorerPageCount}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                rightIcon={<ChevronRight className="h-4 w-4" />}
+                disabled={safeExplorerPage >= explorerPageCount}
+                onClick={() => setExplorerPage((p) => Math.min(explorerPageCount, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         )}
       </SectionCard>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type {
   Mentor,
   Student,
@@ -22,6 +23,7 @@ import {
   AlertTriangle,
   UserMinus,
   ShieldAlert,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Form";
@@ -97,16 +99,53 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
   notifications = [],
   onDismissNotification,
 }) => {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const filteredMentors = useMemo(
     () => mentors.filter((m) => m.role !== "ADMIN"),
     [mentors],
   );
-  const [activeView, setActiveView] = useState<"mentors" | "assignments">("mentors");
+  const [activeView, setActiveView] = useState<"mentors" | "assignments">(() =>
+    searchParams.get("view") === "assignments" ? "assignments" : "mentors",
+  );
   const [assignmentGroup, setAssignmentGroup] = useState<
     "unassigned" | "pending" | "assigned" | "workloads"
-  >("unassigned");
+  >(() => {
+    const group = searchParams.get("group");
+    if (group === "pending" || group === "assigned" || group === "workloads") return group;
+    return "unassigned";
+  });
   const [assignmentSearch, setAssignmentSearch] = useState("");
   const [mentorSearch, setMentorSearch] = useState("");
+
+  useEffect(() => {
+    if (searchParams.get("view") === "assignments") {
+      setActiveView("assignments");
+      const group = searchParams.get("group");
+      if (group === "pending" || group === "assigned" || group === "workloads" || group === "unassigned") {
+        setAssignmentGroup(group);
+      }
+    }
+  }, [searchParams]);
+
+  const openAssignments = (group: "unassigned" | "pending" | "assigned" | "workloads" = "unassigned") => {
+    setAssignmentGroup(group);
+    setActiveView("assignments");
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", "assignments");
+    params.set("group", group);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const openMentorsView = () => {
+    setActiveView("mentors");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("view");
+    params.delete("group");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   const openProfile = (id: string) => {
     if (onOpenProfile) onOpenProfile(id);
@@ -186,13 +225,24 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
 
   const urgentNotifs = notifications.filter((n) => n.type === "URGENT" && !n.is_read);
 
+  // Fill the viewport under the sticky GlobalHeader (mobile top bar). Role switcher floats overlay.
+  const assignmentsShellHeight =
+    "h-[calc(100dvh-10.5rem)] max-h-[calc(100dvh-10.5rem)] lg:h-[calc(100dvh-6.5rem)] lg:max-h-[calc(100dvh-6.5rem)]";
+
   return (
-    <div className="space-y-4 animate-in fade-in duration-300">
-      {/* Engagement-style tab strip */}
-      <div className="inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1">
+    <div
+      className={cn(
+        "animate-in fade-in duration-300",
+        activeView === "assignments"
+          ? cn("flex min-h-0 flex-col gap-4 overflow-hidden", assignmentsShellHeight)
+          : "space-y-4",
+      )}
+    >
+      {/* Engagement-style tab strip — w-fit so flex column doesn't stretch it full-width */}
+      <div className="inline-flex w-fit shrink-0 items-center gap-1 self-start rounded-xl border border-slate-800 bg-slate-900/50 p-1">
         <button
           type="button"
-          onClick={() => setActiveView("mentors")}
+          onClick={openMentorsView}
           className={cn(
             "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition-all cursor-pointer",
             activeView === "mentors"
@@ -205,7 +255,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => setActiveView("assignments")}
+          onClick={() => openAssignments(assignmentGroup)}
           className={cn(
             "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition-all cursor-pointer",
             activeView === "assignments"
@@ -246,10 +296,18 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
             value={unassignedStudents.length}
             hint={`${highCapacityMentors.length} mentors near capacity (>8)`}
             tone="indigo"
-            onClick={() => {
-              setAssignmentGroup("unassigned");
-              setActiveView("assignments");
-            }}
+            action={
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-indigo-500/30 bg-indigo-600/15 text-indigo-200 hover:bg-indigo-600/25 hover:text-indigo-100"
+                rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+                onClick={() => openAssignments("unassigned")}
+              >
+                View
+              </Button>
+            }
           />
           <OverviewCard
             icon={<UserCheck className="w-5 h-5 text-emerald-400" />}
@@ -277,7 +335,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
                 variant="secondary"
                 onClick={() => {
                   onDismissNotification?.(n.id);
-                  setActiveView("assignments");
+                  openAssignments("unassigned");
                 }}
               >
                 Fix
@@ -363,7 +421,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
                     key={mentor.id}
                     className="rounded-xl border border-slate-800 bg-slate-900 p-4 transition-all hover:border-indigo-500/30"
                   >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(340px,1.1fr)_auto] lg:items-center">
                       <div className="flex min-w-0 items-center gap-3">
                         <Avatar name={name} src={mentor.avatar} size="md" className="rounded-xl" />
                         <div className="min-w-0">
@@ -392,7 +450,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-4 gap-2 sm:min-w-[280px]">
+                      <div className="grid w-full grid-cols-[1.2fr_1fr_1fr_1.25fr] gap-2">
                         <RowMetric label="No meeting" value={studentsWithoutMeeting} warn />
                         <RowMetric label="Overdue" value={overdueTasksCount} warn />
                         <RowMetric label="No tasks" value={studentsWithNoTasksSoon} warn />
@@ -403,7 +461,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
                           <p className={cn("text-sm font-bold tabular-nums", complianceTone(score))}>
                             {score}%
                           </p>
-                          <div className="mx-auto mt-1 h-1 w-full max-w-[48px] overflow-hidden rounded-full bg-slate-800">
+                          <div className="mx-auto mt-1 h-1 w-full max-w-[56px] overflow-hidden rounded-full bg-slate-800">
                             <div
                               className={cn("h-full", complianceBar(score))}
                               style={{ width: `${Math.min(score, 100)}%` }}
@@ -412,7 +470,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-1.5 lg:justify-end">
                         <Button
                           size="sm"
                           variant="secondary"
@@ -454,10 +512,17 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
         </div>
       ) : (
         <AssignmentsPanel
+          className="min-h-0 flex-1"
           assignmentSearch={assignmentSearch}
           setAssignmentSearch={setAssignmentSearch}
           assignmentGroup={assignmentGroup}
-          setAssignmentGroup={setAssignmentGroup}
+          setAssignmentGroup={(group) => {
+            setAssignmentGroup(group);
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("view", "assignments");
+            params.set("group", group);
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+          }}
           unassignedStudents={filterStudents(unassignedStudents)}
           pendingStudents={filterStudents(
             students.filter((s) => pendingStudentIds.includes(s.id)),
@@ -484,6 +549,7 @@ function OverviewCard({
   hint,
   tone,
   onClick,
+  action,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -491,6 +557,7 @@ function OverviewCard({
   hint: string;
   tone: "rose" | "amber" | "indigo" | "emerald";
   onClick?: () => void;
+  action?: React.ReactNode;
 }) {
   const tones = {
     rose: "text-rose-400 border-rose-500/20",
@@ -521,6 +588,7 @@ function OverviewCard({
       </div>
       <p className="text-3xl font-black tabular-nums text-white">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{hint}</p>
+      {action ? <div className="mt-4">{action}</div> : null}
     </>
   );
 
@@ -560,6 +628,7 @@ function RowMetric({
 }
 
 function AssignmentsPanel({
+  className,
   assignmentSearch,
   setAssignmentSearch,
   assignmentGroup,
@@ -576,6 +645,7 @@ function AssignmentsPanel({
   onUnassignStudent,
   onOpenProfile,
 }: {
+  className?: string;
   assignmentSearch: string;
   setAssignmentSearch: (v: string) => void;
   assignmentGroup: "unassigned" | "pending" | "assigned" | "workloads";
@@ -637,10 +707,15 @@ function AssignmentsPanel({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-      <div className="grid lg:grid-cols-[220px_minmax(0,1fr)]">
+    <div
+      className={cn(
+        "flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900",
+        className,
+      )}
+    >
+      <div className="grid h-full min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]">
         {/* Left nav */}
-        <aside className="border-b border-slate-800 bg-slate-950/40 p-3 lg:border-b-0 lg:border-r">
+        <aside className="shrink-0 overflow-y-auto border-b border-slate-800 bg-slate-950/40 p-3 lg:h-full lg:border-b-0 lg:border-r">
           <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
             Queues
           </p>
@@ -733,8 +808,8 @@ function AssignmentsPanel({
         </aside>
 
         {/* Main pane */}
-        <section className="flex min-h-[420px] flex-col">
-          <header className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <section className="flex min-h-0 min-w-0 flex-col">
+          <header className="flex shrink-0 flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div className="min-w-0">
               <h3 className="text-base font-semibold text-white">{titles[assignmentGroup]}</h3>
               <p className="text-sm text-slate-500">{subtitles[assignmentGroup]}</p>
@@ -752,10 +827,10 @@ function AssignmentsPanel({
             )}
           </header>
 
-          <div className="flex-1 overflow-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {assignmentGroup === "unassigned" && (
               unassignedStudents.length === 0 ? (
-                <div className="p-6">
+                <div className="flex h-full min-h-[240px] items-center justify-center p-6">
                   <EmptyState
                     icon={<Users className="w-8 h-8" />}
                     title="No unassigned students"
@@ -808,7 +883,7 @@ function AssignmentsPanel({
 
             {assignmentGroup === "pending" && (
               pendingStudents.length === 0 ? (
-                <div className="p-6">
+                <div className="flex h-full min-h-[240px] items-center justify-center p-6">
                   <EmptyState
                     icon={<Hourglass className="w-8 h-8" />}
                     title="No pending assignments"
@@ -879,7 +954,7 @@ function AssignmentsPanel({
 
             {assignmentGroup === "assigned" && (
               assignedStudents.length === 0 ? (
-                <div className="p-6">
+                <div className="flex h-full min-h-[240px] items-center justify-center p-6">
                   <EmptyState
                     icon={<UserCheck className="w-8 h-8" />}
                     title="No assigned students yet"
@@ -966,7 +1041,7 @@ function AssignmentsPanel({
 
             {assignmentGroup === "workloads" && (
               filteredMentors.length === 0 ? (
-                <div className="p-6">
+                <div className="flex h-full min-h-[240px] items-center justify-center p-6">
                   <EmptyState
                     icon={<Activity className="w-8 h-8" />}
                     title="No mentors"

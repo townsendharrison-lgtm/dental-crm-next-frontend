@@ -49,12 +49,14 @@ function KpiCard({
   hint,
   icon,
   tone,
+  action,
 }: {
   label: string;
   value: string | number;
   hint: string;
   icon: React.ReactNode;
   tone: "rose" | "amber" | "indigo" | "emerald";
+  action?: React.ReactNode;
 }) {
   const tones = {
     rose: "border-rose-500/20 bg-rose-500/5",
@@ -70,6 +72,7 @@ function KpiCard({
       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-bold tabular-nums text-white">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{hint}</p>
+      {action ? <div className="mt-3">{action}</div> : null}
     </div>
   );
 }
@@ -146,6 +149,18 @@ export default function ComplianceHubView({
           hint="Need mentor assignment"
           icon={<Users className="h-4 w-4 text-indigo-400" />}
           tone="indigo"
+          action={
+            <Link href={`${mentorsHref}?view=assignments&group=unassigned`}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full border-indigo-500/30 bg-indigo-600/15 text-indigo-200 hover:bg-indigo-600/25 hover:text-indigo-100"
+                rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+              >
+                View
+              </Button>
+            </Link>
+          }
         />
         <KpiCard
           label="Avg Compliance"

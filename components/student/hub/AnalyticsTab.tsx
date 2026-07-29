@@ -46,17 +46,35 @@ function resolveStudentMetricValue(
   if (key === 'shadowing') {
     return (experiences || [])
       .filter((e) => e.category === 'Shadowing')
-      .reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0);
+      .reduce(
+        (sum, e) =>
+          sum +
+          (Number(e.priorHours ?? e.prior_hours) || 0) +
+          (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0),
+        0,
+      );
   }
   if (key === 'dental') {
     return (experiences || [])
       .filter((e) => e.category === 'Dental Experience')
-      .reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0);
+      .reduce(
+        (sum, e) =>
+          sum +
+          (Number(e.priorHours ?? e.prior_hours) || 0) +
+          (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0),
+        0,
+      );
   }
   if (key === 'volunteering') {
     return (experiences || [])
       .filter((e) => e.category === 'Volunteering')
-      .reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0);
+      .reduce(
+        (sum, e) =>
+          sum +
+          (Number(e.priorHours ?? e.prior_hours) || 0) +
+          (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0),
+        0,
+      );
   }
   if (key === 'research') {
     return (experiences || []).filter((e) => e.category === 'Research').length;
@@ -191,7 +209,15 @@ export default function AnalyticsTab({
     ];
     return categories.map(cat => ({
       name: cat.label,
-      hours: (experiences || []).filter(e => e.category === cat.id).reduce((sum, e) => sum + (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0), 0)
+      hours: (experiences || [])
+        .filter((e) => e.category === cat.id)
+        .reduce(
+          (sum, e) =>
+            sum +
+            (Number(e.priorHours ?? e.prior_hours) || 0) +
+            (e.sessions || []).reduce((sSum, s) => sSum + s.duration, 0),
+          0,
+        ),
     }));
   }, [experiences]);
 

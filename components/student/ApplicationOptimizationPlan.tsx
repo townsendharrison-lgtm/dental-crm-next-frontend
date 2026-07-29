@@ -191,7 +191,13 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
     if (!cat) return '0 Units';
 
     const filtered = experiences.filter(e => e.category === cat);
-    const hours = filtered.reduce((acc, e) => acc + (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0), 0);
+    const hours = filtered.reduce(
+      (acc, e) =>
+        acc +
+        (Number(e.priorHours ?? e.prior_hours) || 0) +
+        (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0),
+      0,
+    );
     const count = filtered.length;
 
     if (cat === 'Volunteering') return `${hours} Hours • ${count} Organizations`;
@@ -212,7 +218,13 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
     if (catKey === 'shadowing') {
       const filtered = experiences.filter(e => e.category === 'Shadowing');
       switch (subGoalId) {
-        case 'sg1': return filtered.reduce((acc, e) => acc + (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0), 0);
+        case 'sg1': return filtered.reduce(
+          (acc, e) =>
+            acc +
+            (Number(e.priorHours ?? e.prior_hours) || 0) +
+            (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0),
+          0,
+        );
         case 'sg2': return filtered.filter(e => e.dentistType === 'General').length;
         case 'sg3': return filtered.filter(e => e.dentistType === 'Specialty').length;
         case 'sg4': return filtered.length;
@@ -223,7 +235,13 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
     if (catKey === 'volunteering') {
       const filtered = experiences.filter(e => e.category === 'Volunteering');
       switch (subGoalId) {
-        case 'vg1': return filtered.reduce((acc, e) => acc + (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0), 0);
+        case 'vg1': return filtered.reduce(
+          (acc, e) =>
+            acc +
+            (Number(e.priorHours ?? e.prior_hours) || 0) +
+            (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0),
+          0,
+        );
         case 'vg2': return filtered.length;
         default: return 0;
       }
@@ -232,7 +250,13 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
     if (catKey === 'research') {
       const filtered = experiences.filter(e => e.category === 'Research');
       switch (subGoalId) {
-        case 'rg1': return filtered.reduce((acc, e) => acc + (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0), 0);
+        case 'rg1': return filtered.reduce(
+          (acc, e) =>
+            acc +
+            (Number(e.priorHours ?? e.prior_hours) || 0) +
+            (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0),
+          0,
+        );
         default: return 0;
       }
     }
@@ -240,7 +264,13 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
     if (catKey === 'dental') {
       const filtered = experiences.filter(e => e.category === 'Dental Experience');
       switch (subGoalId) {
-        case 'dg1': return filtered.reduce((acc, e) => acc + (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0), 0);
+        case 'dg1': return filtered.reduce(
+          (acc, e) =>
+            acc +
+            (Number(e.priorHours ?? e.prior_hours) || 0) +
+            (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0),
+          0,
+        );
         case 'dg2': return filtered.length;
         default: return 0;
       }
@@ -249,7 +279,13 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
     if (catKey === 'academic') {
       const filtered = experiences.filter(e => e.category === 'Academic');
       switch (subGoalId) {
-        case 'ag1': return filtered.reduce((acc, e) => acc + (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0), 0);
+        case 'ag1': return filtered.reduce(
+          (acc, e) =>
+            acc +
+            (Number(e.priorHours ?? e.prior_hours) || 0) +
+            (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0),
+          0,
+        );
         case 'ag2': return filtered.length;
         default: return 0;
       }
@@ -734,8 +770,21 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
         <div className="space-y-4">
           {(Object.entries((editPlan.categories || {})) as [string, any][]).map(([key, cat]) => {
             const isExpanded = expandedCategories[key];
-            const currentHours = experiences.filter(e => e.category === (key === 'dental' ? 'Dental Experience' : key.charAt(0).toUpperCase() + key.slice(1)))
-              .reduce((acc, e) => acc + (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0), 0);
+            const currentHours = experiences
+              .filter(
+                (e) =>
+                  e.category ===
+                  (key === "dental"
+                    ? "Dental Experience"
+                    : key.charAt(0).toUpperCase() + key.slice(1)),
+              )
+              .reduce(
+                (acc, e) =>
+                  acc +
+                  (Number(e.priorHours ?? e.prior_hours) || 0) +
+                  (e.sessions || []).reduce((sAcc, s) => sAcc + s.duration, 0),
+                0,
+              );
             const progress = cat.targetGoal ? Math.min(100, (currentHours / cat.targetGoal.value) * 100) : 0;
 
             return (

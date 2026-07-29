@@ -33,7 +33,31 @@ export function useBroadcastNotification() {
       message: string;
       type?: "INFO" | "WARNING" | "URGENT";
       targetRole?: "STUDENT" | "MENTOR" | "BOTH";
+      endDate?: string | null;
     }) => notificationsApi.broadcast(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.notifications.broadcasts() });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+/** Admin: update a broadcast batch */
+export function useUpdateBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      relatedId,
+      updates,
+    }: {
+      relatedId: string;
+      updates: {
+        title?: string;
+        message?: string;
+        type?: "INFO" | "WARNING" | "URGENT";
+        endDate?: string | null;
+      };
+    }) => notificationsApi.updateBroadcast(relatedId, updates),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.notifications.broadcasts() });
       qc.invalidateQueries({ queryKey: ["notifications"] });

@@ -1,10 +1,11 @@
 "use client";
 
 import { useAuth } from "@/lib/hooks/useAuth";
-import { useSurveys, useCreateSurvey, useDeleteSurvey } from "@/lib/hooks/useSurveys";
+import { useSurveys, useCreateSurvey, useUpdateSurvey, useDeleteSurvey } from "@/lib/hooks/useSurveys";
 import {
   useBroadcasts,
   useBroadcastNotification,
+  useUpdateBroadcast,
   useDeleteBroadcast,
 } from "@/lib/hooks/useNotifications";
 import { usePopups, useCreatePopup, useUpdatePopup, useDeletePopup } from "@/lib/hooks/usePopups";
@@ -41,8 +42,10 @@ export default function AdminEngagementPage() {
   const { data: resources = [], isLoading: resourcesLoading } = useResources(!!user);
 
   const createSurveyMutation = useCreateSurvey();
+  const updateSurveyMutation = useUpdateSurvey();
   const deleteSurveyMutation = useDeleteSurvey();
   const broadcastMutation = useBroadcastNotification();
+  const updateBroadcastMutation = useUpdateBroadcast();
   const deleteBroadcastMutation = useDeleteBroadcast();
   const createPopupMutation = useCreatePopup();
   const updatePopupMutation = useUpdatePopup();
@@ -72,6 +75,8 @@ export default function AdminEngagementPage() {
     type: b.type,
     category: b.category,
     related_id: b.related_id,
+    end_date: b.end_date ?? b.endDate ?? null,
+    endDate: b.endDate ?? b.end_date ?? null,
     targetRole: b.targetRole || b.target_role,
     target_role: b.target_role || b.targetRole,
     created_at: b.created_at,
@@ -96,11 +101,41 @@ export default function AdminEngagementPage() {
           | "MENTOR"
           | "BOTH",
         isActive: true,
+        endDate: survey.endDate ?? survey.end_date ?? null,
       }),
       {
         loading: "Creating survey…",
         success: "Survey created",
         error: "Failed to create survey",
+      },
+    );
+  };
+
+  const handleUpdateSurvey = (survey: Survey) => {
+    const questions = (survey.questions || []).map((q) => ({
+      ...q,
+      questionText: q.questionText || q.question || "",
+      question: q.question || q.questionText || "",
+    }));
+    void toastAction(
+      updateSurveyMutation.mutateAsync({
+        id: survey.id,
+        updates: {
+          title: survey.title,
+          description: survey.description || "",
+          questions,
+          targetRole: (survey.targetRole || survey.target_role || "BOTH") as
+            | "STUDENT"
+            | "MENTOR"
+            | "BOTH",
+          isActive: survey.is_active !== false,
+          endDate: survey.endDate ?? survey.end_date ?? null,
+        },
+      }),
+      {
+        loading: "Saving survey…",
+        success: "Survey updated",
+        error: "Failed to update survey",
       },
     );
   };
@@ -115,11 +150,31 @@ export default function AdminEngagementPage() {
           | "STUDENT"
           | "MENTOR"
           | "BOTH",
+        endDate: notif.endDate ?? notif.end_date ?? null,
       }),
       {
         loading: "Sending alert…",
         success: (res) => `Alert sent to ${res.notified} user(s)`,
         error: "Failed to send alert",
+      },
+    );
+  };
+
+  const handleUpdateNotification = (notif: SystemNotification) => {
+    void toastAction(
+      updateBroadcastMutation.mutateAsync({
+        relatedId: notif.id,
+        updates: {
+          title: notif.title,
+          message: notif.message,
+          type: (notif.type as "INFO" | "WARNING" | "URGENT") || "INFO",
+          endDate: notif.endDate ?? notif.end_date ?? null,
+        },
+      }),
+      {
+        loading: "Saving alert…",
+        success: "Alert updated",
+        error: "Failed to update alert",
       },
     );
   };
@@ -356,7 +411,9 @@ export default function AdminEngagementPage() {
         notifications={notifications}
         responses={[]}
         onAddSurvey={handleAddSurvey}
+        onUpdateSurvey={handleUpdateSurvey}
         onAddNotification={handleAddNotification}
+        onUpdateNotification={handleUpdateNotification}
         onDeleteSurvey={handleDeleteSurvey}
         onDeleteNotification={handleDeleteNotification}
         popups={popups}

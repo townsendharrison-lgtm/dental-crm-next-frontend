@@ -37,8 +37,10 @@ import {
   Plus,
   X,
   Globe,
+  Trash2,
 } from "lucide-react";
-import { MOCK_MENTORS } from "@/lib/data";
+import { formatMeetingLocal, parseLocalDate } from "@/lib/utils/dateUtils";
+import { useMentor } from "@/lib/hooks/useMentors";
 import ApplicationTracker from "./ApplicationTracker";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -46,7 +48,6 @@ import { Textarea, FormField, Input } from "@/components/ui/Form";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import { renderBadgeIcon } from "@/lib/utils/badgeIcons";
-import { formatMeetingLocal, parseLocalDate } from "@/lib/utils/dateUtils";
 
 interface StudentDashboardProps {
   student: Student;
@@ -61,12 +62,13 @@ interface StudentDashboardProps {
     receiverIds?: string[],
     groupName?: string,
     threadId?: string,
-  ) => void;
+  ) => void | Promise<void>;
   onNavigate: (tab: string) => void;
   /** Open a recent-update notification (dismiss + deep-link). */
   onOpenNotification?: (notif: SystemNotification) => void;
   onToggleActionItem: (itemId: string) => void;
   onAddActionItem?: (task: string, dueDate: string) => void;
+  onDeleteActionItem?: (itemId: string) => void;
   onTakeSurvey: (id: string) => void;
   onUpdateApplications: (apps: Application[]) => void;
   /** Next 1:1 / mentorship meeting — never replaced by webinars */
@@ -84,6 +86,20 @@ interface StudentDashboardProps {
 
 function itemDueDate(item: ActionItem) {
   return item.due_date || item.dueDate || "";
+}
+
+function itemCreatedAt(item: ActionItem) {
+  return item.created_at || "";
+}
+
+function sortChecklistTasks(items: ActionItem[]) {
+  return [...items].sort((a, b) => {
+    const aTime = new Date(itemCreatedAt(a)).getTime();
+    const bTime = new Date(itemCreatedAt(b)).getTime();
+    const aValid = Number.isFinite(aTime) ? aTime : 0;
+    const bValid = Number.isFinite(bTime) ? bTime : 0;
+    return bValid - aValid;
+  });
 }
 
 function formatDueDateOnly(raw: string) {
@@ -220,6 +236,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onOpenNotification,
   onToggleActionItem,
   onAddActionItem,
+  onDeleteActionItem,
   onTakeSurvey,
   onUpdateApplications,
   nextMeeting,
@@ -257,8 +274,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     resetAddTaskForm();
   };
 
-  const mentorId = student.mentorId || student.profile?.mentor_id;
-  const mentor = MOCK_MENTORS.find((m) => m.id === mentorId);
+  const mentorId =
+    student.mentorId ||
+    student.profile?.mentor_id ||
+    nextMeeting?.mentorId ||
+    nextMeeting?.mentor_id ||
+    "";
+  const { data: mentor } = useMentor(mentorId);
   const nextTask = studentTasks.find((t) => t.status !== "COMPLETED") || studentTasks[0];
 
   usePageHeaderAction({
@@ -336,22 +358,34 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   const handleRescheduleClick = () => {
+    if (!mentorId) {
+      toast.error("No mentor assigned yet.");
+      return;
+    }
     setChatMessage(
       `Hi ${mentor?.name || "Mentor"}, I'm so sorry but I need to reschedule our meeting.`,
     );
     setIsChatOpen(true);
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!chatMessage.trim()) return;
-    if (!mentor) {
+    if (!mentorId) {
       toast.error("No mentor assigned yet.");
       return;
     }
-    onSendMessage(chatMessage, mentor.id);
-    setIsChatOpen(false);
-    setChatMessage("");
-    toast.success("Message sent");
+    try {
+      await Promise.resolve(onSendMessage(chatMessage, mentorId));
+      setIsChatOpen(false);
+      setChatMessage("");
+      toast.success("Message sent");
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message?: string }).message)
+          : "Failed to send message";
+      toast.error(message || "Failed to send message");
+    }
   };
 
   const progress = student.progress ?? student.profile?.progress ?? 0;
@@ -380,7 +414,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   }, [strengthPercentile, strengthScore]);
 
   const recentUpdates = React.useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     return [...notifications]
+      .filter((n) => {
+        const created = new Date(notifCreatedAt(n)).getTime();
+        return Number.isFinite(created) && created >= cutoff;
+      })
       .sort((a, b) => {
         const aUnread = a.is_read ? 0 : 1;
         const bUnread = b.is_read ? 0 : 1;
@@ -698,9 +737,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
           </section>
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 sm:grid-cols-2">
-            <div className="flex h-full min-h-[180px] flex-col rounded-xl border border-slate-800 bg-slate-900 p-5">
-              <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 sm:grid-cols-2 sm:items-stretch">
+            <div className="flex h-full max-h-[280px] min-h-[180px] flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-5">
+              <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
                 <h3 className="flex items-center gap-2 text-base font-bold text-white">
                   <Award className="h-4 w-4 text-amber-400" /> Milestone Badges
                 </h3>
@@ -708,7 +747,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   {earnedBadges.length} Earned
                 </span>
               </div>
-              <div className="grid flex-1 grid-cols-2 content-start gap-3">
+              <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto pr-1 custom-scrollbar">
                 {earnedBadges.map((badge) =>
                   badge ? (
                     <button
@@ -741,8 +780,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </div>
             </div>
 
-            <div className="flex h-full min-h-[180px] flex-col rounded-xl border border-cyan-500/25 bg-slate-900 p-5">
-              <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="flex h-full max-h-[280px] min-h-[180px] flex-col overflow-hidden rounded-xl border border-cyan-500/25 bg-slate-900 p-5">
+              <div className="mb-3 flex shrink-0 items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/80">
                     Global event
@@ -905,7 +944,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </section>
 
         <section id="active-checklist" className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-5">
+          <div className="mb-5 flex shrink-0 items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <CheckSquare className="w-4 h-4 text-indigo-400" /> Active Checklist
             </h3>
@@ -958,8 +997,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
           )}
 
-          <div className="space-y-2">
-            {studentTasks.map((item) => (
+          <div className="h-[280px] space-y-2 overflow-y-auto overscroll-contain pr-1 custom-scrollbar">
+            {sortChecklistTasks(studentTasks).map((item) => (
               <div
                 key={item.id}
                 className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
@@ -1001,10 +1040,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     )}
                   </div>
                 </div>
+                {onDeleteActionItem && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteActionItem(item.id)}
+                    className="shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-rose-500/10 hover:text-rose-400 cursor-pointer"
+                    aria-label={`Delete task ${item.task}`}
+                    title="Delete task"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             ))}
             {studentTasks.length === 0 && !isAddingTask && (
-              <div className="text-center py-8 border border-dashed border-slate-800 rounded-xl">
+              <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-800 text-center">
                 <p className="text-slate-500 text-sm">No active tasks. You&apos;re all caught up!</p>
               </div>
             )}

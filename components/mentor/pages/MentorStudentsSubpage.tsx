@@ -237,7 +237,13 @@ function MentorStudentsSubpageInner({
         pendingAssignments={pendingForMentor}
         allStudents={students}
         meetings={meetings}
-        onSelectStudent={(id) => router.push(`${listHref}?studentId=${id}`)}
+        onSelectStudent={(id, tab) =>
+          router.push(
+            tab
+              ? `${listHref}?studentId=${id}&tab=${encodeURIComponent(tab)}`
+              : `${listHref}?studentId=${id}`,
+          )
+        }
         onMessageStudent={async (id) => {
           try {
             const { openDmWithUser } = await import("@/lib/messages/openDm");

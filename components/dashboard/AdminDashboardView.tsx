@@ -24,6 +24,7 @@ import {
   ArrowUpRight,
   User,
   UserCheck,
+  UserX,
   CalendarX,
   X,
   Plus,
@@ -91,6 +92,7 @@ export function AdminDashboardView() {
   const [openingChat, setOpeningChat] = useState(false);
   const [performanceTab, setPerformanceTab] = useState<"COMPLIANCE" | "STRENGTH">("COMPLIANCE");
   const [inactivityReportOpen, setInactivityReportOpen] = useState(false);
+  const [unassignedReportOpen, setUnassignedReportOpen] = useState(false);
 
   const { data: users = [], isLoading: usersLoading } = useAdminUsers();
   const { data: leads = [], isLoading: leadsLoading } = useLeads();
@@ -126,13 +128,21 @@ export function AdminDashboardView() {
     notifications
       .filter((n) => !n.is_read)
       .forEach((n) => {
+        // Student-only LOR outcomes should never surface on the admin dashboard
+        const category = (n.category || "").toUpperCase();
+        if (
+          category === "LOR_REVIEWED" ||
+          /letter approved|needs revision/i.test(n.title || "")
+        ) {
+          return;
+        }
+
         let actionType: "LEAD" | "LOR" | "NOTIFICATION" = "NOTIFICATION";
         if (n.category === "NEW_LEAD") {
           actionType = "LEAD";
         } else if (
-          n.category === "LOR" ||
-          n.title.toLowerCase().includes("letter") ||
-          n.message.toLowerCase().includes("letter")
+          category === "LOR_UPLOADED" ||
+          /new letter uploaded|letter uploaded/i.test(n.title || "")
         ) {
           actionType = "LOR";
         }
@@ -213,6 +223,19 @@ export function AdminDashboardView() {
       // Longest inactivity first (never / oldest activity → top)
       .sort((a, b) => a.lastMs - b.lastMs || a.name.localeCompare(b.name));
 
+    const unassignedStudents = students
+      .filter((s) => {
+        if (s.email?.toLowerCase().endsWith("@school-selection.local")) return false;
+        return !s.mentorId;
+      })
+      .map((s) => ({
+        id: s.id,
+        name: s.name || "Unnamed student",
+        email: s.email || "",
+        avatar: s.avatar || undefined,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     const avgCompliance =
       mentors.length > 0
         ? Math.round(
@@ -253,6 +276,8 @@ export function AdminDashboardView() {
       readinessDist,
       inactiveCount: inactiveStudents.length,
       inactiveStudents,
+      unassignedCount: unassignedStudents.length,
+      unassignedStudents,
       avgCompliance,
       retentionRate,
       retainedCount: retained,
@@ -642,6 +667,113 @@ export function AdminDashboardView() {
                   >
                     {row.mentorName}
                   </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Unassigned Students Callout */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl lg:rounded-3xl p-5 lg:p-8 relative overflow-hidden">
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 lg:gap-6">
+          <div className="flex items-center gap-4 lg:gap-6">
+            <div className="p-3 lg:p-4 bg-indigo-500/10 rounded-xl lg:rounded-2xl border border-indigo-500/20 shrink-0">
+              <UserX className="w-6 h-6 lg:w-8 lg:h-8 text-indigo-400" />
+            </div>
+            <div>
+              <h3 className="text-lg lg:text-2xl font-bold text-white mb-1">Unassigned Students</h3>
+              <p className="text-sm lg:text-base text-slate-400">
+                <span className="text-indigo-400 font-bold">
+                  {stats.unassignedCount} student{stats.unassignedCount === 1 ? "" : "s"}
+                </span>{" "}
+                waiting for a mentor pairing.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-indigo-500/30 bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 hover:text-indigo-200"
+              onClick={() => setUnassignedReportOpen(true)}
+              disabled={studentsLoading}
+            >
+              Show report
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-indigo-600 hover:bg-indigo-500"
+              onClick={() => router.push("/admin/mentors?view=assignments&group=unassigned")}
+            >
+              Assign mentors
+            </Button>
+          </div>
+        </div>
+        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none hidden lg:block">
+          <Users size={160} className="text-indigo-500" />
+        </div>
+      </div>
+
+      <Modal
+        open={unassignedReportOpen}
+        onClose={() => setUnassignedReportOpen(false)}
+        title="Unassigned Students"
+        description="Students without an active mentor pairing"
+        size="lg"
+        footer={
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setUnassignedReportOpen(false)}
+              className="rounded-xl px-5"
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setUnassignedReportOpen(false);
+                router.push("/admin/mentors?view=assignments&group=unassigned");
+              }}
+            >
+              Go to Assignments
+            </Button>
+          </div>
+        }
+      >
+        {stats.unassignedStudents.length === 0 ? (
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-10 text-center">
+            <p className="text-sm text-slate-400">Everyone currently has a mentor pairing.</p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/50">
+            <div className="border-b border-slate-800 px-4 py-3 sm:px-5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                Student
+              </p>
+            </div>
+            <div className="max-h-[min(52vh,420px)] overflow-y-auto">
+              {stats.unassignedStudents.map((row) => (
+                <div
+                  key={row.id}
+                  className="flex items-center gap-3 border-b border-slate-800/80 px-4 py-3.5 last:border-b-0 sm:px-5"
+                >
+                  <Avatar
+                    name={row.name}
+                    src={row.avatar}
+                    size="sm"
+                    className="h-9 w-9 rounded-lg bg-slate-800 text-slate-300"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">{row.name}</p>
+                    {row.email ? (
+                      <p className="truncate text-xs text-slate-500">{row.email}</p>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

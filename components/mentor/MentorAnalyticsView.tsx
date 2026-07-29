@@ -128,7 +128,7 @@ const MentorAnalyticsView: React.FC<MentorAnalyticsViewProps> = ({
   onNavigateSchedule,
   onNavigateStudents,
 }) => {
-  const [timeframe, setTimeframe] = useState<"6M" | "1Y">("6M");
+  const [timeframe, setTimeframe] = useState<"6M" | "1Y">("1Y");
 
   const currentMentor = mentors.find((m) => m.id === mentorId) || mentors[0];
 

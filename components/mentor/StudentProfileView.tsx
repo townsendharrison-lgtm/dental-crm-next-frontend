@@ -36,6 +36,7 @@ import {
   calculateStrengthScore,
   hoursByCategoryFromExperiences,
 } from '@/lib/utils/strengthScore';
+import { buildStrengthMonthlySeries } from '@/lib/utils/strengthHistorySeries';
 import { useStudentStrengthHistory } from '@/lib/hooks/useStudentProfile';
 import { useApplications } from '@/lib/hooks/useApplications';
 import { useStudentSchools } from '@/lib/hooks/useStudentSchools';
@@ -342,13 +343,11 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
     (Number.isFinite(storedStrength) ? storedStrength : computedStrength);
 
   const progressionData = React.useMemo(() => {
-    const rows =
+    return buildStrengthMonthlySeries(
       strengthHistory.length > 0
         ? strengthHistory
         : [
             {
-              id: "current",
-              student_id: student.id,
               strength_score: displayStrength,
               recorded_at:
                 student.profile?.updated_at ||
@@ -356,70 +355,10 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                 student.createdAt ||
                 new Date().toISOString(),
             },
-          ];
-
-    // Chronological points — keep every score change (including same-day changes)
-    type Point = { month: string; score: number; sortKey: number; fullDate: string; dayKey: string };
-    const changePoints: Point[] = [];
-    let prevScore: number | null = null;
-
-    const sortedRows = [...rows].sort((a, b) => {
-      const ta = new Date(a.recorded_at).getTime();
-      const tb = new Date(b.recorded_at).getTime();
-      return (Number.isNaN(ta) ? 0 : ta) - (Number.isNaN(tb) ? 0 : tb);
-    });
-
-    for (const row of sortedRows) {
-      const at = new Date(row.recorded_at);
-      if (Number.isNaN(at.getTime())) continue;
-      const score = Math.round(Number(row.strength_score) || 0);
-      // Skip only when the score is unchanged (even across different dates)
-      if (prevScore === score) continue;
-
-      const dayKey = `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`;
-      changePoints.push({
-        month: at.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-        score,
-        sortKey: at.getTime(),
-        fullDate: at.toLocaleString(),
-        dayKey,
-      });
-      prevScore = score;
-    }
-
-    // If multiple points share a day, include time so axis labels stay unique
-    const dayCounts = new Map<string, number>();
-    for (const point of changePoints) {
-      dayCounts.set(point.dayKey, (dayCounts.get(point.dayKey) || 0) + 1);
-    }
-
-    let points = changePoints.map((point) => {
-      if ((dayCounts.get(point.dayKey) || 0) <= 1) {
-        return { month: point.month, score: point.score, sortKey: point.sortKey, fullDate: point.fullDate };
-      }
-      const at = new Date(point.sortKey);
-      const time = at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-      return {
-        month: `${point.month} ${time}`,
-        score: point.score,
-        sortKey: point.sortKey,
-        fullDate: point.fullDate,
-      };
-    });
-
-    if (points.length === 0) {
-      return [{ month: "Now", score: displayStrength, fullDate: "Current" }];
-    }
-
-    const last = points[points.length - 1];
-    if (last.score !== displayStrength) {
-      points = [
-        ...points,
-        { month: "Now", score: displayStrength, sortKey: last.sortKey + 1, fullDate: "Current" },
-      ];
-    }
-
-    return points.map(({ month, score, fullDate }) => ({ month, score, fullDate }));
+          ],
+      displayStrength,
+      12,
+    );
   }, [strengthHistory, displayStrength, student]);
 
   const resetNewAction = () => {
@@ -1000,10 +939,15 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                 <h3 className="text-base font-semibold text-white flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-indigo-400" /> Strength Score Progression
                 </h3>
-                <div className="px-3 py-1 bg-indigo-500/10 rounded-full border border-indigo-500/20">
-                  <span className="text-xs font-bold text-indigo-400">
-                    Current Score: {displayStrength || "—"}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Last 12 months
                   </span>
+                  <div className="px-3 py-1 bg-indigo-500/10 rounded-full border border-indigo-500/20">
+                    <span className="text-xs font-bold text-indigo-400">
+                      Current Score: {displayStrength || "—"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -1144,16 +1088,28 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
               </TabsList>
 
               {activitySubTab === "meetings" && (
-                <SelectMenu
-                  value={meetingFilter}
-                  onChange={(v) => setMeetingFilter(v as "all" | "upcoming" | "completed")}
-                  options={[
-                    { value: "all", label: "All meetings" },
-                    { value: "upcoming", label: "Upcoming" },
-                    { value: "completed", label: "Completed" },
-                  ]}
-                  className="w-full sm:w-48"
-                />
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <SelectMenu
+                    value={meetingFilter}
+                    onChange={(v) => setMeetingFilter(v as "all" | "upcoming" | "completed")}
+                    options={[
+                      { value: "all", label: "All meetings" },
+                      { value: "upcoming", label: "Upcoming" },
+                      { value: "completed", label: "Completed" },
+                    ]}
+                    className="w-full sm:w-48"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setSelectedMeetingToComplete(null);
+                      setIsCompletingMeeting(true);
+                    }}
+                    leftIcon={<Plus className="w-4 h-4" />}
+                  >
+                    Add Completed Meeting
+                  </Button>
+                </div>
               )}
 
               {activitySubTab === "tasks" && (
@@ -1190,6 +1146,17 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                         ? "No upcoming meetings."
                         : "No completed meetings."}
                   </p>
+                  <Button
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => {
+                      setSelectedMeetingToComplete(null);
+                      setIsCompletingMeeting(true);
+                    }}
+                    leftIcon={<Plus className="w-4 h-4" />}
+                  >
+                    Add Completed Meeting
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -2028,7 +1995,13 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           setIsCompletingMeeting(false);
           setSelectedMeetingToComplete(null);
         }}
-        title={selectedMeetingToComplete?.completed ? "Edit Meeting" : "Complete Meeting"}
+        title={
+          !selectedMeetingToComplete
+            ? "Add Completed Meeting"
+            : selectedMeetingToComplete.completed
+              ? "Edit Meeting"
+              : "Complete Meeting"
+        }
         description={
           selectedMeetingToComplete
             ? `Session with ${student.name} • ${formatMeetingLocal(
@@ -2042,7 +2015,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                   timeZoneName: "short",
                 },
               )}`
-            : `Session with ${student.name}`
+            : `Log an unscheduled session with ${student.name}`
         }
         size="2xl"
         fullHeight

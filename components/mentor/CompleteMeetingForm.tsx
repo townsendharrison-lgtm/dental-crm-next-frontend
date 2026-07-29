@@ -670,7 +670,11 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
             isLoading={submitting}
             onClick={() => void handleSubmit()}
           >
-            {meeting?.completed ? "Save Meeting" : "Complete Meeting"}
+            {!meeting
+              ? "Log Completed Meeting"
+              : meeting.completed
+                ? "Save Meeting"
+                : "Complete Meeting"}
           </Button>
         </div>
       </form>

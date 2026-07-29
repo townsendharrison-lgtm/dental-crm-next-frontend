@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import {
 import MentorManagerDashboard from "@/components/mentor/MentorManagerDashboard";
 import { normalizeStudents } from "@/lib/utils/normalizeStudent";
 import type { Mentor, Meeting, ActionItem } from "@/lib/types";
+import { FullPageSpinner } from "@/components/ui/Spinner";
 
 interface MentorOpsPageProps {
   title?: string;
@@ -107,7 +108,8 @@ export default function MentorOpsPage({
   };
 
   return (
-    <MentorManagerDashboard
+    <Suspense fallback={<FullPageSpinner label="Loading mentor ops…" />}>
+      <MentorManagerDashboard
       title={title}
       subtitle={subtitle}
       students={students}
@@ -217,6 +219,7 @@ export default function MentorOpsPage({
           onError: (err: any) => toast.error(err?.message || "Failed to unassign student"),
         });
       }}
-    />
+      />
+    </Suspense>
   );
 }

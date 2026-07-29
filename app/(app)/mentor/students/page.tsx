@@ -228,7 +228,13 @@ function MentorStudentsContent() {
         defaultAvailability={mentor?.defaultAvailability || mentor?.profile?.default_availability || []}
         welcomeMessageTemplate={welcomeMessageTemplate}
         acceptBusy={acceptAssignmentMutation.isPending}
-        onSelectStudent={(id) => router.push(`/mentor/students?studentId=${id}`)}
+        onSelectStudent={(id, tab) =>
+          router.push(
+            tab
+              ? `/mentor/students?studentId=${id}&tab=${encodeURIComponent(tab)}`
+              : `/mentor/students?studentId=${id}`,
+          )
+        }
         onMessageStudent={async (id) => {
           try {
             const { openDmWithUser } = await import("@/lib/messages/openDm");

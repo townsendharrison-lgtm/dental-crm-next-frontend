@@ -7,6 +7,7 @@ export interface CreateSurveyPayload {
   questions: SurveyQuestion[];
   targetRole?: "STUDENT" | "MENTOR" | "BOTH";
   isActive?: boolean;
+  endDate?: string | null;
 }
 
 export interface QuestionAnalyticsItem {

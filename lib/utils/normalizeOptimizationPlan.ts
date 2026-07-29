@@ -22,6 +22,8 @@ export function normalizeOptimizationPlan(
   return {
     ...plan,
     studentId: plan.studentId ?? plan.student_id,
+    externalId: plan.externalId ?? plan.external_id,
+    schoolBoard: plan.schoolBoard ?? plan.school_board ?? null,
     overallScore: plan.overallScore ?? plan.overall_score ?? 0,
     improvementLeverageScore:
       plan.improvementLeverageScore ?? plan.improvement_leverage_score ?? 0,

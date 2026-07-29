@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { Experience, Student } from "@/lib/types";
 import { parseLocalDate } from "./hubShared";
 import {
-  buildPriorHourSessions,
+  resolvePriorHoursInput,
   computeExperienceStats,
 } from "@/lib/utils/experienceStats";
 import {
@@ -28,9 +28,6 @@ import {
   useUpdateExperienceSession,
   useDeleteExperienceSession,
 } from "@/lib/hooks/useExperiences";
-import { experiencesApi } from "@/lib/api/experiences";
-import { queryKeys } from "@/lib/api/queryKeys";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Badge,
   Button,
@@ -122,7 +119,6 @@ function CategoryIcon({ category }: { category: string }) {
 }
 
 export default function HourTrackerTab({ student, experiences }: HourTrackerTabProps) {
-  const queryClient = useQueryClient();
   const createExperience = useCreateExperience();
   const updateExperience = useUpdateExperience();
   const deleteExperience = useDeleteExperience();
@@ -153,6 +149,16 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
   useEffect(() => {
     if (!isAddExperienceOpen) return;
     if (editingExperience) {
+      const priorHours = Number(
+        editingExperience.priorHours ?? editingExperience.prior_hours ?? 0,
+      );
+      const priorWeeks = Number(
+        editingExperience.priorWeeks ?? editingExperience.prior_weeks ?? 0,
+      );
+      const avg =
+        priorHours > 0 && priorWeeks > 0
+          ? String(Math.round((priorHours / priorWeeks) * 10) / 10)
+          : "";
       setExperienceForm({
         category: editingExperience.category || "Volunteering",
         title: editingExperience.title || "",
@@ -162,9 +168,9 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
         description: editingExperience.description || "",
         startDate: expField(editingExperience, "startDate", "start_date"),
         endDate: expField(editingExperience, "endDate", "end_date") || "",
-        priorTotalHours: "",
-        priorAvgHrs: "",
-        priorWeeks: "",
+        priorTotalHours: priorHours > 0 ? String(priorHours) : "",
+        priorAvgHrs: avg,
+        priorWeeks: priorWeeks > 0 ? String(priorWeeks) : "",
       });
     } else {
       setExperienceForm(emptyExperienceForm);
@@ -238,6 +244,23 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
       return;
     }
 
+    const prior = resolvePriorHoursInput({
+      totalHours: experienceForm.priorTotalHours
+        ? Number(experienceForm.priorTotalHours)
+        : null,
+      avgHrsPerWeek: experienceForm.priorAvgHrs ? Number(experienceForm.priorAvgHrs) : null,
+      weeks: experienceForm.priorWeeks ? Number(experienceForm.priorWeeks) : null,
+    });
+
+    if (
+      (experienceForm.priorTotalHours || experienceForm.priorAvgHrs || experienceForm.priorWeeks) &&
+      prior.priorHours <= 0 &&
+      (Number(experienceForm.priorTotalHours) > 0 || Number(experienceForm.priorAvgHrs) > 0)
+    ) {
+      toast.error("Prior hours values must be valid numbers");
+      return;
+    }
+
     const endDate = experienceForm.endDate.trim() || null;
     const payload = {
       studentId: student.id,
@@ -250,44 +273,18 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
       startDate: experienceForm.startDate,
       endDate,
       isOngoing: !endDate,
+      priorHours: prior.priorHours,
+      priorWeeks: prior.priorWeeks,
     };
 
-    const priorSessions = buildPriorHourSessions({
-      startDate: experienceForm.startDate,
-      totalHours: experienceForm.priorTotalHours
-        ? Number(experienceForm.priorTotalHours)
-        : null,
-      avgHrsPerWeek: experienceForm.priorAvgHrs ? Number(experienceForm.priorAvgHrs) : null,
-      weeks: experienceForm.priorWeeks ? Number(experienceForm.priorWeeks) : null,
-    });
-
-    for (const s of priorSessions) {
-      if (!Number.isFinite(s.duration) || s.duration <= 0) {
-        toast.error("Prior hours values must be valid numbers");
-        return;
-      }
-    }
-
     try {
-      let experienceId = editingExperience?.id;
       if (editingExperience) {
         await updateExperience.mutateAsync({
           id: editingExperience.id,
           updates: payload,
         });
       } else {
-        const created = await createExperience.mutateAsync(payload);
-        experienceId = created.id;
-      }
-
-      if (experienceId && priorSessions.length > 0) {
-        for (const session of priorSessions) {
-          await experiencesApi.createSession(experienceId, session);
-        }
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.experiences.all(student.id),
-        });
-        await queryClient.invalidateQueries({ queryKey: ["experiences"] });
+        await createExperience.mutateAsync(payload);
       }
 
       toast.success(editingExperience ? "Experience updated" : "Experience created");
@@ -537,7 +534,10 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                       ) : (
                         (exp.sessions || [])
                           .slice()
-                          .reverse()
+                          .sort(
+                            (a, b) =>
+                              parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime(),
+                          )
                           .map((session) => (
                             <div
                               key={session.id}
@@ -652,7 +652,11 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                 placeholder="Select start date"
               />
             </FormField>
-            <FormField label="End Date" htmlFor="exp-endDate" hint="Leave blank if still active">
+            <FormField
+              label="End Date"
+              htmlFor="exp-endDate"
+              hint="Leave blank if still active. Timeline shows “Current” when a session was logged in the last 60 days; older activity shows the last session date."
+            >
               <DatePicker
                 value={experienceForm.endDate}
                 onChange={(value) => setExperienceForm((prev) => ({ ...prev, endDate: value }))}
@@ -709,9 +713,8 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                 <span className="font-normal text-slate-500">(optional)</span>
               </p>
               <p className="mt-0.5 text-xs text-slate-500">
-                Enter total hours, avg hrs/wk, and/or weeks — we&apos;ll log them so your timeline
-                and averages stay accurate. Category, title, and start date are the only required
-                fields above.
+                Enter total hours, avg hrs/wk, and/or weeks from before you started logging here.
+                Totals update immediately — no placeholder session dates are created.
               </p>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

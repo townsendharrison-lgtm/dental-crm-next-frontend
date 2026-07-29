@@ -101,11 +101,26 @@ function notifVisual(notif: SystemNotification) {
   return { icon: Info, tone: "bg-slate-800 text-slate-300 border-slate-700" };
 }
 
+function isStudentOnlyLorReviewNotif(opts: {
+  category?: string | null;
+  title?: string | null;
+  dataType?: string | null;
+}) {
+  const category = (opts.category || "").toUpperCase();
+  const dataType = (opts.dataType || "").toUpperCase();
+  const title = opts.title || "";
+  return (
+    category === "LOR_REVIEWED" ||
+    dataType === "LOR_REVIEWED" ||
+    /letter approved|needs revision/i.test(title)
+  );
+}
+
 function NotificationBell() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const { user } = useAuth();
-  const { role } = useRole();
+  const { role, actualRole } = useRole();
   const token = getAccessToken();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -123,20 +138,36 @@ function NotificationBell() {
   const markAllAsReadMutation = useMarkAllNotificationsAsRead();
   const clearAllMutation = useClearAllNotifications();
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.is_read).length,
-    [notifications],
-  );
-
   const visibleNotifications = useMemo(() => {
-    const list = [...notifications].sort((a, b) => {
-      const unreadDelta = Number(!a.is_read) - Number(!b.is_read);
-      if (unreadDelta !== 0) return -unreadDelta;
-      return new Date(notifCreatedAt(b)).getTime() - new Date(notifCreatedAt(a)).getTime();
-    });
+    const list = [...notifications]
+      .filter((n) => {
+        if (actualRole === "STUDENT") return true;
+        return !isStudentOnlyLorReviewNotif({
+          category: n.category,
+          title: n.title,
+        });
+      })
+      .sort((a, b) => {
+        const unreadDelta = Number(!a.is_read) - Number(!b.is_read);
+        if (unreadDelta !== 0) return -unreadDelta;
+        return new Date(notifCreatedAt(b)).getTime() - new Date(notifCreatedAt(a)).getTime();
+      });
     if (filter === "unread") return list.filter((n) => !n.is_read);
     return list;
-  }, [notifications, filter]);
+  }, [notifications, filter, actualRole]);
+
+  const unreadCount = useMemo(
+    () =>
+      notifications.filter((n) => {
+        if (n.is_read) return false;
+        if (actualRole === "STUDENT") return true;
+        return !isStudentOnlyLorReviewNotif({
+          category: n.category,
+          title: n.title,
+        });
+      }).length,
+    [notifications, actualRole],
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -186,6 +217,18 @@ function NotificationBell() {
           const newNotif = payload.new as SystemNotification;
           const category = (newNotif.category || "").toUpperCase();
           const relatedId = newNotif.related_id || (newNotif as { relatedId?: string }).relatedId;
+
+          // Letter approved/declined alerts are student-only — never toast for staff.
+          if (
+            actualRole !== "STUDENT" &&
+            isStudentOnlyLorReviewNotif({
+              category: newNotif.category,
+              title: newNotif.title,
+            })
+          ) {
+            return;
+          }
+
           const isAssignment =
             category === "ASSIGNMENT" &&
             !!relatedId &&
@@ -231,7 +274,7 @@ function NotificationBell() {
     return () => {
       supabaseClient.removeChannel(channel);
     };
-  }, [user?.id, token, queryClient, router, role]);
+  }, [user?.id, token, queryClient, router, role, actualRole]);
 
   useEffect(() => {
     const initialized = initializeFirebase();
@@ -242,6 +285,16 @@ function NotificationBell() {
       const body = payload.notification?.body || payload.data?.body || "You have a new update";
       const data = payload.data || {};
       const isAssignment = data.type === "NEW_ASSIGNMENT" && data.assignmentId;
+
+      if (
+        actualRole !== "STUDENT" &&
+        isStudentOnlyLorReviewNotif({
+          title,
+          dataType: data.type,
+        })
+      ) {
+        return;
+      }
 
       if (isAssignment) {
         // Realtime INSERT already shows an Accept/Decline toast while the tab is open.
@@ -261,7 +314,7 @@ function NotificationBell() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [queryClient]);
+  }, [queryClient, actualRole]);
 
   const handleEnablePush = async () => {
     if (!token) return;

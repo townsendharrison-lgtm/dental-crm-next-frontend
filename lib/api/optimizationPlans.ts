@@ -5,10 +5,24 @@ import type {
   RoadmapPhases,
   RiskFactor,
   LeverageAction,
+  School,
+  SchoolCategory,
 } from "@/lib/types";
 
+export type SchoolBoardPayload = {
+  categories: SchoolCategory[];
+  schools: School[];
+};
+
 export interface UpsertPlanPayload {
-  studentId: string;
+  /** Linked CRM student — mutually exclusive with external fields */
+  studentId?: string;
+  /** Existing external customer id (school_selection_externals) */
+  externalId?: string;
+  /** Create / rename external customer (no CRM account) */
+  externalName?: string;
+  /** Categories + schools snapshot for external plans */
+  schoolBoard?: SchoolBoardPayload | null;
   snapshot: string;
   overallScore?: number;
   improvementLeverageScore?: number;
@@ -55,6 +69,10 @@ export function toUpsertPlanPayload(
 }
 
 export type OptimizationPlanListItem = OptimizationPlan & {
+  external_id?: string | null;
+  externalId?: string | null;
+  school_board?: SchoolBoardPayload | null;
+  schoolBoard?: SchoolBoardPayload | null;
   student?: {
     id: string;
     name: string;
@@ -73,6 +91,12 @@ export const optimizationPlansApi = {
   get: async (studentId?: string): Promise<OptimizationPlan> => {
     const endpoint = `/api/optimization-plans${studentId ? `?studentId=${studentId}` : ""}`;
     return await apiGet<OptimizationPlan>(endpoint);
+  },
+
+  getByExternal: async (externalId: string): Promise<OptimizationPlan> => {
+    return await apiGet<OptimizationPlan>(
+      `/api/optimization-plans?externalId=${encodeURIComponent(externalId)}`,
+    );
   },
 
   /** Admin / mentor-manager: all created optimization / school-selection plans. */

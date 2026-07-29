@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { createRoot } from "react-dom/client";
 import {
   Target,
   Plus,
@@ -22,9 +21,6 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
 import {
   Button,
   FormField,
@@ -47,17 +43,14 @@ import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import { usePlatformConfig } from "@/lib/hooks/usePlatformConfig";
 import { useStudentSchools } from "@/lib/hooks/useStudentSchools";
 import { useSchoolCategories } from "@/lib/hooks/useSchoolCategories";
-import { studentsApi } from "@/lib/api/students";
 import { studentSchoolsApi } from "@/lib/api/studentSchools";
 import { schoolCategoriesApi } from "@/lib/api/schoolCategories";
-import { schoolsApi } from "@/lib/api/schools";
 import {
   mapStudentSchoolToHubSchool,
-  schoolEnsurePayloadFromHub,
 } from "@/lib/utils/schoolApplications";
-import { queryKeys } from "@/lib/api/queryKeys";
 import SchoolSelectionTab from "@/components/student/hub/SchoolSelectionTab";
 import { DEFAULT_CATEGORIES } from "@/components/student/hub/hubShared";
+import { exportPlanPdf } from "@/components/admin/SchoolSelectionPdf";
 import type { OptimizationPlanListItem } from "@/lib/api/optimizationPlans";
 import type {
   OptimizationPlan,
@@ -665,747 +658,11 @@ function PlanPreviewBody({
   );
 }
 
-/** Hex-only PDF markup — mirrors preview layout without Tailwind lab()/oklch colors. */
-function PlanPdfDocument({
-  studentName,
-  draft,
-  schools,
-  categories,
-}: {
-  studentName: string;
-  draft: PlanDraft;
-  schools: HubSchool[];
-  categories: SchoolCategory[];
-}) {
-  const cats = (() => {
-    const base = categories.length > 0 ? categories : DEFAULT_CATEGORIES;
-    const known = new Set(base.map((c) => c.id));
-    const extras = Array.from(
-      new Set(schools.map(schoolCategoryKey).filter((id) => id && !known.has(id))),
-    ).map((id) => ({
-      id,
-      name: id,
-      color: "#94a3b8",
-      icon: "SchoolIcon",
-    }));
-    return [...base, ...extras];
-  })();
-
-  const kpiEntries = Object.entries(draft.kpis) as [string, KpiLevel][];
-  const strengths = draft.strengths.filter(Boolean);
-  const gaps = draft.gaps.filter(Boolean);
-  const leverage = draft.leverageActions.filter((a) => a.title.trim());
-  const risks = draft.riskFactors.filter((r) => r.factor.trim());
-  const roadmapPhases = (["phase1", "phase2", "phase3", "phase4"] as const)
-    .map((phase, idx) => ({
-      phase,
-      idx,
-      tasks: draft.roadmap[phase].filter(Boolean),
-    }))
-    .filter((p) => p.tasks.length > 0);
-  const schoolGroups = cats
-    .map((cat) => ({
-      cat,
-      schools: schools.filter((s) => schoolCategoryKey(s) === cat.id),
-    }))
-    .filter((g) => g.schools.length > 0);
-
-  const initial = (studentName.trim()[0] || "S").toUpperCase();
-  const dateLabel = new Date().toLocaleDateString(undefined, {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const score = Math.max(0, Math.min(100, draft.overallScore));
-  const donutTone = score >= 80 ? "#34d399" : score >= 60 ? "#818cf8" : "#f59e0b";
-  const r = 42;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (circ * score) / 100;
-
-  const kpiMeta = (value: KpiLevel) => {
-    switch (value) {
-      case "Strong":
-        return { text: "#34d399", bar: "#10b981", width: "100%" };
-      case "Moderate":
-        return { text: "#a5b4fc", bar: "#6366f1", width: "75%" };
-      case "Developing":
-        return { text: "#fcd34d", bar: "#f59e0b", width: "50%" };
-      default:
-        return { text: "#fb7185", bar: "#f43f5e", width: "25%" };
-    }
-  };
-
-  const sectionLabel: React.CSSProperties = {
-    margin: "0 0 12px",
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: "0.14em",
-    textTransform: "uppercase",
-    color: "#64748b",
-  };
-
-  return (
-    <div
-      id="school-selection-pdf-export"
-      style={{
-        width: 800,
-        boxSizing: "border-box",
-        fontFamily:
-          'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
-        background: "#020617",
-        color: "#e2e8f0",
-        border: "1px solid #1e293b",
-        borderRadius: 12,
-        overflow: "hidden",
-      }}
-    >
-      <header
-        style={{
-          borderBottom: "1px solid #1e293b",
-          background: "#0f172a",
-          padding: "24px 28px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 20 }}>
-          <div style={{ display: "flex", gap: 16, minWidth: 0 }}>
-            <div
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 12,
-                background: "#4f46e5",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 18,
-                fontWeight: 700,
-                flexShrink: 0,
-              }}
-            >
-              {initial}
-            </div>
-            <div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: "0.14em",
-                  textTransform: "uppercase",
-                  color: "#818cf8",
-                }}
-              >
-                Strategic Selection Plan
-              </p>
-              <h3
-                style={{
-                  margin: "4px 0 0",
-                  fontSize: 28,
-                  fontWeight: 700,
-                  color: "#fff",
-                  lineHeight: 1.2,
-                }}
-              >
-                {studentName}
-              </h3>
-              <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748b" }}>
-                Prepared by Dental School Guide · {dateLabel}
-              </p>
-            </div>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              border: "1px solid #1e293b",
-              background: "#020617",
-              borderRadius: 12,
-              padding: "10px 14px",
-              flexShrink: 0,
-            }}
-          >
-            <div style={{ position: "relative", width: 88, height: 88 }}>
-              <svg
-                viewBox="0 0 112 112"
-                width="88"
-                height="88"
-                style={{ transform: "rotate(-90deg)" }}
-              >
-                <circle cx="56" cy="56" r={r} fill="transparent" stroke="#1e293b" strokeWidth="8" />
-                <circle
-                  cx="56"
-                  cy="56"
-                  r={r}
-                  fill="transparent"
-                  stroke={donutTone}
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeDasharray={circ}
-                  strokeDashoffset={offset}
-                />
-              </svg>
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <span style={{ fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
-                  {score}
-                </span>
-                <span style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>/ 100</span>
-              </div>
-            </div>
-            <div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "#64748b",
-                }}
-              >
-                Overall strength
-              </p>
-              <p style={{ margin: "6px 0 0", fontSize: 13, color: "#94a3b8" }}>
-                Leverage{" "}
-                <span style={{ fontWeight: 700, color: "#a5b4fc" }}>
-                  {draft.improvementLeverageScore}%
-                </span>
-              </p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div style={{ padding: "28px", display: "flex", flexDirection: "column", gap: 28 }}>
-        <section>
-          <h4 style={sectionLabel}>Strategic snapshot</h4>
-          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, color: "#cbd5e1" }}>
-            {draft.snapshot.trim() || "No strategic snapshot has been written yet."}
-          </p>
-        </section>
-
-        <section>
-          <h4 style={sectionLabel}>Profile KPIs</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-            {kpiEntries.map(([key, value]) => {
-              const meta = kpiMeta(value);
-              return (
-                <div
-                  key={key}
-                  style={{
-                    border: "1px solid #1e293b",
-                    background: "#0f172a",
-                    borderRadius: 12,
-                    padding: "12px 14px",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      color: "#64748b",
-                    }}
-                  >
-                    {kpiLabel(key)}
-                  </p>
-                  <p style={{ margin: "8px 0 0", fontSize: 14, fontWeight: 700, color: meta.text }}>
-                    {value}
-                  </p>
-                  <div
-                    style={{
-                      marginTop: 10,
-                      height: 6,
-                      borderRadius: 999,
-                      background: "#1e293b",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: meta.width,
-                        borderRadius: 999,
-                        background: meta.bar,
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <div
-            style={{
-              border: "1px solid #065f46",
-              background: "#022c22",
-              borderRadius: 12,
-              padding: 16,
-            }}
-          >
-            <h4
-              style={{
-                ...sectionLabel,
-                color: "#34d399",
-                marginBottom: 12,
-              }}
-            >
-              Strengths to leverage
-            </h4>
-            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {strengths.length === 0 ? (
-                <li style={{ fontSize: 13, fontStyle: "italic", color: "#475569" }}>None listed</li>
-              ) : (
-                strengths.map((s, i) => (
-                  <li
-                    key={i}
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      fontSize: 13,
-                      lineHeight: 1.55,
-                      color: "#cbd5e1",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <span style={{ color: "#34d399", fontWeight: 700 }}>✓</span>
-                    <span>{s}</span>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
-          <div
-            style={{
-              border: "1px solid #9f1239",
-              background: "#4c0519",
-              borderRadius: 12,
-              padding: 16,
-            }}
-          >
-            <h4 style={{ ...sectionLabel, color: "#fb7185", marginBottom: 12 }}>Critical gaps</h4>
-            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {gaps.length === 0 ? (
-                <li style={{ fontSize: 13, fontStyle: "italic", color: "#475569" }}>None listed</li>
-              ) : (
-                gaps.map((g, i) => (
-                  <li
-                    key={i}
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      fontSize: 13,
-                      lineHeight: 1.55,
-                      color: "#cbd5e1",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <span style={{ color: "#fb7185", fontWeight: 700 }}>!</span>
-                    <span>{g}</span>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
-        </section>
-
-        <section>
-          <h4 style={sectionLabel}>School selection</h4>
-          <p style={{ margin: "-4px 0 14px", fontSize: 13, color: "#64748b" }}>
-            {schools.length > 0
-              ? `${schools.length} school${schools.length === 1 ? "" : "s"} across ${schoolGroups.length} categor${schoolGroups.length === 1 ? "y" : "ies"}`
-              : "No schools linked yet"}
-          </p>
-          {schoolGroups.length === 0 ? (
-            <p
-              style={{
-                margin: 0,
-                border: "1px dashed #1e293b",
-                borderRadius: 12,
-                padding: "36px 16px",
-                textAlign: "center",
-                fontSize: 13,
-                color: "#475569",
-              }}
-            >
-              No schools on this list yet.
-            </p>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: schoolGroups.length === 1 ? "1fr" : "1fr 1fr",
-                gap: 12,
-              }}
-            >
-              {schoolGroups.map(({ cat, schools: inCat }) => (
-                <div
-                  key={cat.id}
-                  style={{
-                    border: "1px solid #1e293b",
-                    background: "#0f172a",
-                    borderRadius: 12,
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      borderBottom: "1px solid #1e293b",
-                      background: "#111827",
-                      padding: "10px 14px",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: cat.color || "#818cf8",
-                      }}
-                    >
-                      {cat.name}
-                    </p>
-                    <span
-                      style={{
-                        background: "#1e293b",
-                        color: "#94a3b8",
-                        borderRadius: 999,
-                        padding: "2px 8px",
-                        fontSize: 10,
-                        fontWeight: 700,
-                      }}
-                    >
-                      {inCat.length}
-                    </span>
-                  </div>
-                  <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                    {inCat.map((s) => (
-                      <li
-                        key={s.selectionId || s.id}
-                        style={{
-                          padding: "12px 14px",
-                          borderTop: "1px solid #1e293b",
-                        }}
-                      >
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#fff" }}>
-                          {s.name}
-                        </p>
-                        {s.notes ? (
-                          <p
-                            style={{
-                              margin: "4px 0 0",
-                              fontSize: 12,
-                              lineHeight: 1.5,
-                              color: "#64748b",
-                            }}
-                          >
-                            {s.notes}
-                          </p>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {roadmapPhases.length > 0 && (
-          <section>
-            <h4 style={sectionLabel}>Strategic roadmap</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {roadmapPhases.map(({ phase, idx, tasks }) => (
-                <div
-                  key={phase}
-                  style={{
-                    border: "1px solid #1e293b",
-                    background: "#0f172a",
-                    borderRadius: 12,
-                    padding: 16,
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: "0 0 10px",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      color: "#818cf8",
-                    }}
-                  >
-                    Phase {idx + 1}
-                  </p>
-                  <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                    {tasks.map((t, i) => (
-                      <li
-                        key={i}
-                        style={{
-                          display: "flex",
-                          gap: 12,
-                          fontSize: 13,
-                          lineHeight: 1.55,
-                          color: "#cbd5e1",
-                          marginBottom: 8,
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: 999,
-                            background: "#312e81",
-                            color: "#a5b4fc",
-                            fontSize: 10,
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {i + 1}
-                        </span>
-                        <span>{t}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {leverage.length > 0 && (
-          <section>
-            <h4 style={sectionLabel}>Leverage actions</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {leverage.map((action, idx) => {
-                const badge =
-                  action.impact === "High"
-                    ? { bg: "#064e3b", color: "#34d399" }
-                    : action.impact === "Moderate"
-                      ? { bg: "#312e81", color: "#a5b4fc" }
-                      : { bg: "#1e293b", color: "#94a3b8" };
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      border: "1px solid #1e293b",
-                      background: "#0f172a",
-                      borderRadius: 12,
-                      padding: 16,
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "inline-block",
-                        borderRadius: 6,
-                        padding: "2px 8px",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: "0.06em",
-                        textTransform: "uppercase",
-                        background: badge.bg,
-                        color: badge.color,
-                      }}
-                    >
-                      {action.impact} impact
-                    </span>
-                    <h5
-                      style={{
-                        margin: "8px 0 0",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "#fff",
-                      }}
-                    >
-                      {action.title}
-                    </h5>
-                    {action.description ? (
-                      <p
-                        style={{
-                          margin: "8px 0 0",
-                          fontSize: 13,
-                          lineHeight: 1.55,
-                          color: "#94a3b8",
-                        }}
-                      >
-                        {action.description}
-                      </p>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {risks.length > 0 && (
-          <section>
-            <h4 style={sectionLabel}>Risk factors</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {risks.map((risk, idx) => {
-                const badge =
-                  risk.severity === "High"
-                    ? { bg: "#4c0519", color: "#fb7185" }
-                    : risk.severity === "Medium"
-                      ? { bg: "#78350f", color: "#fcd34d" }
-                      : { bg: "#1e293b", color: "#94a3b8" };
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      border: "1px solid #1e293b",
-                      background: "#0f172a",
-                      borderRadius: 12,
-                      padding: 16,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        marginBottom: 6,
-                      }}
-                    >
-                      <h5 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#fff" }}>
-                        {risk.factor}
-                      </h5>
-                      <span
-                        style={{
-                          flexShrink: 0,
-                          borderRadius: 6,
-                          padding: "2px 8px",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: "0.06em",
-                          textTransform: "uppercase",
-                          background: badge.bg,
-                          color: badge.color,
-                        }}
-                      >
-                        {risk.severity}
-                      </span>
-                    </div>
-                    {risk.description ? (
-                      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "#94a3b8" }}>
-                        {risk.description}
-                      </p>
-                    ) : null}
-                    {risk.mitigation ? (
-                      <p
-                        style={{
-                          margin: "10px 0 0",
-                          paddingTop: 10,
-                          borderTop: "1px solid #1e293b",
-                          fontSize: 13,
-                          color: "#94a3b8",
-                        }}
-                      >
-                        <span style={{ fontWeight: 600, color: "#34d399" }}>Mitigation: </span>
-                        {risk.mitigation}
-                      </p>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-      </div>
-    </div>
-  );
-}
-
-async function exportPlanPdf(opts: {
-  studentName: string;
-  draft: PlanDraft;
-  schools: HubSchool[];
-  categories: SchoolCategory[];
-}) {
-  const host = document.createElement("div");
-  host.setAttribute("aria-hidden", "true");
-  host.style.cssText =
-    "position:fixed;left:-12000px;top:0;width:800px;background:#020617;pointer-events:none;z-index:-1;";
-  document.body.appendChild(host);
-
-  const root = createRoot(host);
-  try {
-    root.render(
-      <PlanPdfDocument
-        studentName={opts.studentName}
-        draft={opts.draft}
-        schools={opts.schools}
-        categories={opts.categories}
-      />,
-    );
-    await new Promise((r) => setTimeout(r, 120));
-
-    const target = host.querySelector("#school-selection-pdf-export") as HTMLElement | null;
-    if (!target) throw new Error("PDF export root missing");
-
-    const canvas = await html2canvas(target, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: "#020617",
-      width: 800,
-      windowWidth: 800,
-    });
-
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
-    const imgProps = pdf.getImageProperties(imgData);
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    const pageHeight = pdf.internal.pageSize.getHeight();
-
-    let heightLeft = pdfHeight;
-    let position = 0;
-    pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
-    heightLeft -= pageHeight;
-    while (heightLeft > 0) {
-      position -= pageHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
-      heightLeft -= pageHeight;
-    }
-
-    const safeName = (opts.studentName || "School_Selection").replace(/[^\w\-]+/g, "_");
-    pdf.save(`${safeName}_School_Selection.pdf`);
-  } finally {
-    root.unmount();
-    host.remove();
-  }
-}
-
 export default function SchoolSelectionView() {
-  const queryClient = useQueryClient();
   const [mainTab, setMainTab] = useState<MainTab>("reports");
   const [createMode, setCreateMode] = useState<CreateMode>("manual");
   const [studentId, setStudentId] = useState("");
+  const [externalId, setExternalId] = useState("");
   const [studentName, setStudentName] = useState("");
   const [draft, setDraft] = useState<PlanDraft>(EMPTY_DRAFT);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -1431,16 +688,13 @@ export default function SchoolSelectionView() {
 
   const studentOptions = useMemo(
     () => [
-      { value: "", label: "None — create external plan on save" },
+      { value: "", label: "None — save as external customer (no account)" },
       ...[...students]
+        .filter((s) => !isExternalStudentEmail(s.email))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((s) => ({
           value: s.id,
-          label: isExternalStudentEmail(s.email)
-            ? `${s.name} · External`
-            : s.email
-              ? `${s.name} · ${s.email}`
-              : s.name,
+          label: s.email ? `${s.name} · ${s.email}` : s.name,
         })),
     ],
     [students],
@@ -1472,6 +726,7 @@ export default function SchoolSelectionView() {
 
   const handleStudentSelect = (id: string) => {
     setStudentId(id);
+    setExternalId("");
     if (!id) {
       setDraft(EMPTY_DRAFT);
       return;
@@ -1501,36 +756,7 @@ export default function SchoolSelectionView() {
     setSavingPlan(true);
 
     try {
-      let targetStudentId = studentId;
-      let createdExternal = false;
-
-      // External (name-only): create a shell student so the plan can be stored
-      if (!targetStudentId) {
-        const created = await studentsApi.createExternal({ name });
-        targetStudentId = created.id;
-        createdExternal = true;
-        setStudentName(created.name || name);
-
-        // Persist any local school board drafted before linking
-        if (manualCategories.length > 0) {
-          await schoolCategoriesApi.replace(targetStudentId, manualCategories);
-        }
-        for (const school of manualSchools) {
-          // Sheet catalog ids are not DB UUIDs — ensure a directory row first
-          const ensured = await schoolsApi.ensure(schoolEnsurePayloadFromHub(school));
-          await studentSchoolsApi.create({
-            studentId: targetStudentId,
-            schoolId: ensured.id,
-            category: school.type || manualCategories[0]?.id || "Target",
-            notes: typeof school.notes === "string" ? school.notes : undefined,
-          });
-        }
-      }
-
-      const hadPlan = !!existingPlan && !createdExternal;
-
-      await upsertPlan.mutateAsync({
-        studentId: targetStudentId,
+      const planBody = {
         snapshot: draft.snapshot.trim(),
         overallScore: draft.overallScore,
         improvementLeverageScore: draft.improvementLeverageScore,
@@ -1545,24 +771,37 @@ export default function SchoolSelectionView() {
         gaps: cleanList(draft.gaps),
         leverageActions: draft.leverageActions.filter((a) => a.title.trim()),
         riskFactors: draft.riskFactors.filter((r) => r.factor.trim()),
-      });
+      };
 
-      // Link after upsert so the plan query doesn't wipe the draft mid-save
-      if (createdExternal) {
-        setStudentId(targetStudentId);
-        setManualSchools([]);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.students.all() });
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.studentSchools.all(targetStudentId),
+      const hadPlan = !!existingPlan || !!externalId;
+      let createdExternal = false;
+
+      if (studentId) {
+        // Linked CRM student — use account school board APIs (already persisted live)
+        await upsertPlan.mutateAsync({
+          ...planBody,
+          studentId,
         });
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.schoolCategories.all(targetStudentId),
+      } else {
+        // External customer — no auth user / no CRM student row
+        createdExternal = !externalId;
+        const saved = await upsertPlan.mutateAsync({
+          ...planBody,
+          externalId: externalId || undefined,
+          externalName: name,
+          schoolBoard: {
+            categories: manualCategories,
+            schools: manualSchools,
+          },
         });
+        const newExternalId = saved.external_id || saved.externalId || "";
+        if (newExternalId) setExternalId(newExternalId);
+        setStudentName(name);
       }
 
       toast.success(
         createdExternal
-          ? "External student plan created"
+          ? "External plan created"
           : hadPlan
             ? "Strategic selection plan updated"
             : "Strategic selection plan created",
@@ -1598,29 +837,46 @@ export default function SchoolSelectionView() {
   };
 
   const handleDownloadReport = async (report: OptimizationPlanListItem) => {
-    const reportStudentId =
-      report.student_id || report.studentId || report.student?.id || "";
     const name = report.student?.name || "Unnamed student";
-    if (!reportStudentId) {
-      toast.error("This report has no linked student.");
-      return;
-    }
+    const isExternal = Boolean(
+      report.student?.isExternal || report.external_id || report.externalId,
+    );
+    const reportStudentId =
+      report.student_id || report.studentId || (!isExternal ? report.student?.id : "") || "";
+    const board = report.school_board || report.schoolBoard;
 
     setExportingReportId(report.id);
     toast.info("Generating PDF…");
     try {
-      const [schoolRows, categories] = await Promise.all([
-        studentSchoolsApi.list(reportStudentId),
-        schoolCategoriesApi.list(reportStudentId).catch(() => DEFAULT_CATEGORIES),
-      ]);
-      const schools = (schoolRows || []).map((row) =>
-        mapStudentSchoolToHubSchool(row as StudentSchool),
-      );
+      let schools: HubSchool[] = [];
+      let categories: SchoolCategory[] = DEFAULT_CATEGORIES;
+
+      if (isExternal) {
+        schools = (board?.schools || []) as HubSchool[];
+        categories =
+          board?.categories && board.categories.length > 0
+            ? board.categories
+            : DEFAULT_CATEGORIES;
+      } else {
+        if (!reportStudentId) {
+          toast.error("This report has no linked student.");
+          return;
+        }
+        const [schoolRows, cats] = await Promise.all([
+          studentSchoolsApi.list(reportStudentId),
+          schoolCategoriesApi.list(reportStudentId).catch(() => DEFAULT_CATEGORIES),
+        ]);
+        schools = (schoolRows || []).map((row) =>
+          mapStudentSchoolToHubSchool(row as StudentSchool),
+        );
+        categories = cats.length > 0 ? cats : DEFAULT_CATEGORIES;
+      }
+
       await exportPlanPdf({
         studentName: name,
         draft: planToDraft(report),
         schools,
-        categories: categories.length > 0 ? categories : DEFAULT_CATEGORIES,
+        categories,
       });
       toast.success("PDF downloaded");
     } catch (err) {
@@ -1633,6 +889,7 @@ export default function SchoolSelectionView() {
 
   const resetCreateForm = () => {
     setStudentId("");
+    setExternalId("");
     setStudentName("");
     setDraft(EMPTY_DRAFT());
     setManualSchools([]);
@@ -1640,12 +897,34 @@ export default function SchoolSelectionView() {
     setCreateMode("manual");
   };
 
-  const openReport = (reportStudentId: string, reportStudentName: string) => {
-    setStudentId(reportStudentId);
-    setStudentName(reportStudentName);
-    setManualSchools([]);
-    setManualCategories(DEFAULT_CATEGORIES);
+  const openReport = (report: OptimizationPlanListItem) => {
+    const name = report.student?.name || "Unnamed student";
+    const isExternal = Boolean(
+      report.student?.isExternal || report.external_id || report.externalId,
+    );
+    const reportStudentId =
+      report.student_id || report.studentId || (!isExternal ? report.student?.id : "") || "";
+    const board = report.school_board || report.schoolBoard;
+
+    setStudentName(name);
+    setDraft(planToDraft(report));
     setCreateMode("manual");
+
+    if (isExternal) {
+      setStudentId("");
+      setExternalId(String(report.external_id || report.externalId || report.student?.id || ""));
+      setManualSchools((board?.schools || []) as HubSchool[]);
+      setManualCategories(
+        board?.categories && board.categories.length > 0
+          ? board.categories
+          : DEFAULT_CATEGORIES,
+      );
+    } else {
+      setExternalId("");
+      setStudentId(reportStudentId);
+      setManualSchools([]);
+      setManualCategories(DEFAULT_CATEGORIES);
+    }
     setMainTab("create");
   };
 
@@ -1763,11 +1042,16 @@ export default function SchoolSelectionView() {
           ) : (
             <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredReports.map((report) => {
+                const external = Boolean(
+                  report.student?.isExternal || report.external_id || report.externalId,
+                );
                 const reportStudentId =
-                  report.student_id || report.studentId || report.student?.id || "";
+                  report.student_id ||
+                  report.studentId ||
+                  (!external ? report.student?.id : "") ||
+                  "";
                 const name = report.student?.name || "Unnamed student";
                 const email = report.student?.email || "";
-                const external = Boolean(report.student?.isExternal);
                 const updated = report.updated_at || report.created_at || "";
                 const score = Math.min(
                   100,
@@ -1775,6 +1059,7 @@ export default function SchoolSelectionView() {
                 );
                 const snapshot = report.snapshot?.trim() || "No strategic snapshot.";
                 const downloading = exportingReportId === report.id;
+                const canOpen = external || !!reportStudentId;
                 return (
                   <div
                     key={report.id}
@@ -1786,11 +1071,10 @@ export default function SchoolSelectionView() {
                       variant="ghost"
                       className="absolute right-2 top-2 h-8 w-8 text-rose-400 opacity-0 transition-opacity hover:text-rose-300 group-hover:opacity-100"
                       title="Delete report"
-                      disabled={!reportStudentId}
                       onClick={() => {
                         if (!window.confirm(`Delete report for ${name}?`)) return;
                         deletePlan.mutate(
-                          { id: report.id, studentId: reportStudentId },
+                          { id: report.id, studentId: reportStudentId || undefined },
                           {
                             onSuccess: () => toast.success("Report deleted"),
                             onError: (err: any) =>
@@ -1819,7 +1103,7 @@ export default function SchoolSelectionView() {
                           ) : null}
                         </div>
                         <p className="truncate text-xs text-slate-500">
-                          {external ? "External" : email || "Internal student"}
+                          {external ? "External customer" : email || "Internal student"}
                           {updated
                             ? ` · Updated ${new Date(updated).toLocaleDateString()}`
                             : ""}
@@ -1855,8 +1139,8 @@ export default function SchoolSelectionView() {
                         variant="secondary"
                         className="h-9 text-xs"
                         leftIcon={<Eye className="h-3.5 w-3.5" />}
-                        disabled={!reportStudentId}
-                        onClick={() => openReport(reportStudentId, name)}
+                        disabled={!canOpen}
+                        onClick={() => openReport(report)}
                       >
                         View report
                       </Button>
@@ -1872,7 +1156,7 @@ export default function SchoolSelectionView() {
                             <Download className="h-3.5 w-3.5" />
                           )
                         }
-                        disabled={!reportStudentId || downloading || exportingPdf}
+                        disabled={!canOpen || downloading || exportingPdf}
                         onClick={() => void handleDownloadReport(report)}
                       >
                         Download PDF
@@ -1940,7 +1224,7 @@ export default function SchoolSelectionView() {
             icon={Target}
             iconClass="bg-indigo-500/10 text-indigo-400"
             title="Student"
-            subtitle="Name required. Optionally link an internal student, or leave blank for an external plan."
+            subtitle="Name required. Optionally link a registered student, or leave blank to save as an external customer (no account)."
             actions={
               canEditPlan ? (
                 <Button
@@ -1977,16 +1261,16 @@ export default function SchoolSelectionView() {
             </div>
             {selectedStudent ? (
               <p className="text-xs text-slate-500">
-                {isExternalStudentEmail(selectedStudent.email)
-                  ? "External plan · "
-                  : "Internal student · "}
+                Internal student ·{" "}
                 {existingPlan
                   ? "Existing plan loaded — edits will overwrite on save."
                   : "No saved plan yet — fill in the sections below and create one."}
               </p>
             ) : canEditPlan ? (
               <p className="text-xs text-slate-500">
-                No dashboard student linked — Save will create an external student record for this plan.
+                {externalId
+                  ? "External customer plan — Save updates this report only (no CRM student account)."
+                  : "No student linked — Save will create an external customer plan (not a registered student)."}
               </p>
             ) : null}
           </SectionCard>

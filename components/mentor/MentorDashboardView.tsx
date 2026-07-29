@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import {
   Calendar,
   AlertCircle,
@@ -64,6 +65,9 @@ import { AcceptAssignmentModal } from "@/components/mentor/AcceptAssignmentModal
 import { QuickScheduleMeetingModal } from "@/components/mentor/QuickScheduleMeetingModal";
 import { SuggestMeetingTimesModal } from "@/components/mentor/SuggestMeetingTimesModal";
 import type { CreateMeetingPayload } from "@/lib/api/meetings";
+import { studentsApi } from "@/lib/api/students";
+import { queryKeys } from "@/lib/api/queryKeys";
+import { buildStrengthMonthlySeries } from "@/lib/utils/strengthHistorySeries";
 import { cn } from "@/lib/utils/cn";
 
 interface MentorDashboardProps {
@@ -126,6 +130,42 @@ function riskLabel(status?: ReadinessStatus | string) {
   if (status === RS.YELLOW || status === "YELLOW") return "Moderate";
   if (status === RS.RED || status === "RED") return "High Risk";
   return "Unknown";
+}
+
+/** Mini 12-month strength sparkline for mentor student roster cards. */
+function StrengthYearSparkline({ scores }: { scores: number[] }) {
+  if (!scores.length) return null;
+  const w = 72;
+  const h = 22;
+  const max = 100;
+  const min = 0;
+  const step = scores.length > 1 ? w / (scores.length - 1) : w;
+  const points = scores
+    .map((score, i) => {
+      const x = i * step;
+      const y = h - ((Math.max(min, Math.min(max, score)) - min) / (max - min)) * h;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const last = scores[scores.length - 1] ?? 0;
+  const first = scores[0] ?? 0;
+  const up = last >= first;
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      className="mt-1.5 h-[22px] w-[72px]"
+      aria-hidden
+    >
+      <polyline
+        fill="none"
+        stroke={up ? "#34d399" : "#fb7185"}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
+  );
 }
 
 /** Same source as Application Journey on the student Profile & Docs page. */
@@ -253,6 +293,36 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       return a.name.localeCompare(b.name);
     });
   }, [assignedStudents, pendingAssignments, allStudents, pendingIds]);
+
+  const strengthHistoryQueries = useQueries({
+    queries: students.map((s) => ({
+      queryKey: queryKeys.students.strengthHistory(s.id),
+      queryFn: () => studentsApi.strengthHistory(s.id),
+      staleTime: 60_000,
+    })),
+  });
+
+  const strengthHistoryStamp = strengthHistoryQueries
+    .map((q) => `${q.dataUpdatedAt}:${q.data?.length ?? 0}`)
+    .join("|");
+
+  const strengthYearByStudent = useMemo(() => {
+    const map = new Map<string, number[]>();
+    students.forEach((s, i) => {
+      const history = strengthHistoryQueries[i]?.data || [];
+      const current = Math.round(
+        Number(s.strengthScore ?? s.profile?.strength_score ?? 0) || 0,
+      );
+      const series = buildStrengthMonthlySeries(history, current, 12);
+      map.set(
+        s.id,
+        series.map((p) => p.score),
+      );
+    });
+    return map;
+    // strengthHistoryQueries is read via stamp to avoid unstable array identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, strengthHistoryStamp]);
 
   const searchMatchedStudents = useMemo(() => {
     const q = studentSearch.trim().toLowerCase();
@@ -1926,13 +1996,20 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                     </td>
 
                     <td className="px-6 py-4 text-center align-middle">
-                      <div className="inline-block rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-center shadow-inner">
+                      <div className="inline-flex flex-col items-center rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-center shadow-inner">
                         <p className="mb-0.5 text-[8px] font-black uppercase tracking-widest text-indigo-400">
-                          Strength
+                          Strength · 1Y
                         </p>
                         <p className="text-lg font-black leading-none text-white">
                           {student.strengthScore != null ? student.strengthScore : "—"}
                         </p>
+                        <StrengthYearSparkline
+                          scores={
+                            strengthYearByStudent.get(student.id) || [
+                              Math.round(Number(student.strengthScore) || 0),
+                            ]
+                          }
+                        />
                       </div>
                     </td>
 

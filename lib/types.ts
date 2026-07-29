@@ -493,6 +493,8 @@ export interface ActionItem {
   resource_link?: string | null;
   created_at?: string;
   updated_at?: string;
+  completed_at?: string | null;
+  completedAt?: string | null;
   studentId?: string;
   dueDate?: string;
   resourceId?: string | null;
@@ -576,6 +578,8 @@ export interface Experience {
   end_date?: string | null;
   is_ongoing?: boolean;
   dentist_type?: "General" | "Specialty" | null;
+  prior_hours?: number;
+  prior_weeks?: number;
   created_at?: string;
   updated_at?: string;
   sessions?: ExperienceSession[];
@@ -586,6 +590,8 @@ export interface Experience {
   endDate?: string | null;
   isOngoing?: boolean;
   dentistType?: "General" | "Specialty" | null;
+  priorHours?: number;
+  priorWeeks?: number;
 }
 
 export interface ExperienceSession {
@@ -702,10 +708,12 @@ export interface Survey {
   questions: SurveyQuestion[];
   target_role?: "STUDENT" | "MENTOR" | "BOTH";
   is_active?: boolean;
+  end_date?: string | null;
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;
   targetRole?: "STUDENT" | "MENTOR" | "BOTH";
+  endDate?: string | null;
   status?: string;
   createdAt?: string;
   createdBy?: string | null;
@@ -735,11 +743,20 @@ export interface Badge {
   description: string;
   icon: string;
   color: string;
-  benchmark_type: "PROGRESS" | "STRENGTH_SCORE" | "DAT" | "TASKS_COMPLETED" | "MEETINGS_ATTENDED";
+  benchmark_type:
+    | "PROGRESS"
+    | "STRENGTH_SCORE"
+    | "DAT"
+    | "TASKS_COMPLETED"
+    | "MEETINGS_ATTENDED"
+    | "GPA"
+    | "LOR_COLLECTED"
+    | "VOLUNTEER_HOURS"
+    | "SHADOWING_HOURS";
   benchmark_value: number;
   created_at: string;
   updated_at: string;
-  benchmarkType?: "PROGRESS" | "STRENGTH_SCORE" | "DAT" | "TASKS_COMPLETED" | "MEETINGS_ATTENDED";
+  benchmarkType?: Badge["benchmark_type"];
   benchmarkValue?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -904,7 +921,12 @@ export interface ManualDexterityPlan {
 
 export interface OptimizationPlan {
   id: string;
-  student_id?: string;
+  student_id?: string | null;
+  external_id?: string | null;
+  school_board?: {
+    categories?: SchoolCategory[];
+    schools?: School[];
+  } | null;
   snapshot?: string;
   overall_score?: number;
   improvement_leverage_score?: number;
@@ -919,7 +941,12 @@ export interface OptimizationPlan {
   categories?: Record<string, CategoryPlan>;
   manualDexterity?: ManualDexterityPlan;
   lastUpdated?: string;
-  studentId?: string;
+  studentId?: string | null;
+  externalId?: string | null;
+  schoolBoard?: {
+    categories?: SchoolCategory[];
+    schools?: School[];
+  } | null;
   overallScore?: number;
   improvementLeverageScore?: number;
   riskFactors?: RiskFactor[];
@@ -1173,6 +1200,8 @@ export interface SystemNotification {
   is_read?: boolean;
   created_at?: string;
   created_by?: string | null;
+  end_date?: string | null;
+  endDate?: string | null;
   targetRole?: "STUDENT" | "MENTOR" | "BOTH";
   target_role?: "STUDENT" | "MENTOR" | "BOTH";
   createdAt?: string;

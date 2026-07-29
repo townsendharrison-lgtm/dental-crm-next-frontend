@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { useDocuments, useUpdateDocument } from "@/lib/hooks/useDocuments";
 import { ProfileDetailsEditor } from "@/components/student/ProfileDetailsEditor";
+import { getApplicationCycleOptions } from "@/lib/profile/profileOptions";
 
 export type StudentProfileUpdates = Partial<
   StudentProfile & { name?: string; avatar?: string }
@@ -571,10 +572,22 @@ export function StudentProfileEditForm({
                 onChange={(e) => set("progress")(e.target.value)}
               />
             </FormField>
-            <FormField label="Application cycle">
-              <Input
+            <FormField label="Goal application cycle">
+              <SelectMenu
                 value={form.application_cycle}
-                onChange={(e) => set("application_cycle")(e.target.value)}
+                onChange={(v) => set("application_cycle")(v)}
+                options={[
+                  { value: "", label: "Select cycle…" },
+                  ...(() => {
+                    const cycles = getApplicationCycleOptions();
+                    const current = form.application_cycle;
+                    const opts = cycles.map((c) => ({ value: c, label: c }));
+                    if (current && !cycles.includes(current)) {
+                      opts.unshift({ value: current, label: current });
+                    }
+                    return opts;
+                  })(),
+                ]}
               />
             </FormField>
             <FormField label="LORs required">

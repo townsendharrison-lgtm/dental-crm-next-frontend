@@ -12,6 +12,8 @@ import {
   Trash2,
   Clock,
   X,
+  Edit2,
+  Calendar,
 } from "lucide-react";
 import type {
   UserRole,
@@ -24,6 +26,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Textarea, FormField } from "@/components/ui/Form";
 import { SelectMenu } from "@/components/ui/SelectMenu";
+import { DatePicker } from "@/components/ui/DatePicker";
 import SurveyInsightsModal from "./SurveyInsightsModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
@@ -35,10 +38,35 @@ interface SurveyManagementViewProps {
   notifications: SystemNotification[];
   responses: SurveyResponse[];
   onAddSurvey: (survey: Partial<Survey>) => void;
+  onUpdateSurvey: (survey: Survey) => void;
   onAddNotification: (notification: Partial<SystemNotification>) => void;
+  onUpdateNotification: (notification: SystemNotification) => void;
   onDeleteSurvey: (id: string) => void;
   onDeleteNotification: (id: string) => void;
   hideHeader?: boolean;
+}
+
+function toDateOnly(iso: string | undefined | null) {
+  if (!iso) return "";
+  return iso.includes("T") ? iso.split("T")[0]! : iso.slice(0, 10);
+}
+
+function toEndIso(dateOnly: string) {
+  if (!dateOnly) return null;
+  return `${dateOnly}T23:59:59.999Z`;
+}
+
+function surveyEndDate(s: Survey) {
+  return s.endDate ?? s.end_date ?? null;
+}
+
+function notifEndDate(n: SystemNotification) {
+  return n.endDate ?? n.end_date ?? null;
+}
+
+function isExpired(end: string | null | undefined) {
+  if (!end) return false;
+  return new Date(end).getTime() < Date.now();
 }
 
 function surveyTargetLabel(s: Survey) {
@@ -50,6 +78,7 @@ function surveyTargetLabel(s: Survey) {
 }
 
 function surveyStatus(s: Survey) {
+  if (isExpired(surveyEndDate(s))) return "EXPIRED";
   if (s.status) return s.status;
   return s.is_active === false ? "INACTIVE" : "ACTIVE";
 }
@@ -87,7 +116,9 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
   notifications,
   responses: _responses,
   onAddSurvey,
+  onUpdateSurvey,
   onAddNotification,
+  onUpdateNotification,
   onDeleteSurvey,
   onDeleteNotification,
   hideHeader = false,
@@ -96,12 +127,15 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
   const [activeTab, setActiveTab] = useState<"SURVEYS" | "NOTIFICATIONS">("SURVEYS");
   const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
   const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
+  const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
+  const [editingNotif, setEditingNotif] = useState<SystemNotification | null>(null);
   const [insightsSurvey, setInsightsSurvey] = useState<Survey | null>(null);
 
   const [newSurvey, setNewSurvey] = useState<Partial<Survey>>({
     title: "",
     description: "",
     targetRole: "BOTH",
+    endDate: "",
     questions: [{ id: "q1", type: "RATING", question: "Overall satisfaction?" }],
   });
 
@@ -110,7 +144,61 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
     message: "",
     targetRole: "BOTH",
     type: "INFO",
+    endDate: "",
   });
+
+  const resetSurveyForm = () => {
+    setEditingSurvey(null);
+    setNewSurvey({
+      title: "",
+      description: "",
+      targetRole: "BOTH",
+      endDate: "",
+      questions: [{ id: "q1", type: "RATING", question: "Overall satisfaction?" }],
+    });
+  };
+
+  const resetNotifForm = () => {
+    setEditingNotif(null);
+    setNewNotif({ title: "", message: "", targetRole: "BOTH", type: "INFO", endDate: "" });
+  };
+
+  const openCreateSurvey = () => {
+    resetSurveyForm();
+    setIsSurveyModalOpen(true);
+  };
+
+  const openEditSurvey = (survey: Survey) => {
+    setEditingSurvey(survey);
+    setNewSurvey({
+      title: survey.title,
+      description: survey.description || "",
+      targetRole: survey.targetRole || survey.target_role || "BOTH",
+      endDate: toDateOnly(surveyEndDate(survey)),
+      questions: (survey.questions || []).map((q) => ({
+        ...q,
+        question: q.question || q.questionText || "",
+      })),
+    });
+    setIsSurveyModalOpen(true);
+  };
+
+  const openCreateNotif = () => {
+    resetNotifForm();
+    setIsNotifModalOpen(true);
+  };
+
+  const openEditNotif = (notif: SystemNotification) => {
+    setEditingNotif(notif);
+    setNewNotif({
+      title: notif.title,
+      message: notif.message,
+      targetRole: notif.targetRole || notif.target_role || "BOTH",
+      type: notif.type || "INFO",
+      endDate: toDateOnly(notifEndDate(notif)),
+    });
+    setIsNotifModalOpen(true);
+  };
 
   const handleAddQuestion = () => {
     const id = `q-${Date.now()}`;
@@ -200,39 +288,49 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
       }
     }
 
-    onAddSurvey({
+    const payload = {
       ...newSurvey,
       questions: questions.map((q) =>
         q.type === "MULTIPLE_CHOICE"
           ? { ...q, options: (q.options || []).map((o) => o.trim()).filter(Boolean) }
           : { ...q, options: undefined },
       ),
+      endDate: toEndIso(String(newSurvey.endDate || "")),
+      end_date: toEndIso(String(newSurvey.endDate || "")),
       status: "ACTIVE",
       createdAt: new Date().toISOString(),
       createdBy: currentUserId,
-    });
+    };
+
+    if (editingSurvey) {
+      onUpdateSurvey({ ...editingSurvey, ...payload } as Survey);
+    } else {
+      onAddSurvey(payload);
+    }
     setIsSurveyModalOpen(false);
-    setNewSurvey({
-      title: "",
-      description: "",
-      targetRole: "BOTH",
-      questions: [{ id: "q1", type: "RATING", question: "Overall satisfaction?" }],
-    });
+    resetSurveyForm();
   };
 
   const handleNotifSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddNotification({
+    const payload = {
       ...newNotif,
+      endDate: toEndIso(String(newNotif.endDate || "")),
+      end_date: toEndIso(String(newNotif.endDate || "")),
       createdAt: new Date().toISOString(),
       createdBy: currentUserId,
-    });
+    };
+    if (editingNotif) {
+      onUpdateNotification({ ...editingNotif, ...payload } as SystemNotification);
+    } else {
+      onAddNotification(payload);
+    }
     setIsNotifModalOpen(false);
-    setNewNotif({ title: "", message: "", targetRole: "BOTH", type: "INFO" });
+    resetNotifForm();
   };
 
   return (
-    <div className={`space-y-4 ${hideHeader ? "" : ""}`}>
+    <div className="space-y-4">
       {!hideHeader && (
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
@@ -273,7 +371,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-white">Active Surveys</h3>
-            <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => setIsSurveyModalOpen(true)}>
+            <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreateSurvey}>
               Create Survey
             </Button>
           </div>
@@ -284,6 +382,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
               const responseCount = survey.responseCount ?? survey.response_count ?? 0;
               const lastAt = survey.lastResponseAt ?? survey.last_response_at ?? null;
               const lastRel = formatRelativeTime(lastAt);
+              const endAt = surveyEndDate(survey);
               return (
                 <div
                   key={survey.id}
@@ -297,7 +396,9 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                           className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
                             status === "ACTIVE"
                               ? "bg-emerald-500/20 text-emerald-400"
-                              : "bg-slate-500/20 text-slate-400"
+                              : status === "EXPIRED"
+                                ? "bg-amber-500/20 text-amber-400"
+                                : "bg-slate-500/20 text-slate-400"
                           }`}
                         >
                           {status}
@@ -314,6 +415,14 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                       >
                         Insights
                       </Button>
+                      <button
+                        type="button"
+                        onClick={() => openEditSurvey(survey)}
+                        className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-indigo-400 transition-colors cursor-pointer"
+                        aria-label="Edit survey"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => onDeleteSurvey(survey.id)}
@@ -341,6 +450,12 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                       {lastRel ? `Last response ${lastRel}` : "No responses yet"}
                     </div>
                     <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                      {endAt
+                        ? `Ends ${new Date(endAt).toLocaleDateString()}`
+                        : "No End Date"}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                       <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
                       {survey.questions?.length || 0} Questions
                     </div>
@@ -365,13 +480,16 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-white">System Notifications</h3>
-            <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={() => setIsNotifModalOpen(true)}>
+            <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreateNotif}>
               Broadcast Alert
             </Button>
           </div>
 
           <div className="grid gap-3">
-            {notifications.map((notif) => (
+            {notifications.map((notif) => {
+              const endAt = notifEndDate(notif);
+              const expired = isExpired(endAt);
+              return (
               <div
                 key={notif.id}
                 className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-start gap-4 hover:border-indigo-500/30 transition-all"
@@ -393,15 +511,32 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start gap-2 mb-1">
-                    <h4 className="font-semibold text-white">{notif.title}</h4>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteNotification(notif.id)}
-                      className="p-1.5 hover:bg-rose-500/10 rounded-lg text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-                      aria-label="Delete broadcast"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      <h4 className="font-semibold text-white">{notif.title}</h4>
+                      {expired && (
+                        <span className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400">
+                          Expired
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openEditNotif(notif)}
+                        className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-indigo-400 transition-colors cursor-pointer"
+                        aria-label="Edit broadcast"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteNotification(notif.id)}
+                        className="p-1.5 hover:bg-rose-500/10 rounded-lg text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                        aria-label="Delete broadcast"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   <p className="text-sm text-slate-400 mb-3 leading-relaxed">{notif.message}</p>
                   <div className="flex flex-wrap items-center gap-4">
@@ -416,10 +551,17 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                         ? new Date(notifCreatedAt(notif)).toLocaleString()
                         : "—"}
                     </div>
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      <Calendar className="w-3 h-3 text-indigo-400" />
+                      {endAt
+                        ? `Ends ${new Date(endAt).toLocaleDateString()}`
+                        : "No End Date"}
+                    </div>
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
             {notifications.length === 0 && (
               <div className="py-10 text-center border border-dashed border-slate-800 rounded-xl text-sm text-slate-500">
                 No broadcasts yet. Send a system alert to students or mentors.
@@ -431,13 +573,27 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
 
       <Modal
         open={isSurveyModalOpen}
-        onClose={() => setIsSurveyModalOpen(false)}
-        title="Create New Survey"
-        description="Gather feedback from users"
+        onClose={() => {
+          setIsSurveyModalOpen(false);
+          resetSurveyForm();
+        }}
+        title={editingSurvey ? "Edit Survey" : "Create New Survey"}
+        description={
+          editingSurvey
+            ? "Update survey details and end date"
+            : "Gather feedback from users"
+        }
         size="lg"
         footer={
           <div className="flex gap-3 w-full">
-            <Button variant="outline" className="flex-1" onClick={() => setIsSurveyModalOpen(false)}>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setIsSurveyModalOpen(false);
+                resetSurveyForm();
+              }}
+            >
               Cancel
             </Button>
             <Button
@@ -448,7 +604,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                 form?.requestSubmit();
               }}
             >
-              Launch Survey
+              {editingSurvey ? "Save Changes" : "Launch Survey"}
             </Button>
           </div>
         }
@@ -474,6 +630,15 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                   { value: "MENTOR", label: "Mentors Only" },
                   { value: "BOTH", label: "Everyone" },
                 ]}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <FormField label="End Date" hint="Optional — survey stops accepting responses after this day">
+              <DatePicker
+                value={String(newSurvey.endDate || "")}
+                onChange={(v) => setNewSurvey({ ...newSurvey, endDate: v })}
               />
             </FormField>
           </div>
@@ -584,12 +749,26 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
 
       <Modal
         open={isNotifModalOpen}
-        onClose={() => setIsNotifModalOpen(false)}
-        title="Broadcast Alert"
-        description="Send system-wide notification"
+        onClose={() => {
+          setIsNotifModalOpen(false);
+          resetNotifForm();
+        }}
+        title={editingNotif ? "Edit System Alert" : "Broadcast Alert"}
+        description={
+          editingNotif
+            ? "Update alert content and end date"
+            : "Send system-wide notification"
+        }
         footer={
           <div className="flex gap-3 w-full">
-            <Button variant="outline" className="flex-1" onClick={() => setIsNotifModalOpen(false)}>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setIsNotifModalOpen(false);
+                resetNotifForm();
+              }}
+            >
               Cancel
             </Button>
             <Button
@@ -600,7 +779,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                 form?.requestSubmit();
               }}
             >
-              Send Alert
+              {editingNotif ? "Save Changes" : "Send Alert"}
             </Button>
           </div>
         }
@@ -638,6 +817,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                   { value: "MENTOR", label: "Mentors" },
                   { value: "BOTH", label: "Everyone" },
                 ]}
+                disabled={!!editingNotif}
               />
             </FormField>
             <FormField label="Alert Type">
@@ -652,6 +832,15 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
               />
             </FormField>
           </div>
+          <FormField
+            label="End Date"
+            hint="Optional — alert disappears from inboxes after this day"
+          >
+            <DatePicker
+              value={String(newNotif.endDate || "")}
+              onChange={(v) => setNewNotif({ ...newNotif, endDate: v })}
+            />
+          </FormField>
         </form>
       </Modal>
     </div>
