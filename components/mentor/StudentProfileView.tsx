@@ -31,6 +31,7 @@ import {
   Award,
 } from 'lucide-react';
 import { formatMeetingLocal, parseLocalDate } from '@/lib/utils/dateUtils';
+import { MeetingTimeWithHint } from '@/components/ui/TimezoneHint';
 import { applicantTypeLabel, preferredDatScore } from '@/lib/utils/studentMetrics';
 import {
   calculateStrengthScore,
@@ -573,15 +574,19 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           {nextMeeting && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600/10 border border-indigo-500/20 rounded-lg">
               <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider inline-flex items-center gap-1.5">
                 Next:{" "}
-                {formatMeetingLocal(nextMeeting.date, {
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                  timeZoneName: "short",
-                })}
+                <MeetingTimeWithHint
+                  dateIso={nextMeeting.date}
+                  className="normal-case tracking-normal font-bold"
+                  options={{
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                    timeZoneName: "short",
+                  }}
+                />
               </span>
             </div>
           )}

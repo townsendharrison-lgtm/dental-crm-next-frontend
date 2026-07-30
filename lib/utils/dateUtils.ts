@@ -1,3 +1,70 @@
+/** Exact IANA timezone from the current browser/device. */
+export function getBrowserTimezone(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz && typeof tz === "string") return tz;
+  } catch {
+    /* ignore */
+  }
+  return "UTC";
+}
+
+/** Convert 12h wall-clock (HH:MM + AM/PM) to 24h HH:MM. */
+export function toTime24From12(time: string, ampm: "AM" | "PM"): string {
+  let [hours, minutes] = (time || "12:00").split(":").map(Number);
+  if (!Number.isFinite(hours)) hours = 12;
+  if (!Number.isFinite(minutes)) minutes = 0;
+  if (ampm === "PM" && hours < 12) hours += 12;
+  if (ampm === "AM" && hours === 12) hours = 0;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+/** Human label for an IANA zone, e.g. "America/New_York (EDT)". */
+export function formatTimezoneLabel(timeZone: string, at: Date = new Date()): string {
+  if (!timeZone) return "UTC";
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "short",
+    }).formatToParts(at);
+    const abbr = parts.find((p) => p.type === "timeZoneName")?.value;
+    return abbr ? `${timeZone} (${abbr})` : timeZone;
+  } catch {
+    return timeZone;
+  }
+}
+
+/** Format a wall-clock in a zone as the matching UTC instant label. */
+export function formatUtcFromWallClock(
+  dateOnly: string,
+  time24: string,
+  timeZone: string,
+): string {
+  if (!dateOnly || !time24) return "—";
+  try {
+    const iso = zonedDateTimeToUtcIso(dateOnly, time24, timeZone || "UTC");
+    return formatUtcFromIso(iso);
+  } catch {
+    return "—";
+  }
+}
+
+/** Format an ISO instant in UTC (e.g. "Jul 22, 2026, 7:00 PM UTC"). */
+export function formatUtcFromIso(dateStr: string): string {
+  if (!dateStr) return "—";
+  const date = dateStr.includes("T") ? new Date(dateStr) : parseLocalDate(dateStr);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-US", {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
 /**
  * Parses a date string as a LOCAL date to avoid timezone-shift bugs.
  *

@@ -29,9 +29,11 @@ import { Modal } from "@/components/ui/Modal";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { TimePicker } from "@/components/ui/TimePicker";
+import { TimezoneHint } from "@/components/ui/TimezoneHint";
 import {
   formatMeetingLocal,
   formatMeetingLocalTime,
+  getBrowserTimezone,
   getZonedWallClock,
   zonedDateTimeToUtcIso,
 } from "@/lib/utils/dateUtils";
@@ -127,7 +129,7 @@ const emptyMeetingForm = (role: UserRole, currentUserId: string) => ({
   date: new Date().toISOString().split("T")[0],
   time: "12:00",
   ampm: "PM" as "AM" | "PM",
-  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  timezone: getBrowserTimezone(),
   duration: 30,
   audience: "STUDENT" as MeetingAudience,
   counterpartyType: "student" as "student" | "mentor",
@@ -420,7 +422,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const openEditMeeting = (meeting: Meeting) => {
     const tz =
-      meeting.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      meeting.timezone || getBrowserTimezone();
     const wall = getZonedWallClock(meeting.date, tz);
     let hours = wall.hours24;
     const minutes = wall.minutes;
@@ -1018,7 +1020,20 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                 onChange={(date) => setNewMeeting({ ...newMeeting, date })}
               />
             </FormField>
-            <FormField label="Time" required>
+            <FormField
+              label={
+                <>
+                  Time
+                  <TimezoneHint
+                    date={newMeeting.date}
+                    time={newMeeting.time}
+                    ampm={newMeeting.ampm}
+                    timeZone={newMeeting.timezone}
+                  />
+                </>
+              }
+              required
+            >
               <TimePicker
                 time={newMeeting.time}
                 ampm={newMeeting.ampm}
@@ -1043,6 +1058,18 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                   { value: "America/Phoenix", label: "Mountain Time - AZ" },
                   { value: "America/Los_Angeles", label: "Pacific Time (PT)" },
                   { value: "UTC", label: "UTC" },
+                  ...(
+                    [
+                      "America/New_York",
+                      "America/Chicago",
+                      "America/Denver",
+                      "America/Phoenix",
+                      "America/Los_Angeles",
+                      "UTC",
+                    ].includes(newMeeting.timezone)
+                      ? []
+                      : [{ value: newMeeting.timezone, label: newMeeting.timezone }]
+                  ),
                 ]}
               />
             </FormField>

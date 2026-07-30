@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { Input, Textarea, Select } from "@/components/ui/Form";
+import { TimezoneHint } from "@/components/ui/TimezoneHint";
+import { getBrowserTimezone, toTime24From12, zonedDateTimeToUtcIso } from "@/lib/utils/dateUtils";
 import { useRouter } from "next/navigation";
 import {
   Users,
@@ -113,7 +115,7 @@ export const SetterDetailView: React.FC<SetterDetailViewProps> = ({
     date: "",
     time: "12:00",
     ampm: "PM" as "AM" | "PM",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timezone: getBrowserTimezone(),
   });
 
   const [newLead, setNewLead] = useState({
@@ -322,17 +324,17 @@ export const SetterDetailView: React.FC<SetterDetailViewProps> = ({
   const handleScheduleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (showScheduleModal) {
-      let [hours, minutes] = meetingForm.time.split(":").map(Number);
-      if (meetingForm.ampm === "PM" && hours < 12) hours += 12;
-      if (meetingForm.ampm === "AM" && hours === 12) hours = 0;
-
-      const [year, month, day] = meetingForm.date.split("-").map(Number);
-      const date = new Date(year, month - 1, day, hours, minutes);
+      const time24 = toTime24From12(meetingForm.time, meetingForm.ampm);
+      const startTime = zonedDateTimeToUtcIso(
+        meetingForm.date,
+        time24,
+        meetingForm.timezone || getBrowserTimezone(),
+      );
 
       onScheduleMeeting(showScheduleModal.leadId, {
         leadId: showScheduleModal.leadId,
         type: meetingForm.type,
-        startTime: date.toISOString(),
+        startTime,
         timezone: meetingForm.timezone,
       });
       setShowScheduleModal(null);
@@ -341,7 +343,7 @@ export const SetterDetailView: React.FC<SetterDetailViewProps> = ({
         date: "",
         time: "12:00",
         ampm: "PM",
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezone: getBrowserTimezone(),
       });
     }
   };
@@ -387,23 +389,16 @@ export const SetterDetailView: React.FC<SetterDetailViewProps> = ({
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          {isAdmin && (
-            <button
-              onClick={handleBackClick}
-              className="p-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-          )}
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              {setter.name}&apos;s Leads
-            </h1>
-            <p className="text-slate-400 text-sm hidden sm:block">Track and manage sales leads for this setter</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800 shadow-sm self-start sm:self-auto">
+        {isAdmin && (
+          <button
+            onClick={handleBackClick}
+            className="p-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer self-start"
+            aria-label="Back to setter management"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
+        <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800 shadow-sm self-start sm:self-auto sm:ml-auto">
           <button
             onClick={() => setActiveTab("leads")}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
@@ -436,8 +431,10 @@ export const SetterDetailView: React.FC<SetterDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Redesigned 5-Column Stats Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Stats: setters see Total / Weekly / Monthly only; admins also see Close Ratio & Avg Revenue */}
+      <div
+        className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${isAdmin ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}
+      >
         {/* Card 1: Total Leads */}
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between shadow-xl relative overflow-hidden group">
           <div className="flex items-center gap-3">
@@ -452,39 +449,43 @@ export const SetterDetailView: React.FC<SetterDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Card 2: Close Ratio */}
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between shadow-xl relative overflow-hidden group">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-500/10 rounded-xl">
-              <BarChart3 className="w-5 h-5 text-indigo-400" />
+        {isAdmin && (
+          <>
+            {/* Card 2: Close Ratio */}
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between shadow-xl relative overflow-hidden group">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-500/10 rounded-xl">
+                  <BarChart3 className="w-5 h-5 text-indigo-400" />
+                </div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Close Ratio</span>
+              </div>
+              <div className="mt-4">
+                <div className="text-3xl font-black text-white">{performanceMetrics.closeRatio.toFixed(1)}%</div>
+                <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold">
+                  {performanceMetrics.purchaseCount} / {performanceMetrics.showUpCount} Showed Up
+                </div>
+              </div>
             </div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Close Ratio</span>
-          </div>
-          <div className="mt-4">
-            <div className="text-3xl font-black text-white">{performanceMetrics.closeRatio.toFixed(1)}%</div>
-            <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold">
-              {performanceMetrics.purchaseCount} / {performanceMetrics.showUpCount} Showed Up
-            </div>
-          </div>
-        </div>
 
-        {/* Card 3: Avg Revenue */}
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between shadow-xl relative overflow-hidden group">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-500/10 rounded-xl">
-              <DollarSign className="w-5 h-5 text-amber-400" />
+            {/* Card 3: Avg Revenue */}
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between shadow-xl relative overflow-hidden group">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-500/10 rounded-xl">
+                  <DollarSign className="w-5 h-5 text-amber-400" />
+                </div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Avg Revenue</span>
+              </div>
+              <div className="mt-4">
+                <div className="text-3xl font-black text-white">
+                  ${Math.round(performanceMetrics.avgRevenuePerShowUp).toLocaleString()}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold">
+                  Total: ${performanceMetrics.totalRevenue.toLocaleString()}
+                </div>
+              </div>
             </div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Avg Revenue</span>
-          </div>
-          <div className="mt-4">
-            <div className="text-3xl font-black text-white">
-              ${Math.round(performanceMetrics.avgRevenuePerShowUp).toLocaleString()}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold">
-              Total: ${performanceMetrics.totalRevenue.toLocaleString()}
-            </div>
-          </div>
-        </div>
+          </>
+        )}
 
         {/* Card 4: Weekly Goal */}
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col justify-between shadow-xl relative overflow-hidden group">
@@ -1177,7 +1178,15 @@ export const SetterDetailView: React.FC<SetterDetailViewProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1">Time</label>
+                    <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-400">
+                      Time
+                      <TimezoneHint
+                        date={meetingForm.date}
+                        time={meetingForm.time}
+                        ampm={meetingForm.ampm}
+                        timeZone={meetingForm.timezone}
+                      />
+                    </label>
                     <Input
                       required
                       type="time"
@@ -1213,6 +1222,16 @@ export const SetterDetailView: React.FC<SetterDetailViewProps> = ({
                       <option value="America/Phoenix">Mountain Time - AZ (no DST)</option>
                       <option value="America/Los_Angeles">Pacific Time (PT)</option>
                       <option value="UTC">UTC</option>
+                      {![
+                        "America/New_York",
+                        "America/Chicago",
+                        "America/Denver",
+                        "America/Phoenix",
+                        "America/Los_Angeles",
+                        "UTC",
+                      ].includes(meetingForm.timezone) ? (
+                        <option value={meetingForm.timezone}>{meetingForm.timezone}</option>
+                      ) : null}
                     </Select>
                   </div>
                 </div>

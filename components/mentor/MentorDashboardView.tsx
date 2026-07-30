@@ -54,6 +54,7 @@ import {
   formatMeetingLocal,
   formatMeetingLocalTime,
 } from "@/lib/utils/dateUtils";
+import { TimezoneHint } from "@/components/ui/TimezoneHint";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Form";
 import { SelectMenu } from "@/components/ui/SelectMenu";
@@ -594,21 +595,6 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       });
     } catch {
       return "Not Scheduled";
-    }
-  };
-
-  const getNextMeetingLabel = (sid: string) => {
-    const upcoming = getNextMeeting(sid);
-    if (!upcoming?.date) return "Not Scheduled";
-    try {
-      return formatMeetingLocal(upcoming.date, {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      });
-    } catch {
-      return getNextMeetingDate(sid);
     }
   };
 
@@ -1487,7 +1473,10 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                             </div>
                             <p className="text-xs text-slate-400 flex items-center gap-1.5 truncate">
                               <Clock className="w-3 h-3 shrink-0 text-slate-500" />
-                              <span>{timeLabel}</span>
+                              <span className="inline-flex items-center gap-1">
+                                {timeLabel}
+                                <TimezoneHint dateIso={meeting.date} />
+                              </span>
                               <span className="text-slate-700">·</span>
                               <span className="truncate">{student?.name || "No student linked"}</span>
                             </p>
@@ -1638,7 +1627,12 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                           </p>
                           <p className="text-xs text-slate-400 flex items-center gap-1.5 truncate">
                             <Clock className="w-3 h-3 shrink-0 text-slate-500" />
-                            {timeLabel}
+                            <span className="inline-flex items-center gap-1">
+                              {timeLabel}
+                              {meeting.date.includes("T") ? (
+                                <TimezoneHint dateIso={meeting.date} />
+                              ) : null}
+                            </span>
                             <span className="text-slate-700">·</span>
                             <span className="truncate">{meeting.title}</span>
                           </p>
@@ -1928,7 +1922,25 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               {filteredStudents.map((student) => {
                 const isPending = pendingIds.has(student.id);
                 const journey = journeyProgressOf(student);
-                const nextMeetingLabel = getNextMeetingLabel(student.id);
+                const upcomingMeeting = getNextMeeting(student.id);
+                const nextMeetingLabel = upcomingMeeting
+                  ? (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="line-clamp-2">
+                          {formatMeetingLocal(upcomingMeeting.date, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            timeZoneName: "short",
+                          })}
+                        </span>
+                        {upcomingMeeting.date.includes("T") ? (
+                          <TimezoneHint dateIso={upcomingMeeting.date} />
+                        ) : null}
+                      </span>
+                    )
+                  : "Not Scheduled";
                 const prevSession =
                   student.lastMeetingDate || student.lastContactDate || null;
 

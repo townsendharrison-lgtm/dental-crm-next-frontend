@@ -8,7 +8,8 @@ import { Input, Textarea, FormField } from "@/components/ui/Form";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { TimePicker } from "@/components/ui/TimePicker";
-import { zonedDateTimeToUtcIso } from "@/lib/utils/dateUtils";
+import { TimezoneHint } from "@/components/ui/TimezoneHint";
+import { getBrowserTimezone, zonedDateTimeToUtcIso } from "@/lib/utils/dateUtils";
 import type { CreateMeetingPayload } from "@/lib/api/meetings";
 import type { Student } from "@/lib/types";
 
@@ -33,9 +34,7 @@ export function QuickScheduleMeetingModal({
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [time, setTime] = useState("12:00");
   const [ampm, setAmpm] = useState<"AM" | "PM">("PM");
-  const [timezone, setTimezone] = useState(
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York",
-  );
+  const [timezone, setTimezone] = useState(getBrowserTimezone());
   const [duration, setDuration] = useState(30);
   const [link, setLink] = useState("");
   const [notes, setNotes] = useState("");
@@ -47,7 +46,7 @@ export function QuickScheduleMeetingModal({
     setDate(new Date().toISOString().split("T")[0]);
     setTime("12:00");
     setAmpm("PM");
-    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York");
+    setTimezone(getBrowserTimezone());
     setDuration(30);
     setLink("");
     setNotes("");
@@ -131,7 +130,15 @@ export function QuickScheduleMeetingModal({
           <FormField label="Date" required>
             <DatePicker value={date} onChange={setDate} />
           </FormField>
-          <FormField label="Time" required>
+          <FormField
+            label={
+              <>
+                Time
+                <TimezoneHint date={date} time={time} ampm={ampm} timeZone={timezone} />
+              </>
+            }
+            required
+          >
             <TimePicker
               time={time}
               ampm={ampm}

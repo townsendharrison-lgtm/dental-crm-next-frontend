@@ -797,7 +797,7 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
   },
   "/mentor-manager/compliance-hub": {
     title: "Compliance Hub",
-    description: "Monitor mentor compliance scores and latency.",
+    description: "Real-time intelligence for mentorship activity and SLAs.",
   },
   "/mentor-manager/schedule": {
     title: "Schedule",

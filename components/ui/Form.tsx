@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
@@ -53,7 +53,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
 Select.displayName = "Select";
 
 export interface FormFieldProps {
-  label?: string;
+  label?: ReactNode;
   htmlFor?: string;
   error?: string;
   hint?: string;
@@ -66,7 +66,7 @@ export function FormField({ label, htmlFor, error, hint, required, children, cla
   return (
     <div className={cn("space-y-1", className)}>
       {label ? (
-        <Label htmlFor={htmlFor}>
+        <Label htmlFor={htmlFor} className="inline-flex items-center gap-1.5">
           {label}
           {required ? <span className="ml-0.5 text-danger">*</span> : null}
         </Label>

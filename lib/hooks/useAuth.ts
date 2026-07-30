@@ -10,6 +10,7 @@ import {
   persistTokens,
 } from "@/lib/auth/cookies";
 import { canAccess } from "@/lib/auth/roles";
+import { syncUserTimezone } from "@/lib/auth/syncTimezone";
 import type { AuthUser, UserRole } from "@/lib/types";
 
 export function useAuth() {
@@ -24,9 +25,10 @@ export function useAuth() {
       try {
         const res = await authApi.signIn(email, password);
         persistTokens(res.token, res.refreshToken);
-        localStorage.setItem(USER_KEY, JSON.stringify(res.user));
-        setUser(res.user);
-        return { success: true as const, user: res.user };
+        const synced = await syncUserTimezone(res.user);
+        localStorage.setItem(USER_KEY, JSON.stringify(synced));
+        setUser(synced);
+        return { success: true as const, user: synced };
       } catch (err) {
         const message = err instanceof Error ? err.message : "Login failed.";
         return { success: false as const, error: message };

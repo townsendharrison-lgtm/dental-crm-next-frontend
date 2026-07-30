@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Input, Textarea, FormField } from "@/components/ui/Form";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { TimePicker } from "@/components/ui/TimePicker";
+import { TimezoneHint } from "@/components/ui/TimezoneHint";
+import { getBrowserTimezone } from "@/lib/utils/dateUtils";
 import type { Student } from "@/lib/types";
 
 export interface SuggestMeetingTimesModalProps {
@@ -30,7 +32,13 @@ function formatSlotLabel(slot: Slot): string {
     });
     const [hh, mm] = slot.time.split(":");
     const displayH = Number(hh) || 12;
-    return `${label} — ${displayH}:${mm} ${slot.ampm}`;
+    const tzAbbr = new Intl.DateTimeFormat("en-US", {
+      timeZone: getBrowserTimezone(),
+      timeZoneName: "short",
+    })
+      .formatToParts(new Date())
+      .find((p) => p.type === "timeZoneName")?.value;
+    return `${label} — ${displayH}:${mm} ${slot.ampm}${tzAbbr ? ` ${tzAbbr}` : ""}`;
   } catch {
     return `${slot.date} ${slot.time} ${slot.ampm}`;
   }
@@ -144,6 +152,15 @@ export function SuggestMeetingTimesModal({
             <DatePicker value={draftDate} onChange={setDraftDate} />
             <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
               <div className="min-w-0 flex-1">
+                <div className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  Time
+                  <TimezoneHint
+                    date={draftDate}
+                    time={draftTime}
+                    ampm={draftAmpm}
+                    timeZone={getBrowserTimezone()}
+                  />
+                </div>
                 <TimePicker
                   time={draftTime}
                   ampm={draftAmpm}
@@ -157,7 +174,7 @@ export function SuggestMeetingTimesModal({
                 type="button"
                 variant="secondary"
                 onClick={addSlot}
-                className="w-full shrink-0 sm:w-auto sm:px-5"
+                className="w-full shrink-0 sm:w-auto sm:px-5 sm:self-end"
               >
                 <Plus className="h-4 w-4" />
                 Add

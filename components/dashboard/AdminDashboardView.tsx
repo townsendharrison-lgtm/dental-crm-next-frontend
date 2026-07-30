@@ -55,11 +55,99 @@ import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useActionItems } from "@/lib/hooks/useActionItems";
 import { useCourseSubmissions } from "@/lib/hooks/useCourses";
 import { normalizeStudents } from "@/lib/utils/normalizeStudent";
-import { parseLocalDate } from "@/lib/utils/dateUtils";
-import { Modal, Button, Avatar } from "@/components/ui";
-import type { Lead } from "@/lib/types";
+import { parseLocalDate, isUpcomingMeetingDate } from "@/lib/utils/dateUtils";
+import { cn } from "@/lib/utils/cn";
+import { Modal, Button, Avatar, Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
+import type { Meeting, Student, Mentor } from "@/lib/types";
 
 const MENTOR_CHART_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type MonitorReportTab = "no_next" | "stale_30" | "stale_60";
+
+type StudentMonitorRow = {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  mentorId: string | null;
+  mentorName: string;
+  days: number | null;
+  daysLabel: string;
+};
+
+function isShellStudent(s: Student) {
+  return !!s.email?.toLowerCase().endsWith("@school-selection.local");
+}
+
+function resolveStudentMentor(s: Student, mentors: Mentor[]) {
+  return (
+    mentors.find((m) => m.id === (s.mentorId || s.profile?.mentor_id)) ||
+    mentors.find((m) => (m.studentIds || []).includes(s.id)) ||
+    null
+  );
+}
+
+function meetingHasCompletionNotes(m: Meeting) {
+  const notes = (m.notes || m.summary || m.mentor_notes || "").trim();
+  return notes.length > 0;
+}
+
+function meetingStudentId(m: Meeting) {
+  return m.student_id || m.studentId || "";
+}
+
+function daysBetween(fromMs: number, toMs = Date.now()) {
+  if (!Number.isFinite(fromMs)) return null;
+  return Math.max(0, Math.floor((toMs - fromMs) / DAY_MS));
+}
+
+function formatDaysLabel(days: number | null, neverLabel = "Never") {
+  if (days == null) return neverLabel;
+  if (days === 0) return "Today";
+  if (days === 1) return "1 day";
+  return `${days} days`;
+}
+
+function lastCompletedMeetingMs(studentId: string, meetings: Meeting[]) {
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const m of meetings) {
+    if (meetingStudentId(m) !== studentId || !m.completed) continue;
+    if (!meetingHasCompletionNotes(m)) continue;
+    try {
+      const ms = parseLocalDate(m.date).getTime();
+      if (Number.isFinite(ms) && ms > latest) latest = ms;
+    } catch {
+      /* ignore bad dates */
+    }
+  }
+  return Number.isFinite(latest) ? latest : null;
+}
+
+function hasUpcomingMeeting(studentId: string, meetings: Meeting[], now = new Date()) {
+  return meetings.some(
+    (m) =>
+      meetingStudentId(m) === studentId &&
+      !m.completed &&
+      isUpcomingMeetingDate(m.date, now),
+  );
+}
+
+function contactMsOf(s: Student) {
+  const raw =
+    s.lastContactDate ||
+    s.profile?.last_contact_date ||
+    s.lastMeetingDate ||
+    s.profile?.last_meeting_date ||
+    null;
+  if (!raw) return null;
+  try {
+    const ms = new Date(raw).getTime();
+    return Number.isFinite(ms) ? ms : null;
+  } catch {
+    return null;
+  }
+}
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -84,6 +172,108 @@ function latencyHours(raw: string | number | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function MonitorStudentList({
+  rows,
+  empty,
+  daysHeader,
+}: {
+  rows: StudentMonitorRow[];
+  empty: string;
+  daysHeader: string;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-6 py-16 text-center">
+        <div className="mb-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+          <CheckCircle className="h-6 w-6 text-emerald-400" />
+        </div>
+        <p className="text-base font-medium text-slate-300">{empty}</p>
+        <p className="mt-1 text-sm text-slate-500">Nothing needs attention in this category.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60 shadow-inner">
+      <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.7fr)] gap-4 border-b border-slate-800 bg-slate-900/80 px-5 py-3.5 sm:px-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+          Student
+        </p>
+        <p className="hidden text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 sm:block">
+          Mentor
+        </p>
+        <p className="text-right text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+          {daysHeader}
+        </p>
+      </div>
+      <div className="max-h-[min(58vh,560px)] overflow-y-auto">
+        {rows.map((row) => (
+          <div
+            key={row.id}
+            className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.7fr)] items-center gap-4 border-b border-slate-800/70 px-5 py-4 last:border-b-0 transition-colors hover:bg-slate-900/70 sm:px-6"
+          >
+            <div className="flex min-w-0 items-center gap-3.5">
+              <Avatar
+                name={row.name}
+                src={row.avatar}
+                size="md"
+                className="h-11 w-11 shrink-0 rounded-xl bg-slate-800 text-slate-200 ring-1 ring-slate-700/80"
+              />
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold text-white">{row.name}</p>
+                {row.email ? (
+                  <p className="truncate text-sm text-slate-500">{row.email}</p>
+                ) : null}
+                <p
+                  className={`mt-0.5 truncate text-sm sm:hidden ${
+                    row.mentorId ? "text-slate-400" : "text-slate-500"
+                  }`}
+                >
+                  Mentor: {row.mentorName}
+                </p>
+              </div>
+            </div>
+            <div className="hidden min-w-0 sm:block">
+              <p
+                className={`truncate text-sm font-medium ${
+                  row.mentorId ? "text-slate-200" : "text-slate-500"
+                }`}
+                title={row.mentorName}
+              >
+                {row.mentorName}
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <span
+                className={cn(
+                  "inline-flex min-w-[4.5rem] items-center justify-center rounded-lg border px-2.5 py-1.5 text-sm font-bold tabular-nums",
+                  row.days == null
+                    ? "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                    : row.days >= 60
+                      ? "border-rose-500/25 bg-rose-500/10 text-rose-300"
+                      : row.days >= 30
+                        ? "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                        : "border-slate-700 bg-slate-800/80 text-slate-200",
+                )}
+              >
+                {row.daysLabel}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-slate-800 bg-slate-900/50 px-5 py-3 sm:px-6">
+        <p className="text-sm text-slate-500">
+          Showing{" "}
+          <span className="font-semibold text-slate-300">
+            {rows.length} student{rows.length === 1 ? "" : "s"}
+          </span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function AdminDashboardView() {
   const router = useRouter();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -92,6 +282,7 @@ export function AdminDashboardView() {
   const [openingChat, setOpeningChat] = useState(false);
   const [performanceTab, setPerformanceTab] = useState<"COMPLIANCE" | "STRENGTH">("COMPLIANCE");
   const [inactivityReportOpen, setInactivityReportOpen] = useState(false);
+  const [monitorReportTab, setMonitorReportTab] = useState<MonitorReportTab>("no_next");
   const [unassignedReportOpen, setUnassignedReportOpen] = useState(false);
 
   const { data: users = [], isLoading: usersLoading } = useAdminUsers();
@@ -185,48 +376,96 @@ export function AdminDashboardView() {
       red: students.filter((s) => s.readiness === "RED").length,
     };
 
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const inactiveStudents = students
+    const thirtyDaysAgo = Date.now() - 30 * DAY_MS;
+    const sixtyDaysAgo = Date.now() - 60 * DAY_MS;
+    const now = new Date();
+
+    const toMonitorRow = (
+      s: Student,
+      days: number | null,
+      neverLabel = "Never",
+    ): StudentMonitorRow => {
+      const mentor = resolveStudentMentor(s, mentors);
+      return {
+        id: s.id,
+        name: s.name || "Unnamed student",
+        email: s.email || "",
+        avatar: s.avatar || undefined,
+        mentorId: mentor?.id || null,
+        mentorName: mentor?.name?.trim() || "Unassigned",
+        days,
+        daysLabel: formatDaysLabel(days, neverLabel),
+      };
+    };
+
+    const monitoredStudents = students.filter((s) => !isShellStudent(s));
+
+    const noNextMeetingStudents = monitoredStudents
+      .filter((s) => !hasUpcomingMeeting(s.id, meetings, now))
+      .map((s) => {
+        const lastCompleted = lastCompletedMeetingMs(s.id, meetings);
+        const days = lastCompleted != null ? daysBetween(lastCompleted) : null;
+        return toMonitorRow(s, days, "Never met");
+      })
+      .sort(
+        (a, b) =>
+          (b.days ?? Number.POSITIVE_INFINITY) - (a.days ?? Number.POSITIVE_INFINITY) ||
+          a.name.localeCompare(b.name),
+      );
+
+    const stale30Students = monitoredStudents
       .filter((s) => {
-        // Shell customers created for school-selection plans are not real CRM students
-        if (s.email?.toLowerCase().endsWith("@school-selection.local")) return false;
-        const last =
-          s.lastMeetingDate ||
-          s.lastContactDate ||
-          s.profile?.last_meeting_date ||
-          s.profile?.last_contact_date;
-        if (!last) return true;
-        return new Date(last).getTime() < thirtyDaysAgo;
+        const lastCompleted = lastCompletedMeetingMs(s.id, meetings);
+        const lastContact = contactMsOf(s);
+        const lastEngagement = Math.max(
+          lastCompleted ?? Number.NEGATIVE_INFINITY,
+          lastContact ?? Number.NEGATIVE_INFINITY,
+        );
+        if (!Number.isFinite(lastEngagement) || lastEngagement === Number.NEGATIVE_INFINITY) {
+          return true;
+        }
+        return lastEngagement < thirtyDaysAgo;
       })
       .map((s) => {
-        const mentor =
-          mentors.find((m) => m.id === s.mentorId) ||
-          mentors.find((m) => (m.studentIds || []).includes(s.id));
-        const lastRaw =
-          s.lastMeetingDate ||
-          s.lastContactDate ||
-          s.profile?.last_meeting_date ||
-          s.profile?.last_contact_date ||
-          null;
-        const lastMs = lastRaw ? new Date(lastRaw).getTime() : Number.NEGATIVE_INFINITY;
-        return {
-          id: s.id,
-          name: s.name || "Unnamed student",
-          email: s.email || "",
-          avatar: s.avatar || undefined,
-          mentorId: mentor?.id || null,
-          mentorName: mentor?.name?.trim() || "Unassigned",
-          lastActivity: lastRaw,
-          lastMs: Number.isFinite(lastMs) ? lastMs : Number.NEGATIVE_INFINITY,
-        };
+        const lastCompleted = lastCompletedMeetingMs(s.id, meetings);
+        const lastContact = contactMsOf(s);
+        const lastEngagement = Math.max(
+          lastCompleted ?? Number.NEGATIVE_INFINITY,
+          lastContact ?? Number.NEGATIVE_INFINITY,
+        );
+        const days =
+          Number.isFinite(lastEngagement) && lastEngagement !== Number.NEGATIVE_INFINITY
+            ? daysBetween(lastEngagement)
+            : null;
+        return toMonitorRow(s, days);
       })
-      // Longest inactivity first (never / oldest activity → top)
-      .sort((a, b) => a.lastMs - b.lastMs || a.name.localeCompare(b.name));
+      .sort(
+        (a, b) =>
+          (b.days ?? Number.POSITIVE_INFINITY) - (a.days ?? Number.POSITIVE_INFINITY) ||
+          a.name.localeCompare(b.name),
+      );
+
+    const stale60Students = monitoredStudents
+      .filter((s) => {
+        const lastCompleted = lastCompletedMeetingMs(s.id, meetings);
+        if (lastCompleted == null) return true;
+        return lastCompleted < sixtyDaysAgo;
+      })
+      .map((s) => {
+        const lastCompleted = lastCompletedMeetingMs(s.id, meetings);
+        const days = lastCompleted != null ? daysBetween(lastCompleted) : null;
+        return toMonitorRow(s, days);
+      })
+      .sort(
+        (a, b) =>
+          (b.days ?? Number.POSITIVE_INFINITY) - (a.days ?? Number.POSITIVE_INFINITY) ||
+          a.name.localeCompare(b.name),
+      );
 
     const unassignedStudents = students
       .filter((s) => {
-        if (s.email?.toLowerCase().endsWith("@school-selection.local")) return false;
-        return !s.mentorId;
+        if (isShellStudent(s)) return false;
+        return !(s.mentorId || s.profile?.mentor_id);
       })
       .map((s) => ({
         id: s.id,
@@ -248,7 +487,7 @@ export function AdminDashboardView() {
         : null;
 
     // Retention = students with contact/meeting activity in the last 90 days
-    const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    const ninetyDaysAgo = Date.now() - 90 * DAY_MS;
     const retained = students.filter((s) => {
       const last =
         s.lastMeetingDate ||
@@ -274,8 +513,12 @@ export function AdminDashboardView() {
       conversionRate: Math.round(conversionRate),
       avgReadiness,
       readinessDist,
-      inactiveCount: inactiveStudents.length,
-      inactiveStudents,
+      noNextMeetingCount: noNextMeetingStudents.length,
+      noNextMeetingStudents,
+      stale30Count: stale30Students.length,
+      stale30Students,
+      stale60Count: stale60Students.length,
+      stale60Students,
       unassignedCount: unassignedStudents.length,
       unassignedStudents,
       avgCompliance,
@@ -577,33 +820,94 @@ export function AdminDashboardView() {
         </div>
       </div>
 
-      {/* Student Inactivity Callout */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl lg:rounded-3xl p-5 lg:p-8 relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 lg:gap-6">
-          <div className="flex items-center gap-4 lg:gap-6">
-            <div className="p-3 lg:p-4 bg-amber-500/10 rounded-xl lg:rounded-2xl border border-amber-500/20 shrink-0">
-              <Clock className="w-6 h-6 lg:w-8 lg:h-8 text-amber-500" />
+      {/* Student Monitor */}
+      <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:rounded-3xl lg:p-8">
+        <div className="relative z-10 space-y-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-center gap-4 lg:gap-6">
+              <div className="shrink-0 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 lg:rounded-2xl lg:p-4">
+                <Clock className="h-6 w-6 text-amber-500 lg:h-8 lg:w-8" />
+              </div>
+              <div>
+                <h3 className="mb-1 text-lg font-bold text-white lg:text-2xl">
+                  Student Monitor
+                </h3>
+                <p className="text-sm text-slate-400 lg:text-base">
+                  Tracking schedule gaps and overdue completed meetings.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg lg:text-2xl font-bold text-white mb-1">Student Inactivity Monitor</h3>
-              <p className="text-sm lg:text-base text-slate-400">
-                <span className="text-amber-400 font-bold">{stats.inactiveCount} student{stats.inactiveCount === 1 ? "" : "s"}</span>{" "}
-                with no meeting/contact in the last 30 days.
-              </p>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-amber-500/30 bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 hover:text-amber-200"
+              onClick={() => {
+                setMonitorReportTab("no_next");
+                setInactivityReportOpen(true);
+              }}
+              disabled={studentsLoading}
+            >
+              View report
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="border-amber-500/30 bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 hover:text-amber-200"
-            onClick={() => setInactivityReportOpen(true)}
-            disabled={studentsLoading}
-          >
-            Show report
-          </Button>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => {
+                setMonitorReportTab("no_next");
+                setInactivityReportOpen(true);
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-left transition-colors hover:border-rose-500/30"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                No next meeting
+              </p>
+              <p className="mt-2 text-2xl font-black tabular-nums text-rose-400">
+                {studentsLoading ? "…" : stats.noNextMeetingCount}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Students without an upcoming session</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMonitorReportTab("stale_30");
+                setInactivityReportOpen(true);
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-left transition-colors hover:border-amber-500/30"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                No engagement 30+ days
+              </p>
+              <p className="mt-2 text-2xl font-black tabular-nums text-amber-400">
+                {studentsLoading ? "…" : stats.stale30Count}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                No completed meeting/notes or message in 30+ days
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMonitorReportTab("stale_60");
+                setInactivityReportOpen(true);
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-left transition-colors hover:border-rose-500/30"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                No completed meeting 60+ days
+              </p>
+              <p className="mt-2 text-2xl font-black tabular-nums text-rose-400">
+                {studentsLoading ? "…" : stats.stale60Count}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                No completed meeting with notes in 60+ days
+              </p>
+            </button>
+          </div>
         </div>
-        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none hidden lg:block">
+        <div className="pointer-events-none absolute right-0 top-0 hidden p-12 opacity-5 lg:block">
           <Hourglass size={160} className="text-amber-500" />
         </div>
       </div>
@@ -611,67 +915,79 @@ export function AdminDashboardView() {
       <Modal
         open={inactivityReportOpen}
         onClose={() => setInactivityReportOpen(false)}
-        title="Student Inactivity Report"
-        description="Ranking students by time between meetings (Longest to Shortest)"
-        size="lg"
+        title="Student Monitor Report"
+        description="Students needing schedule or outreach attention — sorted longest wait first"
+        size="2xl"
+        fullHeight
         footer={
           <Button
             type="button"
             variant="secondary"
             onClick={() => setInactivityReportOpen(false)}
-            className="rounded-xl px-5"
+            className="rounded-xl px-6"
           >
             Close Report
           </Button>
         }
       >
-        {stats.inactiveStudents.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-10 text-center">
-            <p className="text-sm text-slate-400">No inactive students right now.</p>
-          </div>
-        ) : (
-          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/50">
-            <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3 border-b border-slate-800 px-4 py-3 sm:px-5">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                Student
-              </p>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                Mentor
-              </p>
-            </div>
-            <div className="max-h-[min(52vh,420px)] overflow-y-auto">
-              {stats.inactiveStudents.map((row) => (
-                <div
-                  key={row.id}
-                  className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-center gap-3 border-b border-slate-800/80 px-4 py-3.5 last:border-b-0 sm:px-5"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Avatar
-                      name={row.name}
-                      src={row.avatar}
-                      size="sm"
-                      className="h-9 w-9 rounded-lg bg-slate-800 text-slate-300"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">{row.name}</p>
-                      {row.email ? (
-                        <p className="truncate text-xs text-slate-500">{row.email}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                  <p
-                    className={`min-w-0 truncate text-sm font-medium ${
-                      row.mentorId ? "text-slate-200" : "text-slate-400"
-                    }`}
-                    title={row.mentorName}
-                  >
-                    {row.mentorName}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <Tabs
+          defaultValue="no_next"
+          value={monitorReportTab}
+          onValueChange={(v) => setMonitorReportTab(v as MonitorReportTab)}
+          className="flex h-full min-h-0 flex-col space-y-5"
+        >
+          <TabsList className="flex h-auto w-full flex-wrap gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-1.5">
+            <TabsTrigger
+              value="no_next"
+              className="flex-1 justify-center px-4 py-2.5 text-sm font-semibold"
+            >
+              No next meeting
+              <span className="ml-1.5 rounded-md bg-slate-800/80 px-1.5 py-0.5 text-xs tabular-nums text-slate-300">
+                {stats.noNextMeetingCount}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="stale_30"
+              className="flex-1 justify-center px-4 py-2.5 text-sm font-semibold"
+            >
+              30+ days
+              <span className="ml-1.5 rounded-md bg-slate-800/80 px-1.5 py-0.5 text-xs tabular-nums text-slate-300">
+                {stats.stale30Count}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="stale_60"
+              className="flex-1 justify-center px-4 py-2.5 text-sm font-semibold"
+            >
+              60+ days
+              <span className="ml-1.5 rounded-md bg-slate-800/80 px-1.5 py-0.5 text-xs tabular-nums text-slate-300">
+                {stats.stale60Count}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="no_next" className="mt-0 min-h-0 flex-1">
+            <MonitorStudentList
+              rows={stats.noNextMeetingStudents}
+              empty="All students have a next meeting scheduled."
+              daysHeader="Since last meeting"
+            />
+          </TabsContent>
+          <TabsContent value="stale_30" className="mt-0 min-h-0 flex-1">
+            <MonitorStudentList
+              rows={stats.stale30Students}
+              empty="No students without engagement in the last 30 days."
+              daysHeader="Days since engagement"
+            />
+          </TabsContent>
+          <TabsContent value="stale_60" className="mt-0 min-h-0 flex-1">
+            <MonitorStudentList
+              rows={stats.stale60Students}
+              empty="No students without a completed meeting in the last 60 days."
+              daysHeader="Days since completed meeting"
+            />
+          </TabsContent>
+        </Tabs>
       </Modal>
 
       {/* Unassigned Students Callout */}

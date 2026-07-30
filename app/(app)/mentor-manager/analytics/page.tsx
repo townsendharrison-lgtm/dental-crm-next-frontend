@@ -21,23 +21,13 @@ export default function MentorManagerAnalyticsPage() {
     isFetching,
   } = useAdminAnalytics(true);
 
-  const pendingIds = useMemo(
-    () =>
-      new Set(
-        ops.assignments
-          .filter((a) => a.status === "PENDING")
-          .map((a) => a.studentId || a.student_id)
-          .filter(Boolean) as string[],
-      ),
-    [ops.assignments],
-  );
-
   const unassignedCount = useMemo(
     () =>
-      ops.students.filter(
-        (s) => !(s.mentorId || s.profile?.mentor_id) && !pendingIds.has(s.id),
-      ).length,
-    [ops.students, pendingIds],
+      ops.students.filter((s) => {
+        if (s.email?.toLowerCase().endsWith("@school-selection.local")) return false;
+        return !(s.mentorId || s.profile?.mentor_id);
+      }).length,
+    [ops.students],
   );
 
   if (ops.isLoading || platformLoading) {

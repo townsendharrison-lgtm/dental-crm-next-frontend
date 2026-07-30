@@ -11,7 +11,8 @@ import {
   UserPlus,
   UserMinus,
 } from "lucide-react";
-import { parseLocalDate, isUpcomingMeetingDate } from "@/lib/utils/dateUtils";
+import { parseLocalDate, isUpcomingMeetingDate, formatMeetingLocal } from "@/lib/utils/dateUtils";
+import { TimezoneHint } from "@/components/ui/TimezoneHint";
 import { preferredDatScore } from "@/lib/utils/studentMetrics";
 import type { Student, Meeting, StudentAssignment } from "@/lib/types";
 import { ReadinessStatus } from "@/lib/types";
@@ -177,9 +178,9 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
     });
   }, [assignedStudents, pendingAssignments, allStudents]);
 
-  const getNextMeetingDate = (studentId: string) => {
+  const getNextMeeting = (studentId: string) => {
     const now = new Date();
-    const upcoming = meetings
+    return meetings
       .filter(
         (m) =>
           (m.studentId || m.student_id) === studentId &&
@@ -189,6 +190,10 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
       .sort(
         (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
       )[0];
+  };
+
+  const getNextMeetingDate = (studentId: string) => {
+    const upcoming = getNextMeeting(studentId);
     return upcoming
       ? parseLocalDate(upcoming.date).toLocaleDateString("en-US", {
           month: "short",
@@ -198,25 +203,23 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
       : "Not Scheduled";
   };
 
-  const getNextMeetingLabel = (studentId: string) => {
-    const now = new Date();
-    const upcoming = meetings
-      .filter(
-        (m) =>
-          (m.studentId || m.student_id) === studentId &&
-          !m.completed &&
-          isUpcomingMeetingDate(m.date, now),
-      )
-      .sort(
-        (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
-      )[0];
+  const renderNextMeetingLabel = (studentId: string) => {
+    const upcoming = getNextMeeting(studentId);
     if (!upcoming) return "Not Scheduled";
-    const d = parseLocalDate(upcoming.date);
     const title = upcoming.title?.trim();
-    if (title) {
-      return `${title} · ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
-    }
-    return getNextMeetingDate(studentId);
+    const when = formatMeetingLocal(upcoming.date, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="line-clamp-2">{title ? `${title} · ${when}` : when}</span>
+        {upcoming.date.includes("T") ? <TimezoneHint dateIso={upcoming.date} /> : null}
+      </span>
+    );
   };
 
   const filtered = roster.filter((row) => {
@@ -408,7 +411,7 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
             {filtered.map((row) => {
               const pending = !!row.pendingAssignment;
               const journey = journeyProgressOf(row);
-              const nextMeetingLabel = getNextMeetingLabel(row.id);
+              const nextMeetingLabel = renderNextMeetingLabel(row.id);
               const prevSession = row.lastMeetingDate || row.lastContactDate || null;
 
               return (

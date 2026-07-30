@@ -5,6 +5,7 @@ import { Check, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Form";
 import { cn } from "@/lib/utils/cn";
+import { getBrowserTimezone } from "@/lib/utils/dateUtils";
 
 const TIMEZONES = [
   "America/New_York",
@@ -55,7 +56,7 @@ export function AcceptAssignmentModal({
     if (!open) return;
     setSelectedTimes([]);
     setCustomTime("");
-    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+    setTimezone(getBrowserTimezone());
     setWelcomeMessage(welcomeTemplate);
   }, [open, welcomeTemplate]);
 

@@ -8,6 +8,7 @@ interface RawUser {
   name: string;
   role: UserRole;
   avatar?: string;
+  timezone?: string | null;
   weekly_lead_goal?: number;
   monthly_lead_goal?: number;
 }
@@ -42,8 +43,12 @@ export const usersApi = {
     return mapUser(user);
   },
 
-  /** Update current user's display name (and optional avatar URL). */
-  updateProfile: async (updates: { name?: string; avatar?: string }): Promise<RawUser> => {
+  /** Update current user's display name, avatar, and/or timezone. */
+  updateProfile: async (updates: {
+    name?: string;
+    avatar?: string;
+    timezone?: string;
+  }): Promise<RawUser> => {
     return await apiPut<RawUser>("/api/users/profile", updates);
   },
 

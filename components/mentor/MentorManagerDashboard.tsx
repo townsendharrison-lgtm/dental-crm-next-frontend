@@ -196,13 +196,23 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
     () =>
       studentAssignments
         .filter((a) => a.status === "PENDING")
-        .map((a) => a.studentId)
+        .map((a) => a.studentId || a.student_id)
         .filter(Boolean) as string[],
     [studentAssignments],
   );
 
+  // Match admin: anyone without an accepted mentor (including pending acceptance) counts as unassigned.
   const unassignedStudents = useMemo(
-    () => students.filter((s) => !s.mentorId && !pendingStudentIds.includes(s.id)),
+    () =>
+      students.filter((s) => {
+        if (s.email?.toLowerCase().endsWith("@school-selection.local")) return false;
+        return !(s.mentorId || s.profile?.mentor_id);
+      }),
+    [students],
+  );
+
+  const pendingStudents = useMemo(
+    () => students.filter((s) => pendingStudentIds.includes(s.id)),
     [students, pendingStudentIds],
   );
 
@@ -524,9 +534,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
             router.replace(`${pathname}?${params.toString()}`, { scroll: false });
           }}
           unassignedStudents={filterStudents(unassignedStudents)}
-          pendingStudents={filterStudents(
-            students.filter((s) => pendingStudentIds.includes(s.id)),
-          )}
+          pendingStudents={filterStudents(pendingStudents)}
           assignedStudents={filterStudents(students.filter((s) => s.mentorId))}
           studentAssignments={studentAssignments}
           mentors={mentors}
@@ -840,13 +848,40 @@ function AssignmentsPanel({
               ) : (
                 <ul className="divide-y divide-slate-800">
                   {unassignedStudents.map((student) => {
+                    const assignment = studentAssignments.find(
+                      (a) =>
+                        (a.studentId || a.student_id) === student.id &&
+                        a.status === "PENDING",
+                    );
+                    const pendingMentor = assignment
+                      ? mentors.find(
+                          (m) => m.id === (assignment.mentorId || assignment.mentor_id),
+                        )
+                      : undefined;
                     const picked = assignPick[student.id] || "";
+                    const isPending = !!assignment;
+
                     return (
                       <li
                         key={student.id}
                         className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5"
                       >
-                        <StudentRow student={student} />
+                        <div className="min-w-0">
+                          <StudentRow student={student} />
+                          {isPending && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 sm:pl-11">
+                              <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400">
+                                Pending
+                              </span>
+                              <span>
+                                Waiting on{" "}
+                                <span className="font-medium text-amber-400">
+                                  {pendingMentor ? displayName(pendingMentor) : "mentor acceptance"}
+                                </span>
+                              </span>
+                            </div>
+                          )}
+                        </div>
                         <div className="flex w-full items-center gap-2 sm:w-[280px] sm:shrink-0">
                           <div className="min-w-0 flex-1">
                             <SelectMenu
@@ -854,12 +889,19 @@ function AssignmentsPanel({
                               onChange={(mentorId) =>
                                 setAssignPick((prev) => ({ ...prev, [student.id]: mentorId }))
                               }
-                              options={[{ value: "", label: "Select mentor…" }, ...mentorOptions]}
-                              placeholder="Select mentor…"
+                              options={[
+                                {
+                                  value: "",
+                                  label: isPending ? "Reassign…" : "Select mentor…",
+                                },
+                                ...mentorOptions,
+                              ]}
+                              placeholder={isPending ? "Reassign…" : "Select mentor…"}
                             />
                           </div>
                           <Button
                             size="sm"
+                            variant={isPending ? "secondary" : "primary"}
                             disabled={!picked}
                             onClick={() => {
                               if (!picked) return;
@@ -871,7 +913,7 @@ function AssignmentsPanel({
                               });
                             }}
                           >
-                            Assign
+                            {isPending ? "Reassign" : "Assign"}
                           </Button>
                         </div>
                       </li>
@@ -894,9 +936,13 @@ function AssignmentsPanel({
                 <ul className="divide-y divide-slate-800">
                   {pendingStudents.map((student) => {
                     const assignment = studentAssignments.find(
-                      (a) => a.studentId === student.id && a.status === "PENDING",
+                      (a) =>
+                        (a.studentId || a.student_id) === student.id &&
+                        a.status === "PENDING",
                     );
-                    const mentor = mentors.find((m) => m.id === assignment?.mentorId);
+                    const mentor = mentors.find(
+                      (m) => m.id === (assignment?.mentorId || assignment?.mentor_id),
+                    );
                     const picked = assignPick[student.id] || "";
                     return (
                       <li

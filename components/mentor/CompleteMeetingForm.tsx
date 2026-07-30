@@ -21,6 +21,7 @@ import {
   DatePicker,
   TimePicker,
   SelectMenu,
+  TimezoneHint,
 } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import {
@@ -467,7 +468,20 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                   <FormField label="Date" htmlFor="next-meeting-date">
                     <DatePicker value={nextMeetingDateOnly} onChange={setNextMeetingDateOnly} />
                   </FormField>
-                  <FormField label="Time" htmlFor="next-meeting-time">
+                  <FormField
+                    label={
+                      <>
+                        Time
+                        <TimezoneHint
+                          date={nextMeetingDateOnly}
+                          time={nextMeetingTime}
+                          ampm={nextMeetingAmpm}
+                          timeZone={nextMeetingTimezone}
+                        />
+                      </>
+                    }
+                    htmlFor="next-meeting-time"
+                  >
                     <TimePicker
                       time={nextMeetingTime}
                       ampm={nextMeetingAmpm}

@@ -74,11 +74,27 @@ export function Modal({
         )}
       >
         {(title || description) && (
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-800 p-5">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-800 p-5 sm:p-6">
             <div>
-              {title ? <h2 className="text-lg font-semibold">{title}</h2> : null}
+              {title ? (
+                <h2
+                  className={cn(
+                    "font-semibold text-white",
+                    size === "2xl" || size === "full" ? "text-xl sm:text-2xl" : "text-lg",
+                  )}
+                >
+                  {title}
+                </h2>
+              ) : null}
               {description ? (
-                <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+                <p
+                  className={cn(
+                    "mt-1 text-muted-foreground",
+                    size === "2xl" || size === "full" ? "text-sm sm:text-base" : "text-sm",
+                  )}
+                >
+                  {description}
+                </p>
               ) : null}
             </div>
             <button
@@ -92,7 +108,7 @@ export function Modal({
         )}
         <div
           className={cn(
-            "p-5",
+            size === "2xl" || size === "full" ? "p-5 sm:p-6" : "p-5",
             fullHeight
               ? "min-h-0 flex-1 overflow-y-auto overscroll-contain"
               : "max-h-[70vh] overflow-y-auto",
@@ -101,7 +117,12 @@ export function Modal({
           {children}
         </div>
         {footer ? (
-          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-800 bg-slate-800/30 p-4">
+          <div
+            className={cn(
+              "flex shrink-0 items-center justify-end gap-2 border-t border-slate-800 bg-slate-800/30",
+              size === "2xl" || size === "full" ? "p-4 sm:p-5" : "p-4",
+            )}
+          >
             {footer}
           </div>
         ) : null}

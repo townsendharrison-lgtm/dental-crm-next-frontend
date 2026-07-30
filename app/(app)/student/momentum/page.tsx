@@ -260,8 +260,14 @@ export default function StudentMomentumPage() {
         notifications={notifications}
         surveys={pendingSurveys}
         onSendMessage={async (text, receiverId) => {
-          const conv = await messagesApi.create({ participantIds: [receiverId] });
-          await messagesApi.sendMessage(conv.id, text);
+          try {
+            const conv = await messagesApi.create({ participantIds: [receiverId] });
+            await messagesApi.sendMessage(conv.id, text);
+          } catch (err: any) {
+            const message =
+              err?.response?.data?.error || err?.message || "Failed to send message";
+            throw new Error(message);
+          }
         }}
         onNavigate={handleNavigate}
         onOpenNotification={handleOpenNotification}

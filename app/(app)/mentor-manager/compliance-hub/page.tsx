@@ -18,15 +18,11 @@ export default function MentorManagerComplianceHubPage() {
     );
   }
 
-  const pendingIds = new Set(
-    ops.assignments
-      .filter((a) => a.status === "PENDING")
-      .map((a) => a.studentId || a.student_id)
-      .filter(Boolean) as string[],
-  );
-  const unassignedCount = ops.students.filter(
-    (s) => !(s.mentorId || s.profile?.mentor_id) && !pendingIds.has(s.id),
-  ).length;
+  // Match admin: include pending-acceptance students (mentor_id cleared until accept).
+  const unassignedCount = ops.students.filter((s) => {
+    if (s.email?.toLowerCase().endsWith("@school-selection.local")) return false;
+    return !(s.mentorId || s.profile?.mentor_id);
+  }).length;
 
   return (
     <ComplianceHubView
@@ -34,6 +30,10 @@ export default function MentorManagerComplianceHubPage() {
       insights={ops.insights}
       alerts={ops.alerts}
       rows={ops.complianceRows}
+      students={ops.students}
+      mentors={ops.mentors}
+      meetings={ops.meetings}
+      actionItems={ops.actionItems}
       unassignedCount={unassignedCount}
       onOpenChat={ops.onOpenChat}
       onSendNudge={ops.onSendNudge}
@@ -41,6 +41,8 @@ export default function MentorManagerComplianceHubPage() {
       mentorsHref="/mentor-manager/mentors"
       nudgesHref="/mentor-manager/alerts"
       slaHref="/mentor-manager/reporting"
+      scheduleHref="/mentor-manager/schedule"
+      tasksHref="/mentor-manager/tasks"
     />
   );
 }

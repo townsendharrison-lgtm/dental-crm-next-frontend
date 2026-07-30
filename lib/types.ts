@@ -36,6 +36,8 @@ export interface AuthUser {
   name: string;
   role: UserRole;
   avatar?: string;
+  /** IANA timezone captured from the device (e.g. America/New_York). */
+  timezone?: string;
   createdAt?: string;
 }
 

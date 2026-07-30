@@ -40,6 +40,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { formatMeetingLocal, parseLocalDate } from "@/lib/utils/dateUtils";
+import { MeetingTimeWithHint } from "@/components/ui/TimezoneHint";
 import { useMentor } from "@/lib/hooks/useMentors";
 import ApplicationTracker from "./ApplicationTracker";
 import { Button } from "@/components/ui/Button";
@@ -468,7 +469,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       Next Meeting: {attentionMeeting.title || "Mentorship Session"}
                     </h4>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-100">
-                      {formatMeetingDate(attentionMeeting.date)}
+                      <span className="inline-flex items-center gap-1.5 normal-case tracking-normal">
+                        <MeetingTimeWithHint dateIso={attentionMeeting.date} />
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -844,14 +847,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       weekday: "long",
                     })}
                   </p>
-                  <p className="text-xl font-black text-white md:text-2xl">
-                    {formatMeetingLocal(nextMeeting.date, {
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                      timeZoneName: "short",
-                    })}
+                  <p className="flex items-center justify-center gap-2 text-xl font-black text-white md:text-2xl">
+                    <MeetingTimeWithHint
+                      dateIso={nextMeeting.date}
+                      options={{
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        timeZoneName: "short",
+                      }}
+                    />
                   </p>
                   <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-indigo-300/40">
                     Your local time
