@@ -12,6 +12,9 @@ export function useNotifications(unreadOnly = false, enabled = true) {
     queryKey: queryKeys.notifications.all(unreadOnly),
     queryFn: () => notificationsApi.getNotifications(unreadOnly),
     enabled,
+    // Mentors often miss Realtime; poll so assignment alerts show up quickly.
+    refetchInterval: enabled ? 20_000 : false,
+    refetchOnWindowFocus: true,
   });
 }
 

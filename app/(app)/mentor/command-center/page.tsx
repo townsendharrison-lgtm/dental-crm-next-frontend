@@ -65,12 +65,13 @@ export default function MentorCommandCenterPage() {
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
   const [pushAcceptAssignmentId, setPushAcceptAssignmentId] = useState<string | null>(null);
 
-  // Handle Accept / Decline CTAs from push notifications
+  // Handle Accept / Decline CTAs from push notifications (and bare assignment deep links)
   useEffect(() => {
     const assignmentId = searchParams.get("assignmentId");
-    const action = (searchParams.get("assignmentAction") || "").toLowerCase();
-    if (!assignmentId || (action !== "accept" && action !== "decline")) return;
-    if (!user) return;
+    if (!assignmentId || !user) return;
+
+    const action = (searchParams.get("assignmentAction") || "accept").toLowerCase();
+    if (action !== "accept" && action !== "decline") return;
 
     const key = `${action}:${assignmentId}`;
     if (pushActionHandled.current === key) return;

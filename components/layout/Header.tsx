@@ -31,6 +31,7 @@ import { supabaseClient } from "@/lib/utils/supabase";
 import {
   initializeFirebase,
   requestNotificationPermission,
+  ensureFcmTokenRegistered,
   onForegroundMessage,
 } from "@/lib/utils/firebase";
 import {
@@ -181,6 +182,21 @@ function NotificationBell() {
     }
   }, []);
 
+  // Mentors/setters/admins: keep FCM token registered whenever permission is already granted
+  useEffect(() => {
+    if (!user?.id || !token) return;
+    if (notifPermission !== "granted") return;
+    if (
+      actualRole !== "MENTOR" &&
+      actualRole !== "MENTOR_MANAGER" &&
+      actualRole !== "ADMIN" &&
+      actualRole !== "SETTER"
+    ) {
+      return;
+    }
+    void ensureFcmTokenRegistered();
+  }, [user?.id, token, notifPermission, actualRole]);
+
   useEffect(() => {
     const clickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -316,6 +332,43 @@ function NotificationBell() {
     };
   }, [queryClient, actualRole]);
 
+  // Service worker Accept/Decline fallback when navigate() is unavailable
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+    const onMessage = (event: MessageEvent) => {
+      const payload = event.data;
+      if (!payload || payload.type !== "NOTIFICATION_ACTION") return;
+
+      const data = (payload.data || {}) as Record<string, string>;
+      const url =
+        typeof payload.url === "string"
+          ? payload.url
+          : data.acceptLink || data.declineLink || data.link || "";
+
+      if (url) {
+        try {
+          const parsed = new URL(url, window.location.origin);
+          router.push(`${parsed.pathname}${parsed.search}`);
+          return;
+        } catch {
+          /* fall through */
+        }
+      }
+
+      if (data.assignmentId) {
+        const action = payload.action === "decline" ? "decline" : "accept";
+        const id = encodeURIComponent(String(data.assignmentId));
+        router.push(
+          `/mentor/command-center?assignmentAction=${action}&assignmentId=${id}`,
+        );
+      }
+    };
+
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [router]);
+
   const handleEnablePush = async () => {
     if (!token) return;
     const initialized = initializeFirebase();
@@ -326,7 +379,9 @@ function NotificationBell() {
     const fcmToken = await requestNotificationPermission(token);
     if (fcmToken) {
       setNotifPermission("granted");
-      toast.success("Push notifications active!");
+      toast.success("Push notifications active!", {
+        description: "You'll get alerts for new student assignments and messages.",
+      });
     } else {
       setNotifPermission(Notification.permission);
       if (Notification.permission === "denied") {
@@ -335,6 +390,19 @@ function NotificationBell() {
         });
       }
     }
+  };
+
+  const openAssignmentAction = (
+    assignmentId: string,
+    action: "accept" | "decline" | "open",
+  ) => {
+    const id = encodeURIComponent(assignmentId);
+    if (action === "decline") {
+      router.push(`/mentor/command-center?assignmentAction=decline&assignmentId=${id}`);
+      return;
+    }
+    // "accept" and "open" both open the Accept modal flow
+    router.push(`/mentor/command-center?assignmentAction=accept&assignmentId=${id}`);
   };
 
   const handleMarkAllRead = () => {
@@ -363,7 +431,7 @@ function NotificationBell() {
       const relatedId = notif.related_id || (notif as { relatedId?: string }).relatedId;
       router.push(
         relatedId
-          ? `/mentor/command-center?assignmentId=${encodeURIComponent(relatedId)}`
+          ? `/mentor/command-center?assignmentAction=accept&assignmentId=${encodeURIComponent(relatedId)}`
           : "/mentor/command-center",
       );
       return;
@@ -406,7 +474,6 @@ function NotificationBell() {
     }
   };
 
-  const isAdmin = role === "ADMIN";
   const showInstallPrompt =
     !isStandalone &&
     typeof window !== "undefined" &&
@@ -514,8 +581,12 @@ function NotificationBell() {
             </div>
           </div>
 
-          {/* Admin setup (compact) */}
-          {isAdmin && (notifPermission !== "unsupported" || showInstallPrompt) && (
+          {/* Push setup — mentors need this for assignment Accept/Decline pushes */}
+          {(actualRole === "ADMIN" ||
+            actualRole === "MENTOR" ||
+            actualRole === "MENTOR_MANAGER" ||
+            actualRole === "SETTER") &&
+            (notifPermission !== "unsupported" || showInstallPrompt) && (
             <div className="space-y-2 border-b border-slate-800 bg-slate-950/30 px-3 py-2.5">
               {notifPermission !== "granted" && notifPermission !== "unsupported" && (
                 <button
@@ -531,7 +602,9 @@ function NotificationBell() {
                     <span className="block text-[10px] text-slate-500">
                       {notifPermission === "denied"
                         ? "Blocked in browser settings"
-                        : "Get live lead notifications"}
+                        : actualRole === "MENTOR"
+                          ? "Get assignment Accept / Decline alerts on this device"
+                          : "Get live alerts on this device"}
                     </span>
                   </span>
                 </button>
@@ -575,57 +648,98 @@ function NotificationBell() {
                   const when = formatNotifTime(notifCreatedAt(notif));
                   const title = cleanNotifTitle(notif.title || "Notification");
                   const message = (notif.message || "").trim();
+                  const category = (notif.category || "").toUpperCase();
+                  const relatedId =
+                    notif.related_id || (notif as { relatedId?: string }).relatedId || "";
+                  const isPendingAssignment =
+                    category === "ASSIGNMENT" &&
+                    !!relatedId &&
+                    (role === "MENTOR" || role === "MENTOR_MANAGER") &&
+                    !/declined/i.test(notif.title || "");
 
                   return (
                     <li key={notif.id}>
-                      <button
-                        type="button"
-                        onClick={() => handleNotificationClick(notif)}
+                      <div
                         className={cn(
-                          "flex w-full gap-3 px-4 py-3.5 text-left transition-colors",
+                          "px-4 py-3.5 transition-colors",
                           isUnread
                             ? "bg-indigo-500/[0.06] hover:bg-indigo-500/10"
                             : "hover:bg-slate-800/50",
                         )}
                       >
-                        <div
-                          className={cn(
-                            "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
-                            visual.tone,
-                          )}
+                        <button
+                          type="button"
+                          onClick={() => handleNotificationClick(notif)}
+                          className="flex w-full gap-3 text-left"
                         >
-                          <Icon className="h-4 w-4" />
-                        </div>
+                          <div
+                            className={cn(
+                              "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+                              visual.tone,
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </div>
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start gap-2">
-                            <p
-                              className={cn(
-                                "min-w-0 flex-1 text-[13px] leading-snug",
-                                isUnread
-                                  ? "font-semibold text-white"
-                                  : "font-medium text-slate-200",
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start gap-2">
+                              <p
+                                className={cn(
+                                  "min-w-0 flex-1 text-[13px] leading-snug",
+                                  isUnread
+                                    ? "font-semibold text-white"
+                                    : "font-medium text-slate-200",
+                                )}
+                              >
+                                {title}
+                              </p>
+                              {isUnread && (
+                                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
                               )}
-                            >
-                              {title}
-                            </p>
-                            {isUnread && (
-                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
+                            </div>
+                            {message && (
+                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
+                                {message}
+                              </p>
+                            )}
+                            {when && (
+                              <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-500">
+                                <Clock className="h-2.5 w-2.5" />
+                                {when}
+                              </p>
                             )}
                           </div>
-                          {message && (
-                            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
-                              {message}
-                            </p>
-                          )}
-                          {when && (
-                            <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-500">
-                              <Clock className="h-2.5 w-2.5" />
-                              {when}
-                            </p>
-                          )}
-                        </div>
-                      </button>
+                        </button>
+
+                        {isPendingAssignment && (
+                          <div className="mt-3 flex gap-2 pl-12">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteNotificationMutation.mutate(notif.id);
+                                setIsOpen(false);
+                                openAssignmentAction(String(relatedId), "accept");
+                              }}
+                              className="flex-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-emerald-500"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteNotificationMutation.mutate(notif.id);
+                                setIsOpen(false);
+                                openAssignmentAction(String(relatedId), "decline");
+                              }}
+                              className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-[11px] font-bold text-slate-200 transition-colors hover:bg-slate-700"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </li>
                   );
                 })}

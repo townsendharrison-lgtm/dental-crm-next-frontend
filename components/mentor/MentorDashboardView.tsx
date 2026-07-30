@@ -1053,33 +1053,81 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
             </span>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            {unreadNotifications.map((notif) => (
-              <button
-                key={notif.id}
-                type="button"
-                onClick={() => onMarkNotificationRead?.(notif.id)}
-                className={cn(
-                  "flex items-start gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-slate-900/80",
-                  notif.type === "URGENT"
-                    ? "border-rose-500/25 bg-rose-500/5 text-rose-200"
-                    : notif.type === "WARNING"
-                      ? "border-amber-500/25 bg-amber-500/5 text-amber-200"
-                      : "border-indigo-500/25 bg-indigo-500/5 text-indigo-200",
-                )}
-              >
-                <div className="mt-0.5 shrink-0">
-                  {notif.type === "URGENT" ? (
-                    <AlertCircle className="h-4 w-4" />
-                  ) : (
-                    <Info className="h-4 w-4" />
+            {unreadNotifications.map((notif) => {
+              const category = (notif.category || "").toUpperCase();
+              const relatedId =
+                notif.related_id || (notif as { relatedId?: string }).relatedId || "";
+              const isPendingAssignment =
+                category === "ASSIGNMENT" &&
+                !!relatedId &&
+                !/declined/i.test(notif.title || "");
+
+              return (
+                <div
+                  key={notif.id}
+                  className={cn(
+                    "flex flex-col gap-3 rounded-xl border p-3.5 text-left transition-colors",
+                    notif.type === "URGENT"
+                      ? "border-rose-500/25 bg-rose-500/5 text-rose-200"
+                      : notif.type === "WARNING"
+                        ? "border-amber-500/25 bg-amber-500/5 text-amber-200"
+                        : "border-indigo-500/25 bg-indigo-500/5 text-indigo-200",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isPendingAssignment) {
+                        setAcceptingAssignment(
+                          pendingAssignments.find((a) => a.id === relatedId) || null,
+                        );
+                        return;
+                      }
+                      onMarkNotificationRead?.(notif.id);
+                    }}
+                    className="flex w-full items-start gap-3 text-left"
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      {notif.type === "URGENT" ? (
+                        <AlertCircle className="h-4 w-4" />
+                      ) : (
+                        <Info className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="truncate text-sm font-semibold text-white">{notif.title}</h4>
+                      <p className="mt-0.5 text-xs opacity-80">{notif.message}</p>
+                    </div>
+                  </button>
+                  {isPendingAssignment && (
+                    <div className="flex gap-2 pl-7">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          setAcceptingAssignment(
+                            pendingAssignments.find((a) => a.id === relatedId) || null,
+                          );
+                        }}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={() => {
+                          onDeclineAssignment(String(relatedId));
+                          onMarkNotificationRead?.(notif.id);
+                        }}
+                      >
+                        Decline
+                      </Button>
+                    </div>
                   )}
                 </div>
-                <div className="min-w-0">
-                  <h4 className="truncate text-sm font-semibold text-white">{notif.title}</h4>
-                  <p className="mt-0.5 text-xs opacity-80">{notif.message}</p>
-                </div>
-              </button>
-            ))}
+              );
+            })}
             {surveys.map((survey) => (
               <div
                 key={survey.id}

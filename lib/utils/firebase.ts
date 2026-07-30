@@ -64,12 +64,12 @@ async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null
 
 /**
  * Request notification permission and get FCM token.
- * Sends the token to the backend for storage.
+ * Sends the token to the backend for storage via the authenticated API client.
  *
- * @param authToken - The user's Supabase auth token for backend API calls
+ * @param _authToken - Unused (kept for call-site compatibility); apiClient attaches the bearer.
  * @returns The FCM token string, or null if permission denied / error
  */
-export async function requestNotificationPermission(authToken: string): Promise<string | null> {
+export async function requestNotificationPermission(_authToken?: string): Promise<string | null> {
   if (!initializeFirebase() || !messagingInstance) return null;
 
   try {
@@ -80,11 +80,25 @@ export async function requestNotificationPermission(authToken: string): Promise<
       return null;
     }
 
-    // Register service worker
+    return await ensureFcmTokenRegistered();
+  } catch (error) {
+    console.error("Error requesting notification permission:", error);
+    return null;
+  }
+}
+
+/**
+ * If the browser already granted notification permission, (re)register the FCM
+ * token with the backend. Safe to call on every mentor session start.
+ */
+export async function ensureFcmTokenRegistered(): Promise<string | null> {
+  if (!initializeFirebase() || !messagingInstance) return null;
+  if (!isNotificationPermissionGranted()) return null;
+
+  try {
     const swRegistration = await registerServiceWorker();
     if (!swRegistration) return null;
 
-    // Get FCM token
     const token = await getToken(messagingInstance, {
       vapidKey,
       serviceWorkerRegistration: swRegistration,
@@ -95,30 +109,15 @@ export async function requestNotificationPermission(authToken: string): Promise<
       return null;
     }
 
-    console.log("🔑 FCM token obtained");
-
-    // Send token to backend
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
-    try {
-      await fetch(`${backendUrl}/api/notifications/register-token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          token,
-          deviceInfo: `${navigator.userAgent.substring(0, 100)}`,
-        }),
-      });
-      console.log("✅ FCM token registered with backend");
-    } catch (error) {
-      console.error("Failed to register FCM token with backend:", error);
-    }
-
+    const { notificationsApi } = await import("@/lib/api/notifications");
+    await notificationsApi.registerToken(
+      token,
+      typeof navigator !== "undefined" ? navigator.userAgent.substring(0, 100) : "Unknown",
+    );
+    console.log("✅ FCM token registered with backend");
     return token;
   } catch (error) {
-    console.error("Error requesting notification permission:", error);
+    console.error("Error registering FCM token:", error);
     return null;
   }
 }
@@ -148,17 +147,10 @@ export function onForegroundMessage(
 /**
  * Unregister the FCM token from the backend (call on logout).
  */
-export async function unregisterFCMToken(authToken: string, fcmToken: string): Promise<void> {
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+export async function unregisterFCMToken(_authToken: string, fcmToken: string): Promise<void> {
   try {
-    await fetch(`${backendUrl}/api/notifications/unregister-token`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({ token: fcmToken }),
-    });
+    const { notificationsApi } = await import("@/lib/api/notifications");
+    await notificationsApi.unregisterToken(fcmToken);
   } catch (error) {
     console.error("Failed to unregister FCM token:", error);
   }
