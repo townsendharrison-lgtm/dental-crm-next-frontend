@@ -45,13 +45,14 @@ export default function TasksPage() {
     }
     // Mentor managers assign only to mentors (+ themselves)
     if (role === "MENTOR_MANAGER") {
-      const list = mentors
-        .filter((m) => (m.role || "MENTOR") === "MENTOR")
-        .map((m) => ({
-          id: m.id,
-          name: m.name || m.email || "Mentor",
-          role: "MENTOR" as const,
-        }));
+      const list: Array<{ id: string; name: string; role: "MENTOR" | "MENTOR_MANAGER" }> =
+        mentors
+          .filter((m) => (m.role || "MENTOR") === "MENTOR")
+          .map((m) => ({
+            id: m.id,
+            name: m.name || m.email || "Mentor",
+            role: "MENTOR" as const,
+          }));
       if (!list.some((u) => u.id === user.id)) {
         list.unshift({
           id: user.id,
