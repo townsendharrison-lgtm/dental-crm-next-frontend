@@ -1,9 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { BookOpen, Plus, Trash2 } from "lucide-react";
+import { BookOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { TimelineCardColors, TimelineCardType, TimelineResourceLink } from "@/lib/types";
+import type {
+  TimelineBookshelfItem,
+  TimelineCardColors,
+  TimelineCardType,
+  TimelineResourceLink,
+} from "@/lib/types";
 import { DEFAULT_TIMELINE_CARD_COLORS } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea, FormField } from "@/components/ui/Form";
@@ -11,8 +16,13 @@ import { SelectMenu } from "@/components/ui/SelectMenu";
 import {
   useTimelineBookshelf,
   useCreateBookshelfItem,
+  useUpdateBookshelfItem,
   useDeleteBookshelfItem,
 } from "@/lib/hooks/useTimelineBookshelf";
+import {
+  ResourceLinksFields,
+  resourceLinksSummary,
+} from "@/components/timeline/ResourceLinksFields";
 import { cn } from "@/lib/utils/cn";
 
 const TYPE_KEYS: TimelineCardType[] = ["Meeting", "Milestone", "Task", "Other"];
@@ -21,6 +31,13 @@ const TYPE_OPTIONS: { value: TimelineCardType; label: string }[] = TYPE_KEYS.map
   value: t,
   label: t,
 }));
+
+const emptyForm = () => ({
+  title: "",
+  cardType: "Milestone" as TimelineCardType,
+  description: "",
+  resourceLinks: [] as TimelineResourceLink[],
+});
 
 interface AdminTimelineBookshelfPanelProps {
   cardColors: TimelineCardColors;
@@ -33,42 +50,62 @@ export default function AdminTimelineBookshelfPanel({
 }: AdminTimelineBookshelfPanelProps) {
   const { data, isLoading } = useTimelineBookshelf(true);
   const createItem = useCreateBookshelfItem();
+  const updateItem = useUpdateBookshelfItem();
   const deleteItem = useDeleteBookshelfItem();
-  const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    cardType: "Milestone" as TimelineCardType,
-    description: "",
-    resourceLinks: [] as TimelineResourceLink[],
-  });
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
 
   const items = (data?.items || []).filter((i) => i.scope === "GLOBAL");
   const colors = { ...DEFAULT_TIMELINE_CARD_COLORS, ...cardColors };
+  const saving = createItem.isPending || updateItem.isPending;
 
   const resetForm = () => {
-    setForm({
-      title: "",
-      cardType: "Milestone",
-      description: "",
-      resourceLinks: [],
-    });
-    setAdding(false);
+    setForm(emptyForm());
+    setEditingId(null);
+    setFormOpen(false);
   };
 
-  const handleCreate = async () => {
+  const startCreate = () => {
+    if (formOpen && !editingId) {
+      resetForm();
+      return;
+    }
+    setForm(emptyForm());
+    setEditingId(null);
+    setFormOpen(true);
+  };
+
+  const startEdit = (item: TimelineBookshelfItem) => {
+    setForm({
+      title: item.title || "",
+      cardType: item.cardType || "Milestone",
+      description: item.description || "",
+      resourceLinks: [...(item.resourceLinks || [])],
+    });
+    setEditingId(item.id);
+    setFormOpen(true);
+  };
+
+  const handleSave = async () => {
     if (!form.title.trim()) {
       toast.error("Title is required");
       return;
     }
+    const payload = {
+      title: form.title.trim(),
+      cardType: form.cardType,
+      description: form.description,
+      resourceLinks: form.resourceLinks.filter((r) => r.url.trim()),
+    };
     try {
-      await createItem.mutateAsync({
-        title: form.title.trim(),
-        cardType: form.cardType,
-        description: form.description,
-        resourceLinks: form.resourceLinks.filter((r) => r.url.trim()),
-        scope: "GLOBAL",
-      });
-      toast.success("Platform preset added");
+      if (editingId) {
+        await updateItem.mutateAsync({ id: editingId, updates: payload });
+        toast.success("Platform preset updated");
+      } else {
+        await createItem.mutateAsync({ ...payload, scope: "GLOBAL" });
+        toast.success("Platform preset added");
+      }
       resetForm();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to save preset");
@@ -132,14 +169,17 @@ export default function AdminTimelineBookshelfPanel({
             size="sm"
             variant="secondary"
             leftIcon={<Plus className="h-3.5 w-3.5" />}
-            onClick={() => setAdding((v) => !v)}
+            onClick={startCreate}
           >
-            {adding ? "Cancel" : "Add preset"}
+            {formOpen && !editingId ? "Cancel" : "Add preset"}
           </Button>
         </div>
 
-        {adding && (
+        {formOpen && (
           <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              {editingId ? "Edit platform preset" : "New platform preset"}
+            </p>
             <FormField label="Type">
               <SelectMenu
                 value={form.cardType}
@@ -160,13 +200,20 @@ export default function AdminTimelineBookshelfPanel({
                 className="min-h-[70px]"
               />
             </FormField>
-            <Button
-              size="sm"
-              onClick={() => void handleCreate()}
-              isLoading={createItem.isPending}
-            >
-              Save platform preset
-            </Button>
+            <ResourceLinksFields
+              links={form.resourceLinks}
+              onChange={(resourceLinks) => setForm({ ...form, resourceLinks })}
+            />
+            <div className="flex flex-wrap justify-end gap-2">
+              {editingId ? (
+                <Button size="sm" variant="ghost" onClick={resetForm} disabled={saving}>
+                  Cancel
+                </Button>
+              ) : null}
+              <Button size="sm" onClick={() => void handleSave()} isLoading={saving}>
+                {editingId ? "Update preset" : "Save platform preset"}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -178,11 +225,13 @@ export default function AdminTimelineBookshelfPanel({
           <div className="space-y-2">
             {items.map((item) => {
               const color = colors[item.cardType] || DEFAULT_TIMELINE_CARD_COLORS.Milestone;
+              const isEditing = editingId === item.id;
               return (
                 <div
                   key={item.id}
                   className={cn(
-                    "relative rounded-xl border border-slate-800 bg-slate-950/70 p-3.5",
+                    "relative rounded-xl border bg-slate-950/70 p-3.5",
+                    isEditing ? "border-indigo-500/40" : "border-slate-800",
                   )}
                 >
                   <div
@@ -203,24 +252,41 @@ export default function AdminTimelineBookshelfPanel({
                           {item.description}
                         </p>
                       ) : null}
+                      {resourceLinksSummary(item.resourceLinks) ? (
+                        <p className="mt-1 text-[11px] font-medium text-indigo-400/80">
+                          {resourceLinksSummary(item.resourceLinks)}
+                        </p>
+                      ) : null}
                     </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={async () => {
-                        if (!window.confirm("Delete this platform preset?")) return;
-                        try {
-                          await deleteItem.mutateAsync(item.id);
-                          toast.success("Preset deleted");
-                        } catch (err: unknown) {
-                          toast.error(
-                            err instanceof Error ? err.message : "Failed to delete",
-                          );
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        title="Edit preset"
+                        onClick={() => startEdit(item)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        title="Delete preset"
+                        onClick={async () => {
+                          if (!window.confirm("Delete this platform preset?")) return;
+                          try {
+                            await deleteItem.mutateAsync(item.id);
+                            if (editingId === item.id) resetForm();
+                            toast.success("Preset deleted");
+                          } catch (err: unknown) {
+                            toast.error(
+                              err instanceof Error ? err.message : "Failed to delete",
+                            );
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
