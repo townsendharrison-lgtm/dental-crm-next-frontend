@@ -7,6 +7,8 @@ import type {
   LeverageAction,
   School,
   SchoolCategory,
+  CategoryPlan,
+  ManualDexterityPlan,
 } from "@/lib/types";
 
 export type SchoolBoardPayload = {
@@ -32,6 +34,8 @@ export interface UpsertPlanPayload {
   leverageActions?: LeverageAction[];
   strengths?: string[];
   gaps?: string[];
+  categories?: Record<string, CategoryPlan>;
+  manualDexterity?: ManualDexterityPlan | null;
 }
 
 /** Map a full OptimizationPlan (or partial UI draft) into the upsert API shape. */
@@ -40,9 +44,7 @@ export function toUpsertPlanPayload(
   plan: Partial<OptimizationPlan>,
 ): UpsertPlanPayload {
   const snapshot =
-    (typeof plan.snapshot === "string" && plan.snapshot) ||
-    (plan.categories ? JSON.stringify(plan.categories) : "") ||
-    "";
+    (typeof plan.snapshot === "string" && plan.snapshot.trim()) || "Strategy plan";
 
   return {
     studentId,
@@ -65,6 +67,8 @@ export function toUpsertPlanPayload(
     leverageActions: plan.leverageActions || plan.leverage_actions,
     strengths: plan.strengths,
     gaps: plan.gaps,
+    categories: plan.categories,
+    manualDexterity: plan.manualDexterity ?? null,
   };
 }
 

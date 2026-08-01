@@ -29,6 +29,19 @@ export function normalizeStudent(s: Student): Student {
       s.monthColors ??
       (profile as { month_colors?: Student["monthColors"] } | null | undefined)?.month_colors ??
       undefined,
+    timelineStart:
+      s.timelineStart ??
+      (profile as { timeline_start?: string | null } | null | undefined)?.timeline_start ??
+      null,
+    timelineEnd:
+      s.timelineEnd ??
+      (profile as { timeline_end?: string | null } | null | undefined)?.timeline_end ??
+      null,
+    timelineMonthGoals:
+      s.timelineMonthGoals ??
+      (profile as { timeline_month_goals?: Record<string, string> } | null | undefined)
+        ?.timeline_month_goals ??
+      undefined,
     status: s.status ?? profile?.status,
     timezone: s.timezone ?? profile?.timezone,
     state: s.state ?? profile?.state,

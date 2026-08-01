@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
@@ -30,7 +30,7 @@ import {
 } from '@/lib/types';
 import SchoolFilterView from '../SchoolFilterView';
 import type { DentalSchool } from '@/lib/schools/sheetCatalog';
-import { mapDentalSchoolToHubSchool } from '@/lib/schools/sheetCatalog';
+import { enrichHubSchoolFromCatalog, mapDentalSchoolToHubSchool } from '@/lib/schools/sheetCatalog';
 import {
   useStudentSchools,
   useAddStudentSchool,
@@ -124,7 +124,32 @@ export default function SchoolSelectionTab({
   const [newCategoryIcon, setNewCategoryIcon] = useState('SchoolIcon');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { schools: catalogSchools } = useDentalSchoolsCatalog();
+  const { schools: catalogSchools, refetch: refetchCatalog } = useDentalSchoolsCatalog();
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  // Refetch live spreadsheet whenever this section becomes visible (every mode / tab).
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    let wasVisible = false;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.some((e) => e.isIntersecting);
+        if (visible && !wasVisible) {
+          void refetchCatalog();
+        }
+        wasVisible = visible;
+      },
+      { threshold: 0.05 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [refetchCatalog]);
+
+  const displaySchools = useMemo(
+    () => schools.map((s) => enrichHubSchoolFromCatalog(s, catalogSchools)),
+    [schools, catalogSchools],
+  );
 
   const triggerConfetti = () => {
     const duration = 5 * 1000;
@@ -615,7 +640,7 @@ export default function SchoolSelectionTab({
 
   return (
     <>
-      <div className="space-y-4">
+      <div ref={sectionRef} className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold text-white">Strategic School Selection</h2>
@@ -752,21 +777,22 @@ export default function SchoolSelectionTab({
               >
                 <DroppableCategory
                   category={category}
-                  schoolsCount={schools.filter(s => s.type === category.id).length}
+                  schoolsCount={displaySchools.filter(s => s.type === category.id).length}
                   onRemove={(id) => void handleRemoveCategory(id)}
                   onAdd={openAddSchoolForCategory}
                   isDefault={['Reach', 'Target', 'Strong Fit'].includes(category.id)}
                 >
                   <SortableContext
                     id={category.id}
-                    items={schools.filter(s => s.type === category.id).map(s => s.id)}
+                    items={displaySchools.filter(s => s.type === category.id).map(s => s.id)}
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="min-w-0 space-y-3">
-                      {schools.filter(s => s.type === category.id).map(school => (
+                      {displaySchools.filter(s => s.type === category.id).map(school => (
                         <SortableSchoolCard
                           key={school.id}
                           school={school}
+                          isMentorView={isMentorView}
                           status={
                             loadedApplications.find(
                               (a) => a.schoolId === school.id || a.school_id === school.id,
@@ -779,7 +805,7 @@ export default function SchoolSelectionTab({
                           onViewDetails={openSchoolDetails}
                         />
                       ))}
-                      {schools.filter(s => s.type === category.id).length === 0 && (
+                      {displaySchools.filter(s => s.type === category.id).length === 0 && (
                         <EmptyState
                           icon={<SchoolIcon size={24} />}
                           title="No schools yet"
@@ -797,12 +823,13 @@ export default function SchoolSelectionTab({
           <DragOverlay dropAnimation={null}>
             {activeId ? (
               <SchoolCard
-                school={schools.find(s => s.id === activeId)!}
+                school={displaySchools.find(s => s.id === activeId)!}
                 status={
                   loadedApplications.find(
                     (a) => a.schoolId === activeId || a.school_id === activeId,
                   )?.status
                 }
+                isMentorView={isMentorView}
                 isOverlay={true}
               />
             ) : null}

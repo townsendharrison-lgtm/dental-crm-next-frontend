@@ -29,6 +29,7 @@ export function useCreateActionItem() {
       if (sid) {
         qc.invalidateQueries({ queryKey: queryKeys.actionItems.all(sid) });
       }
+      qc.invalidateQueries({ queryKey: queryKeys.actionItems.all() });
       qc.invalidateQueries({ queryKey: ["actionItems"] });
     },
   });

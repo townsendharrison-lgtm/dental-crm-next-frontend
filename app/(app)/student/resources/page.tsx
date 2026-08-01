@@ -4,7 +4,6 @@ import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen,
-  Clock,
   ExternalLink,
   ArrowUpRight,
   Search,
@@ -16,10 +15,6 @@ import type { Resource } from "@/lib/types";
 import { renderBadgeIcon } from "@/lib/utils/badgeIcons";
 import { Badge, Button, EmptyState, Input, SelectMenu, Spinner } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
-
-function resourceTime(r: Resource) {
-  return r.estimatedTime || r.estimated_time || "5m";
-}
 
 function isActiveResource(r: Resource) {
   if (r.isActive !== undefined) return Boolean(r.isActive);
@@ -174,10 +169,6 @@ export default function StudentResourcesPage() {
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <Badge variant="primary">{resource.category || "General"}</Badge>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-                    <Clock className="h-3 w-3" />
-                    {resourceTime(resource)}
-                  </span>
                 </div>
 
                 <div className="mt-auto flex items-center gap-1.5 pt-5 text-xs font-semibold text-indigo-400">

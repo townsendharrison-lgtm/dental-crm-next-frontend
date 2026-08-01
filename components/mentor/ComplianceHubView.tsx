@@ -14,24 +14,38 @@ import {
   ClipboardList,
   LayoutGrid,
   MessageSquare,
+  Plus,
   ShieldAlert,
   Sparkles,
   UserCheck,
   Users,
   Zap,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
+import { FormField, Input, Textarea } from "@/components/ui/Form";
+import { SelectMenu } from "@/components/ui/SelectMenu";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { cn } from "@/lib/utils/cn";
+import { useAuth } from "@/lib/hooks/useAuth";
 import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
+import { useCreateTask, useTasks } from "@/lib/hooks/useTasks";
+import { useCreateMeeting } from "@/lib/hooks/useMeetings";
+import { QuickScheduleMeetingModal } from "@/components/mentor/QuickScheduleMeetingModal";
+import {
+  ASSIGN_SELF,
+  ASSIGN_ALL_MENTORS,
+} from "@/components/tasks/StaffTasksView";
 import {
   formatMeetingLocal,
   isUpcomingMeetingDate,
   parseLocalDate,
 } from "@/lib/utils/dateUtils";
-import type { ActionItem, Meeting, Mentor, Student } from "@/lib/types";
+import type { ActionItem, Meeting, Mentor, StaffTask, Student } from "@/lib/types";
 import type {
   MentorComplianceRow,
   OperationalAlert,
@@ -129,12 +143,12 @@ function daysBetween(fromMs: number) {
   return Math.max(0, Math.floor((Date.now() - fromMs) / DAY_MS));
 }
 
-function dueDateOf(t: ActionItem) {
+function dueDateOf(t: { dueDate?: string | null; due_date?: string | null }) {
   return t.due_date || t.dueDate || "";
 }
 
-function studentIdOfTask(t: ActionItem) {
-  return t.student_id || t.studentId || "";
+function taskAssigneeId(t: StaffTask) {
+  return t.assignedTo || t.assigned_to || "";
 }
 
 function startOfWeek(d: Date) {
@@ -220,7 +234,7 @@ export default function ComplianceHubView({
   students,
   mentors,
   meetings,
-  actionItems,
+  actionItems: _actionItems,
   unassignedCount,
   onOpenChat,
   onSendNudge,
@@ -232,15 +246,136 @@ export default function ComplianceHubView({
   tasksHref = "/mentor-manager/tasks",
 }: ComplianceHubViewProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const { data: staffTasks = [] } = useTasks();
+  const createStaffTaskMutation = useCreateTask();
+  const createMeetingMutation = useCreateMeeting();
+
   const [scheduleTab, setScheduleTab] = useState<"weekly" | "upcoming">("weekly");
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const [assignForm, setAssignForm] = useState({
+    assignedTo: "",
+    task: "",
+    description: "",
+    dueDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
+    priority: "MEDIUM" as "HIGH" | "MEDIUM" | "LOW",
+  });
 
   usePageHeaderAction({
     label: "Manage Assignments",
     icon: <LayoutGrid className="h-4 w-4" />,
     onClick: () => router.push(`${mentorsHref}?view=assignments`),
   });
+
+  const mentorOptions = useMemo(
+    () =>
+      mentors
+        .filter((m) => (m.role || "MENTOR") === "MENTOR")
+        .map((m) => ({
+          value: m.id,
+          label: m.name || m.email || "Mentor",
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [mentors],
+  );
+
+  const assignOptions = useMemo(
+    () => [
+      { value: "", label: "Select assignee…" },
+      {
+        value: ASSIGN_SELF,
+        label: `Myself${user?.name ? ` — ${user.name}` : ""}`,
+      },
+      {
+        value: ASSIGN_ALL_MENTORS,
+        label: `All Mentors (${mentorOptions.length})`,
+        disabled: mentorOptions.length === 0,
+      },
+      { value: "__people__", label: "—— Specific mentors ——", disabled: true },
+      ...mentorOptions,
+    ],
+    [mentorOptions, user?.name],
+  );
+
+  const resetAssignForm = () => {
+    setAssignForm({
+      assignedTo: "",
+      task: "",
+      description: "",
+      dueDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
+      priority: "MEDIUM",
+    });
+  };
+
+  const resolveAssigneeIds = (target: string): string[] => {
+    if (!user) return [];
+    if (target === ASSIGN_SELF) return [user.id];
+    if (target === ASSIGN_ALL_MENTORS) return mentorOptions.map((m) => m.value);
+    return target ? [target] : [];
+  };
+
+  const handleAssignTask = async () => {
+    if (!assignForm.task.trim()) {
+      toast.error("Task title is required");
+      return;
+    }
+    if (!assignForm.dueDate) {
+      toast.error("Due date is required");
+      return;
+    }
+    if (!assignForm.assignedTo) {
+      toast.error("Select an assignee");
+      return;
+    }
+
+    const assigneeIds = resolveAssigneeIds(assignForm.assignedTo);
+    if (assigneeIds.length === 0) {
+      toast.error("No matching mentors found for that assignment");
+      return;
+    }
+
+    const payloadBase = {
+      task: assignForm.task.trim(),
+      dueDate: assignForm.dueDate,
+      priority: assignForm.priority,
+      description: assignForm.description.trim() || undefined,
+    };
+
+    try {
+      if (assigneeIds.length === 1) {
+        await createStaffTaskMutation.mutateAsync({
+          ...payloadBase,
+          assignedTo: assigneeIds[0],
+        });
+        toast.success("Task assigned");
+      } else {
+        await Promise.all(
+          assigneeIds.map((assignedTo) =>
+            createStaffTaskMutation.mutateAsync({ ...payloadBase, assignedTo }),
+          ),
+        );
+        toast.success(`Assigned to ${assigneeIds.length} people`);
+      }
+      setIsAssignOpen(false);
+      resetAssignForm();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to assign task");
+    }
+  };
+
+  const resolveAssigneeName = (task: StaffTask) => {
+    const id = taskAssigneeId(task);
+    if (user && id === user.id) return "You";
+    return (
+      task.assignedToUser?.name ||
+      mentors.find((m) => m.id === id)?.name ||
+      mentors.find((m) => m.id === id)?.email ||
+      "Staff"
+    );
+  };
 
   const topRisk = [...rows]
     .filter((r) => r.band !== "compliant")
@@ -387,7 +522,7 @@ export default function ComplianceHubView({
   }, [weekMeetings, selectedDate]);
 
   const activeTasks = useMemo(() => {
-    return actionItems
+    return staffTasks
       .filter((t) => {
         const status = (t.status || "").toUpperCase();
         return status !== "COMPLETED" && status !== "DONE";
@@ -397,10 +532,12 @@ export default function ComplianceHubView({
         const bd = dueDateOf(b) ? parseLocalDate(dueDateOf(b)).getTime() : Number.POSITIVE_INFINITY;
         return ad - bd;
       });
-  }, [actionItems]);
+  }, [staffTasks]);
 
   const resolveStudentName = (id: string) =>
     students.find((s) => s.id === id)?.name || "Student";
+
+  const selectedDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-12">
@@ -520,6 +657,16 @@ export default function ComplianceHubView({
                     onClick={() => setWeekOffset((p) => p + 1)}
                   >
                     <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="h-8 w-8"
+                    onClick={() => setIsScheduleOpen(true)}
+                    aria-label="Create meeting"
+                    title="Create meeting"
+                  >
+                    <Plus className="h-4 w-4" />
                   </Button>
                 </div>
               )}
@@ -707,6 +854,16 @@ export default function ComplianceHubView({
                 </p>
               </div>
             </div>
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8"
+              onClick={() => setIsAssignOpen(true)}
+              aria-label="Assign task"
+              title="Assign task"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
 
           <div className="max-h-[380px] flex-1 space-y-2 overflow-y-auto">
@@ -714,12 +871,19 @@ export default function ComplianceHubView({
               <EmptyState
                 icon={<CheckCircle2 className="h-8 w-8" />}
                 title="All caught up"
-                description="No open tasks. Create one or check View all tasks."
+                action={
+                  <Button
+                    size="sm"
+                    leftIcon={<Plus className="h-4 w-4" />}
+                    onClick={() => setIsAssignOpen(true)}
+                  >
+                    Assign Task
+                  </Button>
+                }
               />
             ) : (
               activeTasks.slice(0, 12).map((task) => {
                 const due = dueDateOf(task);
-                const sid = studentIdOfTask(task);
                 return (
                   <div
                     key={task.id}
@@ -748,11 +912,9 @@ export default function ComplianceHubView({
                           })}
                         </span>
                       ) : null}
-                      {sid ? (
-                        <span className="truncate text-[10px] text-slate-500">
-                          {resolveStudentName(sid)}
-                        </span>
-                      ) : null}
+                      <span className="truncate text-[10px] text-slate-500">
+                        {resolveAssigneeName(task)}
+                      </span>
                     </div>
                   </div>
                 );
@@ -1037,6 +1199,121 @@ export default function ComplianceHubView({
           </div>
         )}
       </section>
+
+      <QuickScheduleMeetingModal
+        open={isScheduleOpen}
+        students={students}
+        mentors={mentors}
+        defaultDate={selectedDateStr}
+        isSubmitting={createMeetingMutation.isPending}
+        onClose={() => {
+          if (!createMeetingMutation.isPending) setIsScheduleOpen(false);
+        }}
+        onSubmit={async (payload) => {
+          try {
+            await createMeetingMutation.mutateAsync(payload);
+            toast.success("Meeting scheduled");
+            setIsScheduleOpen(false);
+          } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : "Failed to schedule meeting");
+            throw err;
+          }
+        }}
+      />
+
+      <Modal
+        open={isAssignOpen}
+        onClose={() => {
+          if (createStaffTaskMutation.isPending) return;
+          setIsAssignOpen(false);
+          resetAssignForm();
+        }}
+        title="Assign Task"
+        description="Assign to yourself, all mentors, or a specific mentor."
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={createStaffTaskMutation.isPending}
+              onClick={() => {
+                setIsAssignOpen(false);
+                resetAssignForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleAssignTask()}
+              isLoading={createStaffTaskMutation.isPending}
+            >
+              Assign Task
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <FormField
+            label="Assign to"
+            required
+            hint={
+              assignForm.assignedTo === ASSIGN_ALL_MENTORS
+                ? `Creates a separate task for each of the ${mentorOptions.length} mentors.`
+                : undefined
+            }
+          >
+            <SelectMenu
+              value={assignForm.assignedTo}
+              placeholder="Select assignee…"
+              onChange={(assignedTo) => setAssignForm((f) => ({ ...f, assignedTo }))}
+              options={assignOptions}
+            />
+          </FormField>
+
+          <FormField label="Task title" required>
+            <Input
+              value={assignForm.task}
+              onChange={(e) => setAssignForm((f) => ({ ...f, task: e.target.value }))}
+              placeholder="e.g. Follow up on compliance gaps"
+            />
+          </FormField>
+
+          <FormField label="Details" hint="Optional">
+            <Textarea
+              value={assignForm.description}
+              onChange={(e) => setAssignForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Add context or steps…"
+            />
+          </FormField>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Due date" required>
+              <DatePicker
+                value={assignForm.dueDate}
+                onChange={(dueDate) => setAssignForm((f) => ({ ...f, dueDate }))}
+              />
+            </FormField>
+            <FormField label="Priority">
+              <SelectMenu
+                value={assignForm.priority}
+                onChange={(priority) =>
+                  setAssignForm((f) => ({
+                    ...f,
+                    priority: priority as "HIGH" | "MEDIUM" | "LOW",
+                  }))
+                }
+                options={[
+                  { value: "HIGH", label: "High" },
+                  { value: "MEDIUM", label: "Medium" },
+                  { value: "LOW", label: "Low" },
+                ]}
+              />
+            </FormField>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

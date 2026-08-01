@@ -30,18 +30,39 @@ export default function TasksPage() {
   const deleteTaskMutation = useDeleteTask();
 
   const assignees = useMemo(() => {
-    if (!isAdmin || !user) return mentors;
-    const staff = allUsers.filter(
-      (u) => u.role === "MENTOR" || u.role === "MENTOR_MANAGER" || u.role === "ADMIN",
-    );
-    if (!staff.some((u) => u.id === user.id)) {
-      return [
-        { id: user.id, name: user.name || user.email || "Me", role: user.role },
-        ...staff,
-      ];
+    if (!user) return mentors;
+    if (isAdmin) {
+      const staff = allUsers.filter(
+        (u) => u.role === "MENTOR" || u.role === "MENTOR_MANAGER" || u.role === "ADMIN",
+      );
+      if (!staff.some((u) => u.id === user.id)) {
+        return [
+          { id: user.id, name: user.name || user.email || "Me", role: user.role },
+          ...staff,
+        ];
+      }
+      return staff;
     }
-    return staff;
-  }, [isAdmin, allUsers, mentors, user]);
+    // Mentor managers assign only to mentors (+ themselves)
+    if (role === "MENTOR_MANAGER") {
+      const list = mentors
+        .filter((m) => (m.role || "MENTOR") === "MENTOR")
+        .map((m) => ({
+          id: m.id,
+          name: m.name || m.email || "Mentor",
+          role: "MENTOR" as const,
+        }));
+      if (!list.some((u) => u.id === user.id)) {
+        list.unshift({
+          id: user.id,
+          name: user.name || user.email || "Me",
+          role: "MENTOR_MANAGER",
+        });
+      }
+      return list;
+    }
+    return mentors;
+  }, [isAdmin, allUsers, mentors, user, role]);
 
   const resolveAssigneeIds = (target: string): string[] => {
     if (!user) return [];
@@ -70,12 +91,18 @@ export default function TasksPage() {
   }
 
   const handleAddTask = (task: Partial<StaffTask>) => {
-    if (!task.assignedTo || !task.task || !task.dueDate) {
-      toast.error("Assignee, title, and due date are required");
+    const assignedTo =
+      role === "MENTOR" ? ASSIGN_SELF : task.assignedTo;
+    if (!assignedTo || !task.task || !task.dueDate) {
+      toast.error(
+        role === "MENTOR"
+          ? "Title and due date are required"
+          : "Assignee, title, and due date are required",
+      );
       return;
     }
 
-    const assigneeIds = resolveAssigneeIds(task.assignedTo);
+    const assigneeIds = resolveAssigneeIds(assignedTo);
     if (assigneeIds.length === 0) {
       toast.error("No matching people found for that assignment");
       return;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Sparkles, Plus, Target } from "lucide-react";
 import type {
   Student,
@@ -10,16 +10,53 @@ import type {
   PlatformConfig,
   School,
   KPIAssessment,
+  TimelineBookshelfItem,
 } from "@/lib/types";
 import type { UpsertPlanPayload } from "@/lib/api/optimizationPlans";
 import { generateDraftPlan } from "@/lib/services/geminiService";
+import {
+  DEFAULT_CATEGORY_PLANS,
+  DEFAULT_MANUAL_DEXTERITY,
+  mergeCategoryPlans,
+} from "@/lib/utils/defaultCategoryPlans";
 import ApplicationOptimizationPlan from "@/components/student/ApplicationOptimizationPlan";
 import SchoolSelectionTab from "@/components/student/hub/SchoolSelectionTab";
 import ApplicationTracker from "@/components/student/ApplicationTracker";
+import ApplicationReadinessPanel from "@/components/student/ApplicationReadinessPanel";
+import { StudentTimelineBoard } from "@/components/timeline/StudentTimelineBoard";
+import { TimelineBookshelfDrawer } from "@/components/timeline/TimelineBookshelfDrawer";
 import { Button, Modal, Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
 import { toast } from "sonner";
+import { useCreateMilestone } from "@/lib/hooks/useMilestones";
 
-type PlanSection = "strategy" | "schools" | "applications";
+type PlanSection = "strategy" | "schools" | "applications" | "timeline";
+
+function buildMonthOptions(start?: string | null, end?: string | null) {
+  const now = new Date();
+  const fallbackStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  let s = start || fallbackStart;
+  let e = end;
+  if (!e) {
+    const [y, m] = s.split("-").map(Number);
+    const endDate = new Date(y, m - 1 + 11, 1);
+    e = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}`;
+  }
+  const [sy, sm] = s.split("-").map(Number);
+  const [ey, em] = e.split("-").map(Number);
+  let cursor = new Date(sy, sm - 1, 1);
+  const last = new Date(ey, em - 1, 1);
+  if (cursor > last) cursor = new Date(ey, em - 1, 1);
+  const options: Array<{ value: string; label: string }> = [];
+  while (cursor <= last && options.length < 48) {
+    const value = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+    options.push({
+      value,
+      label: cursor.toLocaleString("en-US", { month: "long", year: "numeric" }),
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return options;
+}
 
 interface MentorStudentPlanTabProps {
   student: Student;
@@ -33,6 +70,8 @@ interface MentorStudentPlanTabProps {
   onUpdateStudent?: (updates: Partial<Student>) => void;
   onUpdateApplications?: (applications: Application[]) => void;
   isCreating?: boolean;
+  /** Deep-link: Plan → Timeline when initialTab was `timeline` */
+  initialSection?: PlanSection;
 }
 
 function blankPlanPayload(student: Student): UpsertPlanPayload {
@@ -59,6 +98,8 @@ function blankPlanPayload(student: Student): UpsertPlanPayload {
     leverageActions: [],
     strengths: [],
     gaps: [],
+    categories: mergeCategoryPlans(DEFAULT_CATEGORY_PLANS),
+    manualDexterity: { ...DEFAULT_MANUAL_DEXTERITY },
   };
 }
 
@@ -98,6 +139,8 @@ function aiDraftToPayload(student: Student, draft: any): UpsertPlanPayload {
       description: s,
       impact: "High" as const,
     })),
+    categories: mergeCategoryPlans(DEFAULT_CATEGORY_PLANS),
+    manualDexterity: { ...DEFAULT_MANUAL_DEXTERITY },
   };
 }
 
@@ -113,10 +156,56 @@ export function MentorStudentPlanTab({
   onUpdateStudent,
   onUpdateApplications,
   isCreating = false,
+  initialSection = "strategy",
 }: MentorStudentPlanTabProps) {
-  const [section, setSection] = useState<PlanSection>("strategy");
+  const [section, setSection] = useState<PlanSection>(initialSection);
   const [isGenerating, setIsGenerating] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [bookshelfOpen, setBookshelfOpen] = useState(false);
+  const [insertMonth, setInsertMonth] = useState<string | null>(null);
+  const createMilestone = useCreateMilestone(student.id);
+
+  const monthOptions = useMemo(
+    () =>
+      buildMonthOptions(
+        student.timelineStart || student.profile?.timeline_start,
+        student.timelineEnd || student.profile?.timeline_end,
+      ),
+    [
+      student.timelineStart,
+      student.timelineEnd,
+      student.profile?.timeline_start,
+      student.profile?.timeline_end,
+    ],
+  );
+
+  React.useEffect(() => {
+    if (initialSection) setSection(initialSection);
+  }, [initialSection]);
+
+  const handleBookshelfPick = async (item: TimelineBookshelfItem) => {
+    const month = insertMonth || monthOptions[0]?.value;
+    if (!month) {
+      toast.error("Pick a month first");
+      return;
+    }
+    const monthLabel =
+      monthOptions.find((m) => m.value === month)?.label || month;
+    try {
+      await createMilestone.mutateAsync({
+        title: item.title,
+        month,
+        cardType: item.cardType,
+        description: item.description || "",
+        resourceLinks: item.resourceLinks || [],
+        status: "Planned",
+      });
+      toast.success(`Added “${item.title}” to ${monthLabel}`);
+      setBookshelfOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to insert preset");
+    }
+  };
 
   const hasPlan = Boolean(optimizationPlan?.id);
 
@@ -163,6 +252,7 @@ export function MentorStudentPlanTab({
         <TabsTrigger value="strategy">Strategy plan</TabsTrigger>
         <TabsTrigger value="schools">School list</TabsTrigger>
         <TabsTrigger value="applications">Applications</TabsTrigger>
+        <TabsTrigger value="timeline">Timeline</TabsTrigger>
       </TabsList>
 
       <TabsContent value="strategy" className="mt-4 space-y-4">
@@ -216,6 +306,7 @@ export function MentorStudentPlanTab({
               <ApplicationOptimizationPlan
                 studentName={student.name}
                 studentCreatedAt={student.createdAt}
+                student={student}
                 plan={optimizationPlan!}
                 experiences={experiences}
                 isEditable
@@ -240,13 +331,38 @@ export function MentorStudentPlanTab({
         </div>
       </TabsContent>
 
-      <TabsContent value="applications" className="mt-4">
+      <TabsContent value="applications" className="mt-4 space-y-4">
+        <ApplicationReadinessPanel student={student} staffMode />
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
           <ApplicationTracker
             studentId={student.id}
             platformConfig={platformConfig}
           />
         </div>
+      </TabsContent>
+
+      <TabsContent value="timeline" className="mt-4">
+        <StudentTimelineBoard
+          student={student}
+          mode="mentor"
+          cardColors={platformConfig.timelineCardColors}
+          showBookshelf
+          onOpenBookshelf={(month) => {
+            setInsertMonth(month || null);
+            setBookshelfOpen(true);
+          }}
+        />
+        <TimelineBookshelfDrawer
+          open={bookshelfOpen}
+          onClose={() => setBookshelfOpen(false)}
+          onPick={handleBookshelfPick}
+          allowPersonalManage
+          pickMode
+          targetMonth={insertMonth || monthOptions[0]?.value || null}
+          onTargetMonthChange={setInsertMonth}
+          monthOptions={monthOptions}
+          cardColors={platformConfig.timelineCardColors}
+        />
       </TabsContent>
 
       <Modal

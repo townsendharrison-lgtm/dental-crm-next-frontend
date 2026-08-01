@@ -26,6 +26,10 @@ import {
   Plus,
   X,
   GripVertical,
+  Percent,
+  ArrowUpRight,
+  ArrowDownRight,
+  Calendar,
 } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
@@ -42,7 +46,7 @@ import {
   PlatformConfig,
   ImprovementGoal,
 } from '@/lib/types';
-import { Button, Textarea, FormField } from '@/components/ui';
+import { Badge, Button, Textarea, FormField } from '@/components/ui';
 import { SelectMenu } from '@/components/ui/SelectMenu';
 import { cn } from '@/lib/utils/cn';
 
@@ -112,11 +116,6 @@ const STATUS_OPTIONS = [
   ...Object.values(ApplicationStatus).map((s) => ({ value: s, label: s })),
 ];
 
-function formatYesNo(value: boolean | null | undefined) {
-  if (value == null) return 'N/A';
-  return value ? 'Yes' : 'No';
-}
-
 function SchoolStrategyNotes({
   schoolId,
   notes,
@@ -168,55 +167,23 @@ export const SchoolCard = React.forwardRef<HTMLDivElement, {
   onUpdateNotes?: (id: string, notes: string) => void,
   onUpdateStatus?: (id: string, status: ApplicationStatus | '') => void,
   onViewDetails?: (school: School) => void,
+  /** When true (admin/mentor), show Min cGPA / sGPA / DAT on category cards. */
+  isMentorView?: boolean,
   isOverlay?: boolean,
   style?: React.CSSProperties,
   attributes?: any,
   listeners?: any
-}>(({ school, status, onDelete, onUpdateNotes, onUpdateStatus, onViewDetails, isOverlay, style, attributes, listeners }, ref) => {
-  const stats: { label: string; value: React.ReactNode; tone?: string }[] = [
-    { label: 'Avg GPA', value: school.avgGPA ?? 'N/A' },
-    { label: 'Avg DAT', value: school.datAvg ?? 'N/A' },
-    {
-      label: 'Acceptance',
-      value: school.acceptanceRate != null ? `${school.acceptanceRate}%` : 'N/A',
-      tone: 'text-emerald-400',
-    },
-    { label: 'IS Acc.', value: school.isAcceptanceRate != null ? `${school.isAcceptanceRate}%` : 'N/A' },
-    { label: 'OOS Acc.', value: school.oosAcceptanceRate != null ? `${school.oosAcceptanceRate}%` : 'N/A' },
-    {
-      label: 'CC Credits',
-      value: formatYesNo(school.ccCredits),
-      tone: school.ccCredits ? 'text-emerald-400' : 'text-rose-400',
-    },
-    {
-      label: 'Length',
-      value:
-        school.lengthOfSchool != null && school.lengthOfSchool !== ''
-          ? `${school.lengthOfSchool} yrs`
-          : 'N/A',
-    },
-    { label: 'Public/Private', value: school.publicPrivate || 'N/A' },
-    {
-      label: 'CDN DAT',
-      value: formatYesNo(school.acceptsCanadianDat),
-      tone:
-        school.acceptsCanadianDat == null
-          ? undefined
-          : school.acceptsCanadianDat
-            ? 'text-emerald-400'
-            : 'text-rose-400',
-    },
-    {
-      label: 'Canadians',
-      value: formatYesNo(school.acceptsCanadians),
-      tone:
-        school.acceptsCanadians == null
-          ? undefined
-          : school.acceptsCanadians
-            ? 'text-emerald-400'
-            : 'text-rose-400',
-    },
-  ];
+}>(({ school, status, onDelete, onUpdateNotes, onUpdateStatus, onViewDetails, isMentorView, isOverlay, style, attributes, listeners }, ref) => {
+  const publicPrivate = school.publicPrivate || '';
+  const isPublic = publicPrivate.toLowerCase().includes('public');
+  const maleCount = Number(school.maleEnrollment ?? school.male_enrollment ?? 0) || 0;
+  const femaleCount = Number(school.femaleEnrollment ?? school.female_enrollment ?? 0) || 0;
+  const genderTotal = maleCount + femaleCount;
+  const malePct = genderTotal > 0 ? Math.round((maleCount / genderTotal) * 100) : null;
+  const femalePct = genderTotal > 0 ? Math.round((femaleCount / genderTotal) * 100) : null;
+
+  const formatStat = (value: unknown) =>
+    value != null && value !== '' && !Number.isNaN(Number(value)) ? String(value) : 'N/A';
 
   return (
     <div
@@ -242,11 +209,19 @@ export const SchoolCard = React.forwardRef<HTMLDivElement, {
               <GripVertical size={16} />
             </button>
           ) : null}
-          <div className="min-w-0 flex-1">
-            <h4 className="truncate text-sm font-semibold text-white" title={school.name}>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {publicPrivate ? (
+                <Badge variant={isPublic ? 'success' : 'warning'}>{publicPrivate}</Badge>
+              ) : null}
+              {school.acceptsCanadians ? (
+                <Badge variant="primary">Int&apos;l Friendly</Badge>
+              ) : null}
+            </div>
+            <h4 className="text-sm font-semibold leading-snug text-white" title={school.name}>
               {school.name}
             </h4>
-            <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-slate-500">
+            <p className="flex items-center gap-1 truncate text-xs text-slate-500">
               <MapPin size={12} className="shrink-0 text-indigo-500" />
               <span className="truncate">{school.location}</span>
             </p>
@@ -266,21 +241,138 @@ export const SchoolCard = React.forwardRef<HTMLDivElement, {
         )}
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-1.5">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="min-w-0 rounded-lg border border-slate-800/80 bg-slate-950/60 px-2.5 py-2"
-          >
-            <p className="truncate text-[10px] font-medium uppercase tracking-wide text-slate-500">
-              {stat.label}
-            </p>
-            <p className={cn('mt-0.5 truncate text-xs font-semibold text-white', stat.tone)}>
-              {stat.value}
-            </p>
+      <div className="mb-3 space-y-1.5">
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { label: 'Avg cGPA', value: formatStat(school.avgGPA ?? school.avg_gpa) },
+            { label: 'Avg sGPA', value: formatStat(school.avgSgpa) },
+            { label: 'Avg DAT AA', value: formatStat(school.datAvg ?? school.dat_avg) },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="min-w-0 rounded-lg border border-slate-800/80 bg-slate-950/60 px-2 py-2 text-center"
+            >
+              <p className="truncate text-[9px] font-medium uppercase tracking-wider text-slate-500">
+                {stat.label}
+              </p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-white">{stat.value}</p>
+            </div>
+          ))}
+        </div>
+        {isMentorView && (
+          <div className="grid grid-cols-3 gap-1.5">
+            {[
+              { label: 'Min cGPA', value: formatStat(school.minCgpa5th ?? school.min_cgpa_5th) },
+              { label: 'Min sGPA', value: formatStat(school.minSgpa5th) },
+              { label: 'Min DAT AA', value: formatStat(school.minDat5th ?? school.min_dat_5th) },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="min-w-0 rounded-lg border border-slate-800/80 bg-slate-950/60 px-2 py-2 text-center"
+              >
+                <p className="truncate text-[9px] font-medium uppercase tracking-wider text-indigo-400/70">
+                  {stat.label}
+                </p>
+                <p className="mt-0.5 truncate text-xs font-semibold text-sky-300">{stat.value}</p>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
+
+      <div className="mb-3 space-y-2.5 rounded-xl border border-slate-800/60 bg-slate-950/40 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+              <Percent size={14} />
+            </div>
+            <span className="truncate text-[10px] font-medium uppercase tracking-wider text-slate-400">
+              Acceptance Rate
+            </span>
+          </div>
+          <span className="shrink-0 text-sm font-semibold text-emerald-400">
+            {school.acceptanceRate != null ? `${school.acceptanceRate}%` : 'N/A'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+              <ArrowUpRight size={14} />
+            </div>
+            <span className="truncate text-[10px] font-medium uppercase tracking-wider text-slate-400">
+              IS Acceptance
+            </span>
+          </div>
+          <span className="shrink-0 text-sm font-semibold text-white">
+            {school.isAcceptanceRate != null ? `${school.isAcceptanceRate}%` : 'N/A'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
+              <ArrowDownRight size={14} />
+            </div>
+            <span className="truncate text-[10px] font-medium uppercase tracking-wider text-slate-400">
+              OOS Acceptance
+            </span>
+          </div>
+          <span className="shrink-0 text-sm font-semibold text-white">
+            {school.oosAcceptanceRate != null ? `${school.oosAcceptanceRate}%` : 'N/A'}
+          </span>
+        </div>
+        <div className="space-y-2 border-t border-slate-800/60 pt-2.5">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">Gender</p>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-slate-400">Male</span>
+            <span className="text-xs font-semibold text-blue-500">
+              {genderTotal > 0 ? `${maleCount} (${malePct}%)` : 'N/A'}
+            </span>
+          </div>
+          <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-900">
+            <div
+              className="h-full bg-blue-500 transition-all duration-700"
+              style={{ width: `${genderTotal > 0 ? (maleCount / genderTotal) * 100 : 0}%` }}
+            />
+            <div
+              className="h-full bg-pink-500 transition-all duration-700"
+              style={{ width: `${genderTotal > 0 ? (femaleCount / genderTotal) * 100 : 0}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-slate-400">Female</span>
+            <span className="text-xs font-semibold text-pink-500">
+              {genderTotal > 0 ? `${femaleCount} (${femalePct}%)` : 'N/A'}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t border-slate-800/60 pt-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-300">
+              <Calendar size={14} />
+            </div>
+            <span className="truncate text-[10px] font-medium uppercase tracking-wider text-slate-400">
+              Deadline
+            </span>
+          </div>
+          <span className="max-w-[55%] shrink-0 truncate text-right text-sm font-semibold text-sky-300">
+            {school.deadline || 'TBD'}
+          </span>
+        </div>
+      </div>
+
+      {onViewDetails && (
+        <div className="mb-3">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            className="w-full"
+            onClick={() => onViewDetails(school)}
+          >
+            View full details
+          </Button>
+        </div>
+      )}
 
       {onUpdateStatus && (
         <div className="mb-3 space-y-2 border-t border-slate-800 pt-3">
@@ -293,31 +385,6 @@ export const SchoolCard = React.forwardRef<HTMLDivElement, {
               className="w-full"
             />
           </FormField>
-          {onViewDetails && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => onViewDetails(school)}
-            >
-              View full details
-            </Button>
-          )}
-        </div>
-      )}
-
-      {!onUpdateStatus && onViewDetails && (
-        <div className="mb-3 border-t border-slate-800 pt-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={() => onViewDetails(school)}
-          >
-            View full details
-          </Button>
         </div>
       )}
 
@@ -341,6 +408,7 @@ export const SortableSchoolCard = ({
   onUpdateNotes,
   onUpdateStatus,
   onViewDetails,
+  isMentorView,
 }: { 
   school: School, 
   status?: ApplicationStatus,
@@ -348,6 +416,7 @@ export const SortableSchoolCard = ({
   onUpdateNotes: (id: string, notes: string) => void,
   onUpdateStatus: (id: string, status: ApplicationStatus | '') => void,
   onViewDetails?: (school: School) => void,
+  isMentorView?: boolean,
 }) => {
   const {
     attributes,
@@ -373,6 +442,7 @@ export const SortableSchoolCard = ({
       onUpdateNotes={onUpdateNotes}
       onUpdateStatus={onUpdateStatus}
       onViewDetails={onViewDetails}
+      isMentorView={isMentorView}
       style={style}
       attributes={attributes}
       listeners={listeners}

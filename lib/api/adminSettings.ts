@@ -1,5 +1,6 @@
 import { apiGet, apiPut, apiPost } from "./client";
-import type { AdminSettings, MeetingTypeConfig, PlatformConfig } from "@/lib/types";
+import type { AdminSettings, MeetingTypeConfig, PlatformConfig, TimelineCardColors } from "@/lib/types";
+import { DEFAULT_TIMELINE_CARD_COLORS } from "@/lib/types";
 
 export interface UpdateSettingsPayload {
   platformName?: string;
@@ -16,6 +17,7 @@ export interface UpdateSettingsPayload {
   interviewMessage?: string | null;
   waitlistMessage?: string | null;
   meetingTypes?: MeetingTypeConfig[];
+  timelineCardColors?: TimelineCardColors;
 }
 
 export const DEFAULT_ASSIGNMENT_WELCOME = `Hi [Mentee Name],
@@ -116,7 +118,19 @@ export const DEFAULT_PLATFORM_CONFIG: PlatformConfig = {
     "Welcome Mentor {{mentor_name}} to Dental CRM! Thank you for helping guide our students.",
   welcomeTemplateAssignment: DEFAULT_ASSIGNMENT_WELCOME,
   meetingTypes: DEFAULT_MEETING_TYPES,
+  timelineCardColors: DEFAULT_TIMELINE_CARD_COLORS,
 };
+
+export function normalizeTimelineCardColors(raw: unknown): TimelineCardColors {
+  const base = { ...DEFAULT_TIMELINE_CARD_COLORS };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return base;
+  const obj = raw as Record<string, unknown>;
+  for (const key of Object.keys(base) as Array<keyof TimelineCardColors>) {
+    const val = String(obj[key] || "").trim();
+    if (/^#[0-9a-fA-F]{3,8}$/.test(val)) base[key] = val;
+  }
+  return base;
+}
 
 export function platformConfigFromSettings(settings?: AdminSettings | null): PlatformConfig {
   if (!settings) return DEFAULT_PLATFORM_CONFIG;
@@ -131,6 +145,7 @@ export function platformConfigFromSettings(settings?: AdminSettings | null): Pla
     welcomeTemplateAssignment:
       settings.welcome_template_assignment || DEFAULT_PLATFORM_CONFIG.welcomeTemplateAssignment,
     meetingTypes: normalizeMeetingTypes(settings.meeting_types),
+    timelineCardColors: normalizeTimelineCardColors(settings.timeline_card_colors),
   };
 }
 

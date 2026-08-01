@@ -169,7 +169,7 @@ function StrengthYearSparkline({ scores }: { scores: number[] }) {
   );
 }
 
-/** Same source as Application Journey on the student Profile & Docs page. */
+/** Same source as Application Readiness on the student Profile & Docs page. */
 function journeyProgressOf(student: Student) {
   return Math.max(
     0,
@@ -234,9 +234,19 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
   const [riskFilter, setRiskFilter] = useState<"GREEN" | "YELLOW" | "RED" | null>(null);
   const [acceptingAssignment, setAcceptingAssignment] = useState<StudentAssignment | null>(null);
   const [decliningAssignmentId, setDecliningAssignmentId] = useState<string | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleStudent, setScheduleStudent] = useState<Student | null>(null);
   const [suggestStudent, setSuggestStudent] = useState<Student | null>(null);
   const [quickScheduleBusy, setQuickScheduleBusy] = useState(false);
+
+  const openScheduleMeeting = (student?: Student | null) => {
+    setScheduleStudent(student || null);
+    setScheduleOpen(true);
+  };
+  const closeScheduleMeeting = () => {
+    setScheduleOpen(false);
+    setScheduleStudent(null);
+  };
   const [suggestMessageBusy, setSuggestMessageBusy] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -1218,7 +1228,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                           type="button"
                           onClick={() => {
                             const s = resolveAlertStudent(alert.studentId);
-                            if (s) setScheduleStudent(s);
+                            if (s) openScheduleMeeting(s);
                           }}
                           className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500"
                         >
@@ -1409,6 +1419,18 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                     <ChevronRight className="w-4 h-4" />
                   </Button>
                 </div>
+              )}
+              {scheduleTab === "upcoming" && onQuickCreateMeeting && (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-8 w-8"
+                  onClick={() => openScheduleMeeting(null)}
+                  aria-label="Create meeting"
+                  title="Create meeting"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
               )}
             </div>
           </div>
@@ -1992,11 +2014,23 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                 const prevSession =
                   student.lastMeetingDate || student.lastContactDate || null;
 
+                const pendingAssignment = isPending
+                  ? pendingAssignments.find((a) => assignmentStudentId(a) === student.id) || null
+                  : null;
+
                 return (
                   <tr
                     key={student.id}
-                    onClick={() => onSelectStudent(student.id, "overview")}
-                    className="group cursor-pointer transition-colors hover:bg-slate-800/40"
+                    onClick={() => {
+                      if (isPending) return;
+                      onSelectStudent(student.id, "overview");
+                    }}
+                    className={cn(
+                      "group transition-colors",
+                      isPending
+                        ? "cursor-default"
+                        : "cursor-pointer hover:bg-slate-800/40",
+                    )}
                   >
                     <td className="px-6 py-4 align-middle">
                       <div className="flex items-center gap-4">
@@ -2076,10 +2110,10 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                     <td className="px-6 py-4 align-middle">
                       <button
                         type="button"
-                        title="Open Application Journey"
+                        title="Open Application Readiness"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onSelectStudent(student.id, "records");
+                          onSelectStudent(student.id, "applications");
                         }}
                         className="flex w-full max-w-[120px] items-center gap-3"
                       >
@@ -2132,28 +2166,80 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                     </td>
 
                     <td className="px-6 py-4 align-middle">
-                      <div className="flex items-center justify-end gap-3">
-                        <button
-                          type="button"
-                          title="Send Message"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onMessageStudent?.(student.id);
-                          }}
-                          className="rounded-xl border border-slate-700 bg-slate-800 p-2.5 text-slate-400 shadow-lg transition-all hover:border-indigo-500 hover:bg-indigo-600 hover:text-white"
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectStudent(student.id, "overview");
-                          }}
-                          className="whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-all group-hover:border-indigo-500 group-hover:bg-indigo-600"
-                        >
-                          Profile
-                        </button>
+                      <div className="flex items-center justify-end gap-2">
+                        {isPending && pendingAssignment ? (
+                          decliningAssignmentId === pendingAssignment.id ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeclineAssignment(pendingAssignment.id);
+                                  setDecliningAssignmentId(null);
+                                }}
+                              >
+                                Confirm
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDecliningAssignmentId(null);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAcceptingAssignment(pendingAssignment);
+                                }}
+                              >
+                                Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDecliningAssignmentId(pendingAssignment.id);
+                                }}
+                              >
+                                Decline
+                              </Button>
+                            </>
+                          )
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              title="Send Message"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMessageStudent?.(student.id);
+                              }}
+                              className="rounded-xl border border-slate-700 bg-slate-800 p-2.5 text-slate-400 shadow-lg transition-all hover:border-indigo-500 hover:bg-indigo-600 hover:text-white"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectStudent(student.id, "overview");
+                              }}
+                              className="whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-all group-hover:border-indigo-500 group-hover:bg-indigo-600"
+                            >
+                              Profile
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -2194,19 +2280,20 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       />
 
       <QuickScheduleMeetingModal
-        open={!!scheduleStudent}
+        open={scheduleOpen}
         student={scheduleStudent}
+        students={students}
         mentorId={mentor.id}
         isSubmitting={quickScheduleBusy}
         onClose={() => {
-          if (!quickScheduleBusy) setScheduleStudent(null);
+          if (!quickScheduleBusy) closeScheduleMeeting();
         }}
         onSubmit={async (payload) => {
           if (!onQuickCreateMeeting) return;
           setQuickScheduleBusy(true);
           try {
             await onQuickCreateMeeting(payload);
-            setScheduleStudent(null);
+            closeScheduleMeeting();
           } finally {
             setQuickScheduleBusy(false);
           }

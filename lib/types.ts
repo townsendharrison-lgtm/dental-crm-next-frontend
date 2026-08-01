@@ -197,6 +197,15 @@ export interface ConsideringSchool {
   location?: string;
 }
 
+/** Manual flags students/staff can toggle on Application Readiness. */
+export interface ApplicationReadinessFlags {
+  dat_scheduled?: boolean;
+  dat_completed?: boolean;
+  personal_statement_written?: boolean;
+  experience_descriptions_written?: boolean;
+  school_list_finalized?: boolean;
+}
+
 export interface StudentProfile {
   id: string;
   mentor_id?: string | null;
@@ -256,6 +265,11 @@ export interface StudentProfile {
   last_profile_reminder_at?: string | null;
   school_categories?: SchoolCategory[] | null;
   month_colors?: Record<string, string> | null;
+  timeline_start?: string | null;
+  timeline_end?: string | null;
+  timeline_month_goals?: Record<string, string> | null;
+  /** Manual Application Readiness checklist flags (student + staff editable). */
+  application_readiness?: ApplicationReadinessFlags | null;
   created_at: string;
   updated_at: string;
 }
@@ -292,6 +306,9 @@ export interface Student {
   selectedSchools?: School[];
   schoolCategories?: SchoolCategory[];
   monthColors?: Record<string, string>;
+  timelineStart?: string | null;
+  timelineEnd?: string | null;
+  timelineMonthGoals?: Record<string, string>;
   avgResponseTime?: string | number;
   datTS?: number | null;
   zipCode?: string | null;
@@ -565,7 +582,14 @@ export interface StudentDocument {
   uploadedAt?: string;
 }
 
-export type ExperienceCategory = "Volunteering" | "Research" | "Shadowing" | "Dental Experience" | "Employment" | "Academic";
+export type ExperienceCategory =
+  | "Volunteering"
+  | "Research"
+  | "Shadowing"
+  | "Dental Experience"
+  | "Employment"
+  | "Academic"
+  | "Extracurricular";
 
 export interface Experience {
   id: string;
@@ -633,6 +657,8 @@ export interface School {
   strengthScoreAvg?: number;
   datAvg?: number;
   avgGPA?: number;
+  /** Average science GPA from catalog */
+  avgSgpa?: number | null;
   acceptanceRate?: number | null;
   isAcceptanceRate?: number | null;
   oosAcceptanceRate?: number | null;
@@ -643,6 +669,9 @@ export interface School {
   femaleEnrollment?: number | null;
   minDat5th?: number | null;
   minCgpa5th?: number | null;
+  minSgpa5th?: number | null;
+  /** Application deadline label from catalog */
+  deadline?: string | null;
   /** Program length in years (from sheet “Length of School”) */
   lengthOfSchool?: string | number | null;
   /** Public vs private (hub `type` is used for Reach/Target category) */
@@ -905,10 +934,17 @@ export interface SubGoal {
   unit: string;
 }
 
+export interface CategoryRecommendation {
+  label: string;
+  /** Optional resource URL mentors can attach */
+  url?: string;
+}
+
 export interface CategoryPlan {
   status?: string;
   actionPlan?: string;
-  recommended?: string[];
+  /** Legacy string[] still accepted; prefer { label, url } */
+  recommended?: Array<string | CategoryRecommendation>;
   cta?: string;
   mentorNotes?: string;
   targetGoal?: { value: number; unit: string };
@@ -981,6 +1017,8 @@ export interface AdminSettings {
   waitlist_message?: string | null;
   /** Complete-meeting type catalog + summary presets */
   meeting_types?: MeetingTypeConfig[] | null;
+  /** Timeline card type accent colors */
+  timeline_card_colors?: TimelineCardColors | null;
   created_at: string;
   updated_at: string;
 }
@@ -1182,6 +1220,8 @@ export interface PlatformConfig {
   welcomeTemplateAssignment?: string;
   /** Mentor complete-meeting types + summary presets */
   meetingTypes: MeetingTypeConfig[];
+  /** Timeline card type accent colors */
+  timelineCardColors: TimelineCardColors;
 }
 
 export interface AutoReplySettings {
@@ -1237,7 +1277,42 @@ export interface Milestone {
   isCustom: boolean;
   status: string;
   sortOrder?: number;
+  cardType?: TimelineCardType;
+  description?: string;
+  resourceLinks?: TimelineResourceLink[];
+  targetDate?: string | null;
+  createdBy?: string | null;
+  createdByRole?: string | null;
 }
+
+export type TimelineCardType = "Meeting" | "Milestone" | "Task" | "Other";
+
+export interface TimelineResourceLink {
+  label: string;
+  url: string;
+}
+
+export interface TimelineBookshelfItem {
+  id: string;
+  scope: "GLOBAL" | "MENTOR";
+  ownerId?: string | null;
+  cardType: TimelineCardType;
+  title: string;
+  description?: string;
+  resourceLinks?: TimelineResourceLink[];
+  sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type TimelineCardColors = Record<TimelineCardType, string>;
+
+export const DEFAULT_TIMELINE_CARD_COLORS: TimelineCardColors = {
+  Meeting: "#6366f1",
+  Milestone: "#10b981",
+  Task: "#f59e0b",
+  Other: "#94a3b8",
+};
 
 export interface MentorReminder {
   id: string;

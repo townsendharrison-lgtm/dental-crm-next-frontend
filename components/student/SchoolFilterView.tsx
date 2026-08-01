@@ -111,6 +111,81 @@ function schoolEthnicityPct(school: DentalSchool, ethnicity: EthnicityFilter) {
   return formatPct(count, total);
 }
 
+/**
+ * Exact columns students see in View Full Details (no staff-only / extra sheet dump).
+ * Whitelist only — no fuzzy heuristics (those leaked tuition, mins, etc.).
+ */
+const STUDENT_SPREADSHEET_COL_KEYS = [
+  'name',
+  'location',
+  'applicants',
+  'acceptanceRate',
+  'isAcceptanceRate',
+  'oosAcceptanceRate',
+  'classSize',
+  'type',
+  'lengthOfSchool',
+  'acceptsCanadianDat',
+  'cgpa',
+  'sgpa',
+  'datAA',
+  'deadline',
+  'canadians',
+  'acceptsNonUsNonCanadian',
+  'additionalInfo',
+  'interview',
+  'links',
+  'website',
+  'email',
+  'phone',
+  'secondaryFee',
+  'deposit',
+  'casper',
+  'letters',
+  'mission',
+  'podcast',
+  'maleEnrollment',
+  'femaleEnrollment',
+  'whiteEnrollment',
+  'blackEnrollment',
+  'hispanicEnrollment',
+  'asianEnrollment',
+  'internationalEnrollment',
+  'ccCredits',
+] as const satisfies ReadonlyArray<keyof typeof COL_MAP>;
+
+function normalizeSheetHeader(header: string) {
+  return header.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function headerMatchesAliases(header: string, aliases: readonly string[]): boolean {
+  const h = header.toLowerCase().trim();
+  const normalized = normalizeSheetHeader(header);
+  return aliases.some((alias) => {
+    const a = alias.toLowerCase().trim();
+    return a === h || normalizeSheetHeader(alias) === normalized;
+  });
+}
+
+function isStudentAccessibleSpreadsheetHeader(header: string): boolean {
+  for (const key of STUDENT_SPREADSHEET_COL_KEYS) {
+    if (headerMatchesAliases(header, COL_MAP[key] as readonly string[])) {
+      return true;
+    }
+  }
+
+  for (const field of COURSE_REQUIREMENT_FIELDS) {
+    if (
+      headerMatchesAliases(header, field.aliases) ||
+      normalizeSheetHeader(field.label) === normalizeSheetHeader(header)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function ScoreFilterControl({
   label,
   tips,
@@ -293,6 +368,10 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
   alreadyAddedSchoolKeys = [],
 }) => {
   const { schools, loading, error, refetch } = useDentalSchoolsCatalog();
+  // Always pull latest sheet when this browser opens (student/admin/mentor).
+  useEffect(() => {
+    void refetch();
+  }, [refetch]);
   const [favorites, setFavorites] = useState<string[]>(() => {
     const saved = localStorage.getItem('dsg_favorites');
     return saved ? JSON.parse(saved) : [];
@@ -1129,7 +1208,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="group relative flex h-full min-h-[520px] flex-col rounded-xl border border-slate-800 bg-slate-900 overflow-hidden hover:border-indigo-500/30 transition-colors"
+                      className="group relative flex h-full min-h-[420px] flex-col rounded-xl border border-slate-800 bg-slate-900 overflow-hidden hover:border-indigo-500/30 transition-colors"
                     >
                       <div className="flex h-full flex-col p-4 space-y-4 relative z-10">
                         {/* Header */}
@@ -1161,60 +1240,48 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                           </Button>
                         </div>
 
-                        {/* Stats Grid */}
-                        <div className={`grid ${isMentorView ? 'grid-cols-3' : 'grid-cols-2'} gap-2 shrink-0`}>
-                          {(isMentorView
-                            ? [
-                                { label: 'Avg cGPA', value: school.cgpa || 'N/A', color: 'text-white' },
-                                { label: 'Avg sGPA', value: school.sgpa || 'N/A', color: 'text-white' },
-                                { label: 'Avg DAT AA', value: school.datAA || 'N/A', color: 'text-white' },
-                                { label: 'Min cGPA', value: school.minCgpa5th || 'N/A', color: 'text-indigo-400' },
-                                { label: 'Min sGPA', value: school.minSgpa5th || 'N/A', color: 'text-indigo-400' },
-                                { label: 'Min DAT AA', value: school.minDat5th || 'N/A', color: 'text-indigo-400' },
-                              ]
-                            : [
-                                { label: 'Mean cGPA', value: school.cgpa || 'N/A', color: 'text-white' },
-                                { label: 'DAT AA', value: school.datAA || 'N/A', color: 'text-white' },
-                                {
-                                  label: 'Acceptance',
-                                  value: school.acceptanceRate ? `${school.acceptanceRate}%` : 'N/A',
-                                  color: 'text-emerald-400',
-                                },
-                                { label: 'Class Size', value: school.classSize || 'N/A', color: 'text-white' },
-                                {
-                                  label: 'Length of School',
-                                  value: school.lengthOfSchool ? `${school.lengthOfSchool} yrs` : 'N/A',
-                                  color: 'text-white',
-                                },
-                                {
-                                  label: 'Public/Private',
-                                  value: school.type || 'N/A',
-                                  color: 'text-white',
-                                },
-                                {
-                                  label: 'Acc. Canadian DAT',
-                                  value: school.acceptsCanadianDat ? 'Yes' : 'No',
-                                  color: school.acceptsCanadianDat ? 'text-emerald-400' : 'text-rose-400',
-                                },
-                                {
-                                  label: 'Accepts Canadians',
-                                  value: school.canadians ? 'Yes' : 'No',
-                                  color: school.canadians ? 'text-emerald-400' : 'text-rose-400',
-                                },
-                              ]
-                          ).map((stat, idx) => (
-                            <div
-                              key={idx}
-                              className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/50 min-h-[58px] flex flex-col items-center justify-center text-center"
-                            >
-                              <p className="text-[9px] font-medium text-slate-500 uppercase tracking-widest mb-1 truncate w-full">
-                                {stat.label}
-                              </p>
-                              <p className={`text-sm font-semibold truncate w-full ${stat.color}`}>
-                                {stat.value}
-                              </p>
+                        {/* Student: avgs only. Admin/mentor: avgs + mins */}
+                        <div className="space-y-2 shrink-0">
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { label: 'Avg cGPA', value: school.cgpa || 'N/A' },
+                              { label: 'Avg sGPA', value: school.sgpa || 'N/A' },
+                              { label: 'Avg DAT AA', value: school.datAA || 'N/A' },
+                            ].map((stat) => (
+                              <div
+                                key={stat.label}
+                                className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/50 min-h-[58px] flex flex-col items-center justify-center text-center"
+                              >
+                                <p className="text-[9px] font-medium text-slate-500 uppercase tracking-widest mb-1 truncate w-full">
+                                  {stat.label}
+                                </p>
+                                <p className="text-sm font-semibold text-white truncate w-full">
+                                  {stat.value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                          {isMentorView && (
+                            <div className="grid grid-cols-3 gap-2">
+                              {[
+                                { label: 'Min cGPA', value: school.minCgpa5th || 'N/A' },
+                                { label: 'Min sGPA', value: school.minSgpa5th || 'N/A' },
+                                { label: 'Min DAT AA', value: school.minDat5th || 'N/A' },
+                              ].map((stat) => (
+                                <div
+                                  key={stat.label}
+                                  className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/50 min-h-[58px] flex flex-col items-center justify-center text-center"
+                                >
+                                  <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-widest mb-1 truncate w-full">
+                                    {stat.label}
+                                  </p>
+                                  <p className="text-sm font-semibold text-sky-300 truncate w-full">
+                                    {stat.value}
+                                  </p>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
 
                         {/* Secondary Info */}
@@ -1361,10 +1428,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                       <th className="p-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest whitespace-nowrap sticky top-0 left-0 bg-slate-950 z-40 border-b border-r border-slate-800 w-24 min-w-[96px]">Actions</th>
                       {schools.length > 0 && Object.keys(schools[0].raw).filter(header => {
                         if (isMentorView) return true;
-                        const h = header.toLowerCase().trim();
-                        const isMinGpa = COL_MAP.minCgpa5th.some(k => k.toLowerCase().trim() === h);
-                        const isMinDat = COL_MAP.minDat5th.some(k => k.toLowerCase().trim() === h);
-                        return !isMinGpa && !isMinDat;
+                        return isStudentAccessibleSpreadsheetHeader(header);
                       }).map(header => {
                         const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '');
                         const isSchool =
@@ -1416,10 +1480,7 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                         </td>
                         {Object.entries(school.raw).filter(([key]) => {
                           if (isMentorView) return true;
-                          const h = key.toLowerCase().trim();
-                          const isMinGpa = COL_MAP.minCgpa5th.some(k => k.toLowerCase().trim() === h);
-                          const isMinDat = COL_MAP.minDat5th.some(k => k.toLowerCase().trim() === h);
-                          return !isMinGpa && !isMinDat;
+                          return isStudentAccessibleSpreadsheetHeader(key);
                         }).map(([key, val], i) => {
                           const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
                           const isSchool =
@@ -1526,32 +1587,8 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                   {/* Stats Overview */}
                   <div className="md:col-span-2 space-y-6">
                     <div className={`grid gap-2 ${isMentorView ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 lg:grid-cols-4'}`}>
-                      <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
-                        <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg cGPA</p>
-                        <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.cgpa || 'N/A'}</p>
-                      </div>
-                      <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
-                        <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg sGPA</p>
-                        <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.sgpa || 'N/A'}</p>
-                      </div>
-                      <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
-                        <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg DAT AA</p>
-                        <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.datAA || 'N/A'}</p>
-                      </div>
-                      {isMentorView && (
+                      {isMentorView ? (
                         <>
-                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
-                            <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-1">Min cGPA (5%)</p>
-                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.minCgpa5th || 'N/A'}</p>
-                          </div>
-                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
-                            <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-1">Min sGPA (5%)</p>
-                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.minSgpa5th || 'N/A'}</p>
-                          </div>
-                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
-                            <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-1">Min DAT (5%)</p>
-                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.minDat5th || 'N/A'}</p>
-                          </div>
                           <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
                             <p className="text-[9px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-1">Max cGPA (95%)</p>
                             <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.maxCgpa95th || 'N/A'}</p>
@@ -1564,13 +1601,50 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                             <p className="text-[9px] font-medium text-emerald-400/70 uppercase tracking-wider leading-tight mb-1">Max DAT (95%)</p>
                             <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.maxDat95th || 'N/A'}</p>
                           </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg cGPA</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.cgpa || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg sGPA</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.sgpa || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg DAT AA</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.datAA || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-1">Min cGPA (5%)</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.minCgpa5th || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-1">Min sGPA (5%)</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.minSgpa5th || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-indigo-400/70 uppercase tracking-wider leading-tight mb-1">Min DAT (5%)</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.minDat5th || 'N/A'}</p>
+                          </div>
                         </>
-                      )}
-                      {!isMentorView && (
-                        <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
-                          <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Acceptance</p>
-                          <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.acceptanceRate ? `${selectedSchool.acceptanceRate}%` : 'N/A'}</p>
-                        </div>
+                      ) : (
+                        <>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg cGPA</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.cgpa || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg sGPA</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.sgpa || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Avg DAT AA</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.datAA || 'N/A'}</p>
+                          </div>
+                          <div className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-center flex flex-col items-center justify-center min-h-[58px] sm:min-h-[64px]">
+                            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-tight mb-1">Acceptance</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{selectedSchool.acceptanceRate ? `${selectedSchool.acceptanceRate}%` : 'N/A'}</p>
+                          </div>
+                        </>
                       )}
                     </div>
 
@@ -1780,110 +1854,199 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
                       </div>
                     </div>
 
-                    {isMentorView && (
-                      <div className="space-y-4">
-                        <h5 className="text-base font-semibold text-white flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4 text-indigo-400" /> Admissions & Interview
-                        </h5>
-                        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
-                          <div className="flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
-                              <Clock className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-1">Interview Format</p>
-                              <p className="text-sm text-slate-300">{selectedSchool.interview || 'Information not available.'}</p>
-                            </div>
+                    <div className="space-y-4">
+                      <h5 className="text-base font-semibold text-white flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-indigo-400" /> Admissions & Interview
+                      </h5>
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
+                            <Clock className="w-4 h-4" />
                           </div>
-                          <div className="flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
-                              <Calendar className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-1">Deadlines</p>
-                              <p className="text-sm text-slate-300">Application: <span className="text-white font-semibold">{selectedSchool.deadline || 'TBD'}</span></p>
-                            </div>
+                          <div>
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-1">Interview Format</p>
+                            <p className="text-sm text-slate-300">{selectedSchool.interview || 'Information not available.'}</p>
                           </div>
-                          {(selectedSchool.secondaryFee || selectedSchool.deposit || selectedSchool.casper) && (
-                            <div className="pt-3 border-t border-slate-800 space-y-2">
-                              {selectedSchool.secondaryFee && (
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-slate-500">Secondary Fee</span>
-                                  <span className="text-white font-semibold">{selectedSchool.secondaryFee}</span>
-                                </div>
-                              )}
-                              {selectedSchool.deposit && (
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-slate-500">Seat Deposit</span>
-                                  <span className="text-white font-semibold">{selectedSchool.deposit}</span>
-                                </div>
-                              )}
-                              {selectedSchool.casper && (
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-slate-500">Casper/Altus</span>
-                                  <span className="text-white font-semibold">{selectedSchool.casper}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {selectedSchool.podcast && (
-                            <div className="pt-3 border-t border-slate-800">
-                              <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-2">Podcast with Dean of Admissions</p>
-                              {selectedSchool.podcast.startsWith('http') ? (
-                                <a 
-                                  href={selectedSchool.podcast}
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
+                            <Calendar className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-1">Deadlines</p>
+                            <p className="text-sm text-slate-300">
+                              Application:{' '}
+                              <span className="text-white font-semibold">{selectedSchool.deadline || 'TBD'}</span>
+                            </p>
+                          </div>
+                        </div>
+                        {selectedSchool.letters && (
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Letters of Recommendation</p>
+                            <p className="text-sm text-slate-300 leading-relaxed">{selectedSchool.letters}</p>
+                          </div>
+                        )}
+                        {(selectedSchool.secondaryFee || selectedSchool.deposit || selectedSchool.casper) && (
+                          <div className="pt-3 border-t border-slate-800 space-y-2">
+                            {selectedSchool.secondaryFee && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-slate-500">Secondary Fee</span>
+                                <span className="text-white font-semibold">{selectedSchool.secondaryFee}</span>
+                              </div>
+                            )}
+                            {selectedSchool.deposit && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-slate-500">Seat Deposit</span>
+                                <span className="text-white font-semibold">{selectedSchool.deposit}</span>
+                              </div>
+                            )}
+                            {selectedSchool.casper && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-slate-500">Casper/Altus</span>
+                                <span className="text-white font-semibold">{selectedSchool.casper}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h5 className="text-base font-semibold text-white flex items-center gap-2">
+                        <Info className="w-4 h-4 text-indigo-400" /> Program Details
+                      </h5>
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Public / Private</p>
+                            <p className="text-sm font-semibold text-white">{selectedSchool.type || 'N/A'}</p>
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Program Length</p>
+                            <p className="text-sm font-semibold text-white">
+                              {selectedSchool.lengthOfSchool
+                                ? `${selectedSchool.lengthOfSchool}${/yr|year/i.test(String(selectedSchool.lengthOfSchool)) ? '' : ' years'}`
+                                : 'N/A'}
+                            </p>
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Class Size</p>
+                            <p className="text-sm font-semibold text-white">{selectedSchool.classSize || 'N/A'}</p>
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Accepts Canadian DAT</p>
+                            <p className={`text-sm font-semibold ${selectedSchool.acceptsCanadianDat ? 'text-emerald-400' : 'text-slate-400'}`}>
+                              {selectedSchool.acceptsCanadianDat ? 'Yes' : 'No'}
+                            </p>
+                          </div>
+                        </div>
+                        {selectedSchool.mission && (
+                          <div className="pt-3 border-t border-slate-800 space-y-1.5">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Mission Statement</p>
+                            <p className="text-sm text-slate-300 leading-relaxed italic">&ldquo;{selectedSchool.mission}&rdquo;</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h5 className="text-base font-semibold text-white flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-indigo-400" /> Media & Resources
+                      </h5>
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                        {selectedSchool.podcast || selectedSchool.links || selectedSchool.website ? (
+                          <>
+                            {selectedSchool.podcast && (
+                              <div>
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mb-2">
+                                  Podcast with Dean of Admissions
+                                </p>
+                                {selectedSchool.podcast.startsWith('http') ? (
+                                  <a
+                                    href={selectedSchool.podcast}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-2 font-medium"
+                                  >
+                                    <ExternalLink className="w-4 h-4" /> Listen to Podcast
+                                  </a>
+                                ) : (
+                                  <p className="text-sm text-slate-300">{selectedSchool.podcast}</p>
+                                )}
+                              </div>
+                            )}
+                            {selectedSchool.links && (
+                              <a
+                                href={selectedSchool.links}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-2 font-medium"
+                              >
+                                <ExternalLink className="w-4 h-4" /> Video Tour / School Resources
+                              </a>
+                            )}
+                            {selectedSchool.website && selectedSchool.website !== selectedSchool.links && (
+                              <a
+                                href={selectedSchool.website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-2 font-medium"
+                              >
+                                <Globe className="w-4 h-4" /> Official Website
+                              </a>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm text-slate-500">No media or resource links available.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h5 className="text-base font-semibold text-white flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-indigo-400" /> Contact Details
+                      </h5>
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                        {selectedSchool.email || selectedSchool.phone || selectedSchool.website ? (
+                          <>
+                            {selectedSchool.email && (
+                              <div className="flex items-center gap-3 text-sm">
+                                <Mail className="w-4 h-4 text-slate-500 shrink-0" />
+                                <a
+                                  href={`mailto:${selectedSchool.email}`}
+                                  className="text-indigo-400 font-medium hover:underline break-all"
+                                >
+                                  {selectedSchool.email}
+                                </a>
+                              </div>
+                            )}
+                            {selectedSchool.phone && (
+                              <div className="flex items-center gap-3 text-sm">
+                                <Phone className="w-4 h-4 text-slate-500 shrink-0" />
+                                <a href={`tel:${selectedSchool.phone}`} className="text-slate-300 hover:text-white">
+                                  {selectedSchool.phone}
+                                </a>
+                              </div>
+                            )}
+                            {selectedSchool.website && (
+                              <div className="flex items-center gap-3 text-sm">
+                                <Globe className="w-4 h-4 text-slate-500 shrink-0" />
+                                <a
+                                  href={selectedSchool.website}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-sm text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-2 font-medium"
+                                  className="text-indigo-400 font-medium hover:underline break-all"
                                 >
-                                  <ExternalLink className="w-4 h-4" /> Listen to Podcast
+                                  {selectedSchool.website}
                                 </a>
-                              ) : (
-                                <p className="text-sm text-slate-300">{selectedSchool.podcast}</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm text-slate-500">No contact details available.</p>
+                        )}
                       </div>
-                    )}
-
-                    {isMentorView && (
-                      <div className="space-y-4">
-                        <h5 className="text-base font-semibold text-white flex items-center gap-2">
-                          <Info className="w-4 h-4 text-indigo-400" /> Additional Details
-                        </h5>
-                        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
-                          {selectedSchool.mission && (
-                            <div className="space-y-1.5">
-                              <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Mission Statement</p>
-                              <p className="text-sm text-slate-300 leading-relaxed italic">&ldquo;{selectedSchool.mission}&rdquo;</p>
-                            </div>
-                          )}
-                          {selectedSchool.letters && (
-                            <div className="space-y-1.5">
-                              <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Letters of Recommendation</p>
-                              <p className="text-sm text-slate-300 leading-relaxed">{selectedSchool.letters}</p>
-                            </div>
-                          )}
-                          {(selectedSchool.email || selectedSchool.phone) && (
-                            <div className="pt-3 border-t border-slate-800 space-y-2">
-                              {selectedSchool.email && (
-                                <div className="flex items-center gap-3 text-sm">
-                                  <Mail className="w-4 h-4 text-slate-500" />
-                                  <span className="text-indigo-400 font-medium">{selectedSchool.email}</span>
-                                </div>
-                              )}
-                              {selectedSchool.phone && (
-                                <div className="flex items-center gap-3 text-sm">
-                                  <Phone className="w-4 h-4 text-slate-500" />
-                                  <span className="text-slate-300">{selectedSchool.phone}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                    </div>
 
                     {selectedSchool.courseRequirements && (
                       <div className="space-y-3">

@@ -96,7 +96,9 @@ import { studentsApi } from "@/lib/api/students";
 import { documentsApi } from "@/lib/api/documents";
 import { usersApi } from "@/lib/api/users";
 import { ProfileDetailsEditModal } from "@/components/student/ProfileDetailsEditModal";
+import ApplicationReadinessPanel from "@/components/student/ApplicationReadinessPanel";
 import { DAT_TYPES, isUnitedStates } from "@/lib/profile/profileOptions";
+import { buildApplicationReadiness } from "@/lib/utils/applicationReadiness";
 
 interface StudentProfileDocumentsViewProps {
   student: Student;
@@ -253,10 +255,14 @@ export function StudentProfileDocumentsView({
   const openPersonalEditor = () => setProfileEditMode("personal");
   const openAcademicEditor = () => setProfileEditMode("academic");
 
-  const journeyProgress = Math.max(
-    0,
-    Math.min(100, Number(student.profile?.progress ?? student.progress ?? 0) || 0),
-  );
+  const readinessProgress = useMemo(() => {
+    return buildApplicationReadiness({
+      student,
+      experiences,
+      lorRequests,
+      credentials,
+    }).percent;
+  }, [student, experiences, lorRequests, credentials]);
 
   const profileCompleteness = useMemo(() => {
     const p = student.profile;
@@ -395,18 +401,29 @@ export function StudentProfileDocumentsView({
   const [credentialYear, setCredentialYear] = useState("");
   const [credentialDescription, setCredentialDescription] = useState("");
 
-  const sections = [
-    { id: "snapshot", label: "Student Snapshot", icon: User },
-    { id: "academic", label: "Academic Background", icon: GraduationCap },
-    { id: "lor", label: "Letters of Rec", icon: FileText },
-    { id: "dexterity", label: "Manual Dexterity", icon: Fingerprint },
-    { id: "credentials", label: "Licenses & Achievements", icon: Trophy },
-    { id: "experience", label: "Experience Summary", icon: Briefcase },
-    { id: "notes", label: "Additional Info", icon: MessageSquare },
-    { id: "documents", label: "Document Center", icon: Upload },
-  ] as const;
+  /** Staff edit Application Readiness under Plan → Applications; students keep it here. */
+  const showReadinessSection = !canReviewDocuments;
 
-  const sectionIds = useMemo(() => sections.map((s) => s.id), []);
+  const sections = useMemo(() => {
+    const base: Array<{ id: string; label: string; icon: typeof User }> = [
+      { id: "snapshot", label: "Student Snapshot", icon: User },
+    ];
+    if (showReadinessSection) {
+      base.push({ id: "readiness", label: "Application Readiness", icon: Target });
+    }
+    base.push(
+      { id: "academic", label: "Academic Background", icon: GraduationCap },
+      { id: "lor", label: "Letters of Rec", icon: FileText },
+      { id: "dexterity", label: "Manual Dexterity", icon: Fingerprint },
+      { id: "credentials", label: "Licenses & Achievements", icon: Trophy },
+      { id: "experience", label: "Experience Summary", icon: Briefcase },
+      { id: "notes", label: "Additional Info", icon: MessageSquare },
+      { id: "documents", label: "Document Center", icon: Upload },
+    );
+    return base;
+  }, [showReadinessSection]);
+
+  const sectionIds = useMemo(() => sections.map((s) => s.id), [sections]);
 
   const getScrollRoot = useCallback((): HTMLElement | null => {
     const start = contentRef.current;
@@ -1165,10 +1182,16 @@ export function StudentProfileDocumentsView({
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {progressDonut(journeyProgress, "Application Journey", "text-indigo-400")}
+            {progressDonut(readinessProgress, "Application Readiness", "text-indigo-400")}
             {progressDonut(profileCompleteness, "Profile Completion", "text-emerald-400")}
           </div>
         </section>
+
+        {showReadinessSection ? (
+          <section id="readiness" className="space-y-4 scroll-mt-28">
+            <ApplicationReadinessPanel student={student} />
+          </section>
+        ) : null}
 
         {/* Academic Background Section */}
         <section id="academic" className="space-y-6 scroll-mt-28">

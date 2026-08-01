@@ -1,5 +1,9 @@
 import type { OptimizationPlan, RoadmapPhases } from "@/lib/types";
 import { ApiRequestError } from "@/lib/api/client";
+import {
+  DEFAULT_MANUAL_DEXTERITY,
+  mergeCategoryPlans,
+} from "@/lib/utils/defaultCategoryPlans";
 
 const EMPTY_ROADMAP: RoadmapPhases = {
   phase1: [],
@@ -19,6 +23,11 @@ export function normalizeOptimizationPlan(
     ...(plan.roadmap || {}),
   };
 
+  const savedCategories =
+    plan.categories ||
+    (plan as { categories?: OptimizationPlan["categories"] }).categories ||
+    {};
+
   return {
     ...plan,
     studentId: plan.studentId ?? plan.student_id,
@@ -34,7 +43,11 @@ export function normalizeOptimizationPlan(
     kpis: plan.kpis ?? {},
     roadmap,
     lastUpdated: plan.lastUpdated ?? plan.updated_at ?? plan.created_at,
-    categories: plan.categories ?? {},
+    categories: mergeCategoryPlans(savedCategories),
+    manualDexterity:
+      plan.manualDexterity ||
+      (plan as { manual_dexterity?: OptimizationPlan["manualDexterity"] }).manual_dexterity ||
+      DEFAULT_MANUAL_DEXTERITY,
   };
 }
 

@@ -102,6 +102,9 @@ export const queryKeys = {
   milestones: {
     all: (studentId?: string) => ["milestones", { studentId }] as const,
   },
+  timelineBookshelf: {
+    all: () => ["timelineBookshelf"] as const,
+  },
   researchCases: {
     all: (filters?: any) => ["researchCases", { filters }] as const,
   },

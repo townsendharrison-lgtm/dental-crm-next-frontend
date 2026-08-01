@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Calendar, Globe } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -11,25 +11,62 @@ import { TimePicker } from "@/components/ui/TimePicker";
 import { TimezoneHint } from "@/components/ui/TimezoneHint";
 import { getBrowserTimezone, zonedDateTimeToUtcIso } from "@/lib/utils/dateUtils";
 import type { CreateMeetingPayload } from "@/lib/api/meetings";
-import type { Student } from "@/lib/types";
+import type { Mentor, Student } from "@/lib/types";
 
 export interface QuickScheduleMeetingModalProps {
   open: boolean;
-  student: Student | null;
-  mentorId: string;
+  /** Prefill a specific student (e.g. from a roster row). */
+  student?: Student | null;
+  /** When set, shows a student picker (dashboard create flow). */
+  students?: Student[];
+  /** Fixed mentor id (mentor self-schedule). */
+  mentorId?: string;
+  /** When set with no fixed mentorId, shows a mentor picker (manager flow). */
+  mentors?: Mentor[];
+  /** Prefill date (YYYY-MM-DD), e.g. selected day on weekly schedule. */
+  defaultDate?: string;
   isSubmitting?: boolean;
   onClose: () => void;
   onSubmit: (payload: CreateMeetingPayload) => void | Promise<void>;
 }
 
+function isShellStudent(s: Student) {
+  return !!s.email?.toLowerCase().endsWith("@school-selection.local");
+}
+
 export function QuickScheduleMeetingModal({
   open,
-  student,
-  mentorId,
+  student: preselectedStudent = null,
+  students = [],
+  mentorId: fixedMentorId,
+  mentors = [],
+  defaultDate,
   isSubmitting = false,
   onClose,
   onSubmit,
 }: QuickScheduleMeetingModalProps) {
+  const studentChoices = useMemo(
+    () =>
+      (students.length > 0 ? students : preselectedStudent ? [preselectedStudent] : [])
+        .filter((s) => !isShellStudent(s))
+        .slice()
+        .sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+    [students, preselectedStudent],
+  );
+
+  const mentorChoices = useMemo(
+    () =>
+      mentors
+        .filter((m) => (m.role || "MENTOR") === "MENTOR")
+        .slice()
+        .sort((a, b) => (a.name || a.email || "").localeCompare(b.name || b.email || "")),
+    [mentors],
+  );
+
+  const needsMentorPick = !fixedMentorId && mentorChoices.length > 0;
+
+  const [studentId, setStudentId] = useState("");
+  const [mentorId, setMentorId] = useState(fixedMentorId || "");
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [time, setTime] = useState("12:00");
@@ -39,24 +76,51 @@ export function QuickScheduleMeetingModal({
   const [link, setLink] = useState("");
   const [notes, setNotes] = useState("");
 
+  const selectedStudent =
+    studentChoices.find((s) => s.id === studentId) ||
+    preselectedStudent ||
+    null;
+
   useEffect(() => {
-    if (!open || !student) return;
-    const first = student.name?.trim().split(/\s+/)[0] || "Student";
-    setTitle(`Mentoring session with ${first}`);
-    setDate(new Date().toISOString().split("T")[0]);
+    if (!open) return;
+    const initialStudent =
+      preselectedStudent ||
+      (studentChoices.length === 1 ? studentChoices[0] : null);
+    setStudentId(initialStudent?.id || "");
+    setMentorId(fixedMentorId || mentorChoices[0]?.id || "");
+    const first = initialStudent?.name?.trim().split(/\s+/)[0] || "Student";
+    setTitle(initialStudent ? `Mentoring session with ${first}` : "Mentoring session");
+    setDate(defaultDate || new Date().toISOString().split("T")[0]);
     setTime("12:00");
     setAmpm("PM");
     setTimezone(getBrowserTimezone());
     setDuration(30);
     setLink("");
     setNotes("");
-  }, [open, student]);
+  }, [open, preselectedStudent, studentChoices, fixedMentorId, mentorChoices, defaultDate]);
 
-  const canSubmit = !!student && !!title.trim() && !!date && !!time && !isSubmitting;
+  useEffect(() => {
+    if (!open || !selectedStudent || preselectedStudent) return;
+    const first = selectedStudent.name?.trim().split(/\s+/)[0] || "Student";
+    setTitle((prev) =>
+      prev.startsWith("Mentoring session")
+        ? `Mentoring session with ${first}`
+        : prev,
+    );
+  }, [open, selectedStudent, preselectedStudent]);
+
+  const resolvedMentorId = fixedMentorId || mentorId;
+  const canSubmit =
+    !!selectedStudent &&
+    !!resolvedMentorId &&
+    !!title.trim() &&
+    !!date &&
+    !!time &&
+    !isSubmitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!student || !canSubmit) return;
+    if (!selectedStudent || !resolvedMentorId || !canSubmit) return;
 
     let [hours, minutes] = time.split(":").map(Number);
     if (ampm === "PM" && hours < 12) hours += 12;
@@ -72,8 +136,8 @@ export function QuickScheduleMeetingModal({
       type: "STUDENT_MEETING",
       audience: "STUDENT",
       attendees: [],
-      mentorId,
-      studentId: student.id,
+      mentorId: resolvedMentorId,
+      studentId: selectedStudent.id,
       notes: notes.trim() || undefined,
       link: link.trim() || undefined,
     });
@@ -85,8 +149,8 @@ export function QuickScheduleMeetingModal({
       onClose={onClose}
       title="Schedule meeting"
       description={
-        student
-          ? `Book a session with ${student.name}`
+        selectedStudent
+          ? `Book a session with ${selectedStudent.name}`
           : "Book a mentoring session"
       }
       size="lg"
@@ -113,9 +177,43 @@ export function QuickScheduleMeetingModal({
       }
     >
       <form id="quick-schedule-meeting-form" onSubmit={handleSubmit} className="space-y-4">
-        <FormField label="Student">
-          <Input value={student?.name || ""} disabled />
-        </FormField>
+        {needsMentorPick && (
+          <FormField label="Mentor" required>
+            <SelectMenu
+              value={mentorId}
+              placeholder="Select mentor…"
+              onChange={setMentorId}
+              options={[
+                { value: "", label: "Select mentor…" },
+                ...mentorChoices.map((m) => ({
+                  value: m.id,
+                  label: m.name || m.email || "Mentor",
+                })),
+              ]}
+            />
+          </FormField>
+        )}
+
+        {preselectedStudent && studentChoices.length <= 1 ? (
+          <FormField label="Student">
+            <Input value={preselectedStudent.name || ""} disabled />
+          </FormField>
+        ) : (
+          <FormField label="Student" required>
+            <SelectMenu
+              value={studentId}
+              placeholder="Select student…"
+              onChange={setStudentId}
+              options={[
+                { value: "", label: "Select student…" },
+                ...studentChoices.map((s) => ({
+                  value: s.id,
+                  label: s.name || s.email || "Student",
+                })),
+              ]}
+            />
+          </FormField>
+        )}
 
         <FormField label="Event title" required>
           <Input

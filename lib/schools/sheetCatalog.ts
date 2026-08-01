@@ -464,6 +464,7 @@ export function mapDentalSchoolToHubSchool(
     strengthScoreAvg: 0,
     datAvg: dentalSchool.datAA,
     avgGPA: dentalSchool.cgpa,
+    avgSgpa: dentalSchool.sgpa || null,
     acceptanceRate: dentalSchool.acceptanceRate,
     isAcceptanceRate: dentalSchool.isAcceptanceRate,
     oosAcceptanceRate: dentalSchool.oosAcceptanceRate,
@@ -476,9 +477,38 @@ export function mapDentalSchoolToHubSchool(
     femaleEnrollment: dentalSchool.femaleEnrollment,
     minDat5th: dentalSchool.minDat5th,
     minCgpa5th: dentalSchool.minCgpa5th,
+    minSgpa5th: dentalSchool.minSgpa5th,
+    deadline: dentalSchool.deadline || null,
     lengthOfSchool: lengthYears,
     publicPrivate: dentalSchool.type || null,
     acceptsCanadianDat: dentalSchool.acceptsCanadianDat,
     acceptsCanadians: dentalSchool.canadians,
+  };
+}
+
+/**
+ * Overlay live spreadsheet/catalog stats onto a hub school.
+ * Catalog values win for display fields so sheet edits show on category cards;
+ * selection-only fields (category, notes, status ids) stay from the saved school.
+ */
+export function enrichHubSchoolFromCatalog(
+  school: School,
+  catalog: DentalSchool[],
+): School {
+  if (!catalog.length) return school;
+  const match =
+    catalog.find((s) => s.id === school.id) ||
+    catalog.find((s) => s.name.toLowerCase() === school.name.toLowerCase());
+  if (!match) return school;
+
+  const mapped = mapDentalSchoolToHubSchool(match, school.type || "Target");
+  return {
+    ...school,
+    ...mapped,
+    id: school.id,
+    type: school.type || mapped.type,
+    notes: school.notes,
+    selectionId: school.selectionId,
+    selectionStatus: school.selectionStatus,
   };
 }

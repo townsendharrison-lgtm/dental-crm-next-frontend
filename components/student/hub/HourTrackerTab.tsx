@@ -12,6 +12,7 @@ import {
   Heart,
   Activity,
   Briefcase,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Experience, Student } from "@/lib/types";
@@ -45,6 +46,8 @@ interface HourTrackerTabProps {
   experiences: Experience[];
   /** @deprecated Local-only updates; mutations now persist via API. Kept for callers that still pass it. */
   onUpdateExperiences?: (newExps: Experience[]) => void;
+  /** Mentors viewing a student's hub logs — hide create/edit/delete */
+  readOnly?: boolean;
 }
 
 const FILTER_OPTIONS = [
@@ -55,6 +58,7 @@ const FILTER_OPTIONS = [
   { value: "Dental Experience", label: "Dental Experiences" },
   { value: "Academic", label: "Academic Enrichment" },
   { value: "Employment", label: "Employment" },
+  { value: "Extracurricular", label: "Extracurricular Activities" },
 ];
 
 const CATEGORY_OPTIONS = FILTER_OPTIONS.filter((o) => o.value !== "All");
@@ -105,6 +109,7 @@ function categoryBadgeVariant(
 function categoryLabel(category: string) {
   if (category === "Dental Experience") return "Dental Experiences";
   if (category === "Academic") return "Academic Enrichment";
+  if (category === "Extracurricular") return "Extracurricular Activities";
   return category;
 }
 
@@ -115,10 +120,15 @@ function CategoryIcon({ category }: { category: string }) {
   if (category === "Volunteering") return <Heart {...props} />;
   if (category === "Dental Experience") return <Activity {...props} />;
   if (category === "Employment") return <Briefcase {...props} />;
+  if (category === "Extracurricular") return <Users {...props} />;
   return null;
 }
 
-export default function HourTrackerTab({ student, experiences }: HourTrackerTabProps) {
+export default function HourTrackerTab({
+  student,
+  experiences,
+  readOnly = false,
+}: HourTrackerTabProps) {
   const createExperience = useCreateExperience();
   const updateExperience = useUpdateExperience();
   const deleteExperience = useDeleteExperience();
@@ -387,13 +397,15 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
               />
             </div>
 
-            <Button
-              leftIcon={<Plus size={16} />}
-              onClick={() => setIsAddExperienceOpen(true)}
-              className="w-full sm:w-auto whitespace-nowrap"
-            >
-              New Experience
-            </Button>
+            {!readOnly && (
+              <Button
+                leftIcon={<Plus size={16} />}
+                onClick={() => setIsAddExperienceOpen(true)}
+                className="w-full sm:w-auto whitespace-nowrap"
+              >
+                New Experience
+              </Button>
+            )}
           </div>
         </div>
 
@@ -404,10 +416,12 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
             description={
               experienceSearch || experienceFilter !== "All"
                 ? "Try adjusting your search or filter."
-                : "Add your first experience to start tracking hours."
+                : readOnly
+                  ? "This student has not logged any experiences yet."
+                  : "Add your first experience to start tracking hours."
             }
             action={
-              !experienceSearch && experienceFilter === "All" ? (
+              !readOnly && !experienceSearch && experienceFilter === "All" ? (
                 <Button leftIcon={<Plus size={16} />} onClick={() => setIsAddExperienceOpen(true)}>
                   New Experience
                 </Button>
@@ -440,34 +454,36 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                         <h3 className="text-lg font-semibold text-white mb-1">{exp.title}</h3>
                         <p className="text-sm text-slate-400">{exp.organization}</p>
                       </div>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditExperience(exp);
-                          }}
-                          className="h-9 w-9 text-slate-500 hover:text-white"
-                          aria-label="Edit experience"
-                        >
-                          <Edit3 size={18} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteConfirmation({ type: "experience", id: exp.id });
-                          }}
-                          className="h-9 w-9 text-slate-500 hover:text-rose-400"
-                          aria-label="Delete experience"
-                        >
-                          <Trash2 size={18} />
-                        </Button>
-                      </div>
+                      {!readOnly && (
+                        <div className="flex gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditExperience(exp);
+                            }}
+                            className="h-9 w-9 text-slate-500 hover:text-white"
+                            aria-label="Edit experience"
+                          >
+                            <Edit3 size={18} />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirmation({ type: "experience", id: exp.id });
+                            }}
+                            className="h-9 w-9 text-slate-500 hover:text-rose-400"
+                            aria-label="Delete experience"
+                          >
+                            <Trash2 size={18} />
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     {exp.description ? (
@@ -515,16 +531,18 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                       <h4 className="text-xs font-medium text-slate-500 uppercase tracking-wider">
                         Recent Sessions
                       </h4>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        leftIcon={<Plus size={14} />}
-                        onClick={() => setIsAddSessionOpen(exp.id)}
-                        className="h-8 text-indigo-400 hover:text-indigo-300"
-                      >
-                        Log Session
-                      </Button>
+                      {!readOnly && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<Plus size={14} />}
+                          onClick={() => setIsAddSessionOpen(exp.id)}
+                          className="h-8 text-indigo-400 hover:text-indigo-300"
+                        >
+                          Log Session
+                        </Button>
+                      )}
                     </div>
                     <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
                       {(exp.sessions || []).length === 0 ? (
@@ -558,37 +576,39 @@ export default function HourTrackerTab({ student, experiences }: HourTrackerTabP
                                   </p>
                                 )}
                               </div>
-                              <div className="flex gap-0.5 opacity-0 group-hover/session:opacity-100 transition-all">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    setEditingSession({ expId: exp.id, session });
-                                    setIsAddSessionOpen(exp.id);
-                                  }}
-                                  className="h-8 w-8 text-slate-500 hover:text-white"
-                                  aria-label="Edit session"
-                                >
-                                  <Edit3 size={14} />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() =>
-                                    setDeleteConfirmation({
-                                      type: "session",
-                                      id: session.id,
-                                      expId: exp.id,
-                                    })
-                                  }
-                                  className="h-8 w-8 text-slate-500 hover:text-rose-400"
-                                  aria-label="Delete session"
-                                >
-                                  <Trash2 size={14} />
-                                </Button>
-                              </div>
+                              {!readOnly && (
+                                <div className="flex gap-0.5 opacity-0 group-hover/session:opacity-100 transition-all">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setEditingSession({ expId: exp.id, session });
+                                      setIsAddSessionOpen(exp.id);
+                                    }}
+                                    className="h-8 w-8 text-slate-500 hover:text-white"
+                                    aria-label="Edit session"
+                                  >
+                                    <Edit3 size={14} />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() =>
+                                      setDeleteConfirmation({
+                                        type: "session",
+                                        id: session.id,
+                                        expId: exp.id,
+                                      })
+                                    }
+                                    className="h-8 w-8 text-slate-500 hover:text-rose-400"
+                                    aria-label="Delete session"
+                                  >
+                                    <Trash2 size={14} />
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           ))
                       )}

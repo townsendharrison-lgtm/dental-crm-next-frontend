@@ -34,6 +34,7 @@ export default function ImprovementTab({
       <ApplicationOptimizationPlan
         studentName={student.name}
         studentCreatedAt={student.createdAt}
+        student={student}
         plan={optimizationPlan}
         experiences={experiences}
         isEditable={isMentorView}

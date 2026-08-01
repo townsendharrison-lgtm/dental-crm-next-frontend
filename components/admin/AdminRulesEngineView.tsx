@@ -18,19 +18,23 @@ import {
   Target,
   Plus,
   Trash2,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   adminSettingsApi,
   DEFAULT_MEETING_TYPES,
   normalizeMeetingTypes,
+  normalizeTimelineCardColors,
 } from "@/lib/api/adminSettings";
-import type { AdminSettings, MeetingTypeConfig } from "@/lib/types";
+import type { AdminSettings, MeetingTypeConfig, TimelineCardColors } from "@/lib/types";
+import { DEFAULT_TIMELINE_CARD_COLORS } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea, FormField } from "@/components/ui/Form";
 import { cn } from "@/lib/utils/cn";
 import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import AdminBenchmarksPanel from "@/components/admin/AdminBenchmarksPanel";
+import AdminTimelineBookshelfPanel from "@/components/admin/AdminTimelineBookshelfPanel";
 
 type RulesTab =
   | "platform"
@@ -38,6 +42,7 @@ type RulesTab =
   | "welcome"
   | "status"
   | "meetings"
+  | "timeline"
   | "benchmarks"
   | "tools";
 
@@ -47,6 +52,7 @@ const RULES_TABS: RulesTab[] = [
   "welcome",
   "status",
   "meetings",
+  "timeline",
   "benchmarks",
   "tools",
 ];
@@ -142,6 +148,9 @@ export default function AdminRulesEngineView() {
   const [interviewMessage, setInterviewMessage] = useState("");
   const [waitlistMessage, setWaitlistMessage] = useState("");
   const [meetingTypes, setMeetingTypes] = useState<MeetingTypeConfig[]>(DEFAULT_MEETING_TYPES);
+  const [timelineCardColors, setTimelineCardColors] = useState<TimelineCardColors>(
+    DEFAULT_TIMELINE_CARD_COLORS,
+  );
 
   useEffect(() => {
     const next = searchParams.get("tab");
@@ -166,6 +175,7 @@ export default function AdminRulesEngineView() {
     setInterviewMessage(data.interview_message || "");
     setWaitlistMessage(data.waitlist_message || "");
     setMeetingTypes(normalizeMeetingTypes(data.meeting_types));
+    setTimelineCardColors(normalizeTimelineCardColors(data.timeline_card_colors));
   };
 
   useEffect(() => {
@@ -188,6 +198,14 @@ export default function AdminRulesEngineView() {
     [settings?.meeting_types],
   );
   const meetingTypesKey = useMemo(() => JSON.stringify(meetingTypes), [meetingTypes]);
+  const savedTimelineColorsKey = useMemo(
+    () => JSON.stringify(normalizeTimelineCardColors(settings?.timeline_card_colors)),
+    [settings?.timeline_card_colors],
+  );
+  const timelineColorsKey = useMemo(
+    () => JSON.stringify(timelineCardColors),
+    [timelineCardColors],
+  );
 
   const isDirty = useMemo(() => {
     if (!settings) return false;
@@ -205,7 +223,8 @@ export default function AdminRulesEngineView() {
       acceptedMessage !== (settings.accepted_message || "") ||
       interviewMessage !== (settings.interview_message || "") ||
       waitlistMessage !== (settings.waitlist_message || "") ||
-      meetingTypesKey !== savedMeetingTypesKey
+      meetingTypesKey !== savedMeetingTypesKey ||
+      timelineColorsKey !== savedTimelineColorsKey
     );
   }, [
     settings,
@@ -224,6 +243,8 @@ export default function AdminRulesEngineView() {
     waitlistMessage,
     meetingTypesKey,
     savedMeetingTypesKey,
+    timelineColorsKey,
+    savedTimelineColorsKey,
   ]);
 
   const handleSave = async () => {
@@ -256,6 +277,7 @@ export default function AdminRulesEngineView() {
         interviewMessage,
         waitlistMessage,
         meetingTypes: cleanedTypes,
+        timelineCardColors,
       });
       applySettings(updated);
       toast.success("Rules saved.");
@@ -301,6 +323,7 @@ export default function AdminRulesEngineView() {
     { id: "welcome", label: "Welcome", icon: Sparkles },
     { id: "status", label: "Status Messages", icon: Megaphone },
     { id: "meetings", label: "Meeting Types", icon: Calendar },
+    { id: "timeline", label: "Timeline", icon: BookOpen },
     { id: "benchmarks", label: "Benchmarks", icon: Target },
     { id: "tools", label: "Dev Tools", icon: Wrench },
   ];
@@ -682,6 +705,13 @@ export default function AdminRulesEngineView() {
             Add meeting type
           </Button>
         </SectionCard>
+      )}
+
+      {tab === "timeline" && (
+        <AdminTimelineBookshelfPanel
+          cardColors={timelineCardColors}
+          onCardColorsChange={setTimelineCardColors}
+        />
       )}
 
       {tab === "benchmarks" && <AdminBenchmarksPanel />}

@@ -501,10 +501,10 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
                     ) : (
                       <button
                         type="button"
-                        title="Open Application Journey"
+                        title="Open Application Readiness"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onSelectStudent(row.id, "records");
+                          onSelectStudent(row.id, "applications");
                         }}
                         className="flex w-full max-w-[120px] items-center gap-3"
                       >

@@ -1,24 +1,20 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import type { Student, StudentProfile } from "@/lib/types";
 import {
   Button,
-  Input,
-  FormField,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  SelectMenu,
   Badge,
 } from "@/components/ui";
-import { Save, RotateCcw, ShieldCheck, AlertCircle, FileText, XCircle } from "lucide-react";
+import { ShieldCheck, AlertCircle, FileText, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { useDocuments, useUpdateDocument } from "@/lib/hooks/useDocuments";
 import { ProfileDetailsEditor } from "@/components/student/ProfileDetailsEditor";
-import { getApplicationCycleOptions } from "@/lib/profile/profileOptions";
 
 export type StudentProfileUpdates = Partial<
   StudentProfile & { name?: string; avatar?: string }
@@ -32,52 +28,9 @@ interface StudentProfileEditFormProps {
   strengthScore?: number;
 }
 
-type AppFormState = {
-  zip_code: string;
-  timezone: string;
-  application_cycle: string;
-  status: "Preparing" | "Applying" | "Interviewing";
-  readiness: "GREEN" | "YELLOW" | "RED";
-  progress: string;
-  lor_required: string;
-  lor_external_service: boolean;
-  lor_external_collected: string;
-};
-
-type SectionKey = "staff_location" | "application";
-
-const SECTION_FIELDS: Record<SectionKey, (keyof AppFormState)[]> = {
-  staff_location: ["zip_code", "timezone"],
-  application: [
-    "status",
-    "readiness",
-    "progress",
-    "application_cycle",
-    "lor_required",
-    "lor_external_service",
-    "lor_external_collected",
-  ],
-};
-
 function strNum(value: unknown): string {
   if (value == null || value === "") return "";
   return String(value);
-}
-
-function buildAppForm(student: Student): AppFormState {
-  const p = student.profile;
-  return {
-    zip_code: student.zipCode ?? p?.zip_code ?? "",
-    timezone: student.timezone ?? p?.timezone ?? "",
-    application_cycle: student.applicationCycle ?? p?.application_cycle ?? "",
-    status: (student.status as AppFormState["status"]) || p?.status || "Preparing",
-    readiness: (student.readiness as AppFormState["readiness"]) || p?.readiness || "YELLOW",
-    progress: strNum(student.progress ?? p?.progress),
-    lor_required: strNum(student.lorRequired ?? p?.lor_required ?? 4),
-    lor_external_service:
-      student.lorExternalService ?? p?.lor_external_service ?? false,
-    lor_external_collected: strNum(p?.lor_external_collected),
-  };
 }
 
 function numOrNull(v: string): number | null {
@@ -86,68 +39,7 @@ function numOrNull(v: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function pickSection(form: AppFormState, section: SectionKey): Partial<AppFormState> {
-  const out: Partial<AppFormState> = {};
-  for (const key of SECTION_FIELDS[section]) {
-    out[key] = form[key] as never;
-  }
-  return out;
-}
-
-const YES_NO = [
-  { value: "no", label: "No" },
-  { value: "yes", label: "Yes" },
-];
-
-const TIMEZONE_OPTIONS = [
-  { value: "America/New_York", label: "Eastern Time (ET)" },
-  { value: "America/Chicago", label: "Central Time (CT)" },
-  { value: "America/Denver", label: "Mountain Time (MT)" },
-  { value: "America/Phoenix", label: "Mountain Time - AZ" },
-  { value: "America/Los_Angeles", label: "Pacific Time (PT)" },
-  { value: "America/Anchorage", label: "Alaska Time" },
-  { value: "Pacific/Honolulu", label: "Hawaii Time" },
-  { value: "UTC", label: "UTC" },
-];
-
 const DONUT_COLORS = ["#818cf8", "#1e293b"];
-
-function SectionActions({
-  dirty,
-  isSaving,
-  onReset,
-  onSave,
-}: {
-  dirty: boolean;
-  isSaving: boolean;
-  onReset: () => void;
-  onSave: () => void;
-}) {
-  return (
-    <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        disabled={!dirty || isSaving}
-        leftIcon={<RotateCcw className="h-4 w-4" />}
-        onClick={onReset}
-      >
-        Reset
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        disabled={!dirty || isSaving}
-        isLoading={isSaving}
-        leftIcon={<Save className="h-4 w-4" />}
-        onClick={onSave}
-      >
-        Save
-      </Button>
-    </div>
-  );
-}
 
 export function StudentProfileEditForm({
   student,
@@ -156,9 +48,7 @@ export function StudentProfileEditForm({
   isSaving = false,
   strengthScore,
 }: StudentProfileEditFormProps) {
-  const [form, setForm] = useState<AppFormState>(() => buildAppForm(student));
-  const [baseline, setBaseline] = useState<AppFormState>(() => buildAppForm(student));
-  const [savingSection, setSavingSection] = useState<SectionKey | "verify" | null>(null);
+  const [savingSection, setSavingSection] = useState<"verify" | null>(null);
   const [reviewingDocId, setReviewingDocId] = useState<string | null>(null);
   const { data: documents = [] } = useDocuments(student.id);
   const updateDocument = useUpdateDocument();
@@ -199,61 +89,6 @@ export function StudentProfileEditForm({
   );
   const pendingCount =
     (pendingGpa ? 1 : 0) + (pendingDat ? 1 : 0) + pendingDocuments.length;
-
-  useEffect(() => {
-    const next = buildAppForm(student);
-    setForm(next);
-    setBaseline(next);
-  }, [student]);
-
-  const isDirty = (section: SectionKey) => {
-    const fields = SECTION_FIELDS[section];
-    return fields.some((key) => form[key] !== baseline[key]);
-  };
-
-  const set =
-    <K extends keyof AppFormState>(key: K) =>
-    (value: AppFormState[K]) => {
-      setForm((prev) => ({ ...prev, [key]: value }));
-    };
-
-  const resetSection = (section: SectionKey) => {
-    const patch = pickSection(baseline, section);
-    setForm((prev) => ({ ...prev, ...patch }));
-  };
-
-  const saveSection = async (section: SectionKey) => {
-    const updates: StudentProfileUpdates =
-      section === "staff_location"
-        ? {
-            zip_code: form.zip_code || null,
-            timezone: form.timezone || null,
-          }
-        : {
-            status: form.status,
-            readiness: form.readiness,
-            progress: numOrNull(form.progress) ?? 0,
-            application_cycle: form.application_cycle || null,
-            lor_required: numOrNull(form.lor_required) ?? 4,
-            lor_external_service: form.lor_external_service,
-            lor_external_collected: numOrNull(form.lor_external_collected),
-          };
-
-    setSavingSection(section);
-    try {
-      await onSave(updates);
-      setBaseline((prev) => ({ ...prev, ...pickSection(form, section) }));
-      toast.success("Section saved");
-    } catch (err: unknown) {
-      const message =
-        err && typeof err === "object" && "message" in err
-          ? String((err as { message?: string }).message)
-          : "Failed to save section";
-      toast.error(message);
-    } finally {
-      setSavingSection(null);
-    }
-  };
 
   const verifyPending = async (scope: "gpa" | "dat" | "all") => {
     setSavingSection("verify");
@@ -533,127 +368,6 @@ export function StudentProfileEditForm({
             mode="academic"
             staffMode
             embedded
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Application status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <FormField label="Status">
-              <SelectMenu
-                value={form.status}
-                onChange={(v) => set("status")(v as AppFormState["status"])}
-                options={[
-                  { value: "Preparing", label: "Preparing" },
-                  { value: "Applying", label: "Applying" },
-                  { value: "Interviewing", label: "Interviewing" },
-                ]}
-              />
-            </FormField>
-            <FormField label="Readiness">
-              <SelectMenu
-                value={form.readiness}
-                onChange={(v) => set("readiness")(v as AppFormState["readiness"])}
-                options={[
-                  { value: "GREEN", label: "Green" },
-                  { value: "YELLOW", label: "Yellow" },
-                  { value: "RED", label: "Red" },
-                ]}
-              />
-            </FormField>
-            <FormField label="Progress %">
-              <Input
-                type="number"
-                value={form.progress}
-                onChange={(e) => set("progress")(e.target.value)}
-              />
-            </FormField>
-            <FormField label="Goal application cycle">
-              <SelectMenu
-                value={form.application_cycle}
-                onChange={(v) => set("application_cycle")(v)}
-                options={[
-                  { value: "", label: "Select cycle…" },
-                  ...(() => {
-                    const cycles = getApplicationCycleOptions();
-                    const current = form.application_cycle;
-                    const opts = cycles.map((c) => ({ value: c, label: c }));
-                    if (current && !cycles.includes(current)) {
-                      opts.unshift({ value: current, label: current });
-                    }
-                    return opts;
-                  })(),
-                ]}
-              />
-            </FormField>
-            <FormField label="LORs required">
-              <Input
-                type="number"
-                value={form.lor_required}
-                onChange={(e) => set("lor_required")(e.target.value)}
-              />
-            </FormField>
-            <FormField label="External LOR">
-              <SelectMenu
-                value={form.lor_external_service ? "yes" : "no"}
-                onChange={(v) => set("lor_external_service")(v === "yes")}
-                options={YES_NO}
-              />
-            </FormField>
-            {form.lor_external_service && (
-              <FormField label="External LORs collected">
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.lor_external_collected}
-                  onChange={(e) => set("lor_external_collected")(e.target.value)}
-                />
-              </FormField>
-            )}
-          </div>
-          <SectionActions
-            dirty={isDirty("application")}
-            isSaving={busy && savingSection === "application"}
-            onReset={() => resetSection("application")}
-            onSave={() => void saveSection("application")}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Staff location</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="ZIP">
-              <Input value={form.zip_code} onChange={(e) => set("zip_code")(e.target.value)} />
-            </FormField>
-            <FormField label="Timezone">
-              <SelectMenu
-                value={form.timezone || "America/New_York"}
-                onChange={(timezone) => set("timezone")(timezone)}
-                options={
-                  form.timezone && !TIMEZONE_OPTIONS.some((o) => o.value === form.timezone)
-                    ? [{ value: form.timezone, label: form.timezone }, ...TIMEZONE_OPTIONS]
-                    : TIMEZONE_OPTIONS
-                }
-                placeholder="Select timezone…"
-              />
-            </FormField>
-            <FormField label="Email" className="sm:col-span-2">
-              <Input value={student.email} disabled />
-            </FormField>
-          </div>
-          <SectionActions
-            dirty={isDirty("staff_location")}
-            isSaving={busy && savingSection === "staff_location"}
-            onReset={() => resetSection("staff_location")}
-            onSave={() => void saveSection("staff_location")}
           />
         </CardContent>
       </Card>

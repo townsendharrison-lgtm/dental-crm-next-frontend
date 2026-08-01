@@ -43,12 +43,17 @@ import { formatMeetingLocal, parseLocalDate } from "@/lib/utils/dateUtils";
 import { MeetingTimeWithHint } from "@/components/ui/TimezoneHint";
 import { useMentor } from "@/lib/hooks/useMentors";
 import ApplicationTracker from "./ApplicationTracker";
+import ApplicationReadinessPanel from "./ApplicationReadinessPanel";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Textarea, FormField, Input } from "@/components/ui/Form";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import { renderBadgeIcon } from "@/lib/utils/badgeIcons";
+import { useExperiences } from "@/lib/hooks/useExperiences";
+import { useLorRequests } from "@/lib/hooks/useLor";
+import { useStudentCredentials } from "@/lib/hooks/useStudentNotesDexterity";
+import { buildApplicationReadiness } from "@/lib/utils/applicationReadiness";
 
 interface StudentDashboardProps {
   student: Student;
@@ -305,27 +310,25 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       })
       .filter(Boolean) || [];
 
-  const getPhaseRange = (phaseNum: number) => {
-    const ranges = [
-      { start: 0, end: 3 },
-      { start: 4, end: 6 },
-      { start: 7, end: 9 },
-      { start: 10, end: 12 },
-    ];
-    const { start: startMonth, end: endMonth } = ranges[phaseNum - 1];
-    const createdAt = student.createdAt || student.profile?.created_at;
-    if (!createdAt) return `${startMonth}-${endMonth} months`;
-
-    const createdDate = new Date(createdAt);
-    const startDate = new Date(createdDate);
-    startDate.setMonth(createdDate.getMonth() + startMonth);
-    const endDate = new Date(createdDate);
-    endDate.setMonth(createdDate.getMonth() + endMonth);
-    const format = (date: Date) => date.toLocaleString("default", { month: "short" });
-    return `${format(startDate)} - ${format(endDate)}`;
-  };
-
   const formatMeetingDate = (dateStr: string) => formatMeetingLocal(dateStr);
+
+  const { data: readinessExperiences = [] } = useExperiences(student.id);
+  const { data: readinessCredentials = [] } = useStudentCredentials(student.id);
+  const { data: readinessLorRaw = [] } = useLorRequests();
+  const readinessLor = React.useMemo(
+    () => readinessLorRaw.filter((r) => r.studentId === student.id),
+    [readinessLorRaw, student.id],
+  );
+  const readinessSummary = React.useMemo(
+    () =>
+      buildApplicationReadiness({
+        student,
+        experiences: readinessExperiences,
+        lorRequests: readinessLor,
+        credentials: readinessCredentials,
+      }),
+    [student, readinessExperiences, readinessLor, readinessCredentials],
+  );
 
   /** Needs attention: only meetings starting within the next 24h (or up to 1h overdue). */
   const isWithinNext24Hours = (dateStr: string) => {
@@ -389,7 +392,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
   };
 
-  const progress = student.progress ?? student.profile?.progress ?? 0;
+  const progress = readinessSummary.percent;
   const strengthScore =
     strengthPercentile?.strengthScore ??
     student.strengthScore ??
@@ -689,7 +692,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
         <div className="flex h-full min-h-0 flex-col gap-6 md:col-span-2">
           <section className="shrink-0 rounded-xl border border-slate-800 bg-slate-900 p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-bold text-white">Application Journey</h3>
+              <h3 className="text-base font-bold text-white">Application Readiness</h3>
               <span className="text-2xl font-bold text-indigo-500">{progress}%</span>
             </div>
             <div className="mb-5 h-2 w-full overflow-hidden rounded-full border border-slate-800/30 bg-slate-950">
@@ -888,69 +891,18 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <h3 className="text-base font-bold text-white mb-5 flex items-center gap-2">
-            <Target className="w-4 h-4 text-indigo-400" /> Application Journey
-          </h3>
-          <div className="relative">
-            <div className="absolute left-3.5 top-0 bottom-0 w-0.5 bg-slate-800" />
-            <div className="space-y-8">
-              {[
-                { phase: "Phase 1", title: "Primary Prep", status: "completed", date: getPhaseRange(1) },
-                { phase: "Phase 2", title: "DAT & Letters", status: "current", date: getPhaseRange(2) },
-                { phase: "Phase 3", title: "Submission", status: "upcoming", date: getPhaseRange(3) },
-                { phase: "Phase 4", title: "Interviews", status: "upcoming", date: getPhaseRange(4) },
-              ].map((step) => (
-                <div key={step.phase} className="relative pl-10">
-                  <div
-                    className={`absolute left-0 w-7 h-7 rounded-full border-4 flex items-center justify-center z-10 ${
-                      step.status === "completed"
-                        ? "bg-indigo-600 border-slate-900"
-                        : step.status === "current"
-                          ? "bg-slate-900 border-indigo-600"
-                          : "bg-slate-900 border-slate-800"
-                    }`}
-                  >
-                    {step.status === "completed" ? (
-                      <CheckCircle className="w-3.5 h-3.5 text-white" />
-                    ) : (
-                      <div
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          step.status === "current" ? "bg-indigo-600" : "bg-slate-800"
-                        }`}
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <p
-                      className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${
-                        step.status === "completed"
-                          ? "text-indigo-400"
-                          : step.status === "current"
-                            ? "text-indigo-500"
-                            : "text-slate-500"
-                      }`}
-                    >
-                      {step.phase}
-                    </p>
-                    <h4
-                      className={`text-sm font-bold mb-0.5 ${
-                        step.status === "upcoming" ? "text-slate-500" : "text-white"
-                      }`}
-                    >
-                      {step.title}
-                    </h4>
-                    <p className="text-xs text-slate-500">{step.date}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+        <ApplicationReadinessPanel
+          student={student}
+          compact
+          className="h-[520px] min-h-0"
+        />
 
-        <section id="active-checklist" className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-          <div className="mb-5 flex shrink-0 items-center justify-between">
+        <section
+          id="active-checklist"
+          className="flex h-[520px] min-h-0 flex-col rounded-xl border border-slate-800 bg-slate-900 p-5"
+        >
+          <div className="mb-4 flex shrink-0 items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <CheckSquare className="w-4 h-4 text-indigo-400" /> Active Checklist
             </h3>
@@ -979,7 +931,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
 
           {isAddingTask && onAddActionItem && (
-            <div className="mb-4 rounded-xl border border-indigo-500/30 bg-slate-950 p-3 space-y-3">
+            <div className="mb-4 shrink-0 space-y-3 rounded-xl border border-indigo-500/30 bg-slate-950 p-3">
               <Input
                 placeholder="Task title…"
                 value={newTaskTitle}
@@ -1003,7 +955,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
           )}
 
-          <div className="h-[280px] space-y-2 overflow-y-auto overscroll-contain pr-1 custom-scrollbar">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1 custom-scrollbar">
             {sortChecklistTasks(studentTasks).map((item) => (
               <div
                 key={item.id}

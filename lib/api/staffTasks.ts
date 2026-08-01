@@ -28,7 +28,7 @@ export const staffTasksApi = {
   },
 
   /**
-   * Create a new staff task (Admin only).
+   * Create a new staff task (Admin, Mentor Manager, or Mentor self-assign).
    */
   create: async (payload: CreateStaffTaskPayload): Promise<StaffTask> => {
     return await apiPost<StaffTask>("/api/staff-tasks", payload);

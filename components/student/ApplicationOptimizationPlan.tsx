@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { OptimizationPlan, Experience } from '@/lib/types';
+import { OptimizationPlan, Experience, Student, CategoryRecommendation } from '@/lib/types';
 import {
   Edit3,
   Save,
@@ -15,7 +15,10 @@ import {
   FlaskConical,
   Briefcase,
   School as SchoolIcon,
-  Activity
+  Activity,
+  ExternalLink,
+  Clock,
+  Hand,
 } from 'lucide-react';
 import {
   Badge,
@@ -28,14 +31,26 @@ import {
   EmptyState,
   FormField,
   Input,
+  Modal,
   SelectMenu,
   Textarea,
-  Tooltip,
 } from '@/components/ui';
+import {
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  DEFAULT_MANUAL_DEXTERITY,
+  mergeCategoryPlans,
+  normalizeRecommendation,
+  normalizeRecommendations,
+  type CategoryKey,
+} from '@/lib/utils/defaultCategoryPlans';
+import HourTrackerTab from '@/components/student/hub/HourTrackerTab';
 
 interface ApplicationOptimizationPlanProps {
   studentName: string;
   studentCreatedAt?: string;
+  /** Needed for mentor Hour Tracker preview */
+  student?: Student | null;
   plan?: OptimizationPlan;
   experiences: Experience[];
   isEditable?: boolean;
@@ -78,6 +93,7 @@ const statusToBadgeVariant = (status: string): 'success' | 'primary' | 'warning'
 const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = ({
   studentName,
   studentCreatedAt,
+  student,
   plan,
   experiences,
   isEditable = false,
@@ -89,6 +105,7 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
   const [editPlan, setEditPlan] = useState<OptimizationPlan | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [expandedRiskTips, setExpandedRiskTips] = useState<Record<number, boolean>>({});
+  const [hourTrackerOpen, setHourTrackerOpen] = useState(false);
 
   const getPhaseLabel = (phaseNum: number) => {
     const ranges = [
@@ -134,6 +151,8 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
           phase3: plan.roadmap?.phase3 || [],
           phase4: plan.roadmap?.phase4 || [],
         },
+        categories: mergeCategoryPlans(plan.categories),
+        manualDexterity: plan.manualDexterity || DEFAULT_MANUAL_DEXTERITY,
         lastUpdated: plan.lastUpdated ?? plan.updated_at ?? plan.created_at,
       })));
     } else {
@@ -142,6 +161,15 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
   }, [plan]);
 
   if (!plan || !editPlan) return null;
+
+  const strengthScore = Math.round(
+    Number(
+      student?.strengthScore ??
+        student?.profile?.strength_score ??
+        (student as { strength_score?: number } | null | undefined)?.strength_score ??
+        0,
+    ) || 0,
+  );
 
   // Defensive: ensure roadmap phases are always arrays
   const roadmap = {
@@ -159,6 +187,9 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
     if (onUpdatePlan && editPlan) {
       onUpdatePlan({
         ...editPlan,
+        // Strength score is always driven by the student hub — never mentor-edited
+        overallScore: strengthScore,
+        overall_score: strengthScore,
         lastUpdated: new Date().toISOString()
       });
       setIsEditing(false);
@@ -311,6 +342,17 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="primary">Student: {studentName}</Badge>
+            {isEditable && student && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                leftIcon={<Clock size={14} />}
+                onClick={() => setHourTrackerOpen(true)}
+              >
+                View Experience
+              </Button>
+            )}
             {isEditable && (
               <>
                 {isEditing ? (
@@ -381,7 +423,7 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
 
         {/* Top Section: 2 Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Overall Strength Module */}
+          {/* Strength score (read-only from student hub) */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={isLoaded ? { opacity: 1, y: 0 } : {}}
@@ -412,31 +454,29 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                         fill="transparent"
                         strokeDasharray="515"
                         initial={{ strokeDashoffset: 515 }}
-                        animate={isLoaded ? { strokeDashoffset: 515 - (515 * (editPlan.overallScore || 0)) / 100 } : {}}
+                        animate={
+                          isLoaded
+                            ? {
+                                strokeDashoffset:
+                                  515 - (515 * Math.min(100, Math.max(0, strengthScore))) / 100,
+                              }
+                            : {}
+                        }
                         transition={{ duration: 2, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
                         className="text-indigo-500"
                         strokeLinecap="round"
                       />
                     </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      {isEditing ? (
-                        <FormField label="Overall score" className="items-center text-center">
-                          <div className="flex items-baseline gap-1 justify-center">
-                            <Input
-                              type="number"
-                              value={(editPlan.overallScore || 0)}
-                              onChange={(e) => setEditPlan({ ...editPlan, overallScore: Number(e.target.value) })}
-                              className="w-28 h-auto text-center text-6xl font-semibold text-white bg-transparent border-0 border-b-2 border-indigo-500 rounded-none px-0 focus-visible:ring-0 shadow-none"
-                            />
-                            <span className="text-lg font-medium text-slate-500">/ 100</span>
-                          </div>
-                        </FormField>
-                      ) : (
-                        <div className="flex flex-col items-center">
-                          <span className="text-7xl font-semibold text-white">{(editPlan.overallScore || 0)}</span>
-                          <span className="text-sm font-medium text-slate-500 mt-1">/ 100</span>
-                        </div>
-                      )}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <div className="flex flex-col items-center">
+                        <span className="text-7xl font-semibold text-white tabular-nums">
+                          {strengthScore}
+                        </span>
+                        <span className="text-sm font-medium text-slate-500 mt-1">/ 100</span>
+                        <span className="mt-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                          Strength score
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -444,29 +484,9 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
 
                   <div className="w-full space-y-4">
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider">Overall Strength</h3>
-                      {isEditing ? (
-                        <FormField label="Leverage %" className="mb-0">
-                          <Input
-                            type="number"
-                            value={editPlan.improvementLeverageScore || 0}
-                            onChange={(e) =>
-                              setEditPlan({
-                                ...editPlan,
-                                improvementLeverageScore: Number(e.target.value),
-                              })
-                            }
-                            className="h-8 w-24 text-xs"
-                          />
-                        </FormField>
-                      ) : (
-                        <Tooltip content="Improvement Leverage Score: prioritize actions by their impact on admission probability.">
-                          <Badge variant="primary" className="gap-1.5 cursor-help">
-                            <Sparkles size={12} />
-                            Leverage: {(editPlan.improvementLeverageScore || 0)}%
-                          </Badge>
-                        </Tooltip>
-                      )}
+                      <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                        KPI Assessment
+                      </h3>
                     </div>
                     <div className="grid grid-cols-1 gap-2">
                       {Object.entries((editPlan.kpis || {}) as Record<string, string>).map(([key, value]) => (
@@ -766,9 +786,11 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
           </Card>
         </motion.div>
 
-        {/* Category Sections */}
+        {/* Category Sections — hub hours + mentor strategy blocks */}
         <div className="space-y-4">
-          {(Object.entries((editPlan.categories || {})) as [string, any][]).map(([key, cat]) => {
+          {CATEGORY_ORDER.map((key) => {
+            const cat = (editPlan.categories || {})[key] || mergeCategoryPlans()[key];
+            const recommendations = normalizeRecommendations(cat.recommended);
             const isExpanded = expandedCategories[key];
             const currentHours = experiences
               .filter(
@@ -776,7 +798,9 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                   e.category ===
                   (key === "dental"
                     ? "Dental Experience"
-                    : key.charAt(0).toUpperCase() + key.slice(1)),
+                    : key === "academic"
+                      ? "Academic"
+                      : key.charAt(0).toUpperCase() + key.slice(1)),
               )
               .reduce(
                 (acc, e) =>
@@ -786,6 +810,22 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                 0,
               );
             const progress = cat.targetGoal ? Math.min(100, (currentHours / cat.targetGoal.value) * 100) : 0;
+
+            const updateCategory = (patch: Partial<typeof cat>) => {
+              setEditPlan({
+                ...editPlan,
+                categories: {
+                  ...(editPlan.categories || {}),
+                  [key]: { ...cat, ...patch },
+                },
+              });
+            };
+
+            const updateRecommendation = (idx: number, patch: Partial<CategoryRecommendation>) => {
+              const next = [...recommendations];
+              next[idx] = { ...next[idx], ...patch };
+              updateCategory({ recommended: next });
+            };
 
             return (
               <motion.div
@@ -802,7 +842,7 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                   type="button"
                   variant="ghost"
                   onClick={() => toggleCategory(key)}
-                  className="w-full h-auto p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group rounded-none hover:bg-transparent"
+                  className="w-full h-auto p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group rounded-none hover:bg-transparent cursor-pointer"
                 >
                   <div className="flex items-center gap-4 flex-1">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
@@ -812,10 +852,12 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h4 className="text-base font-semibold text-white capitalize">
-                          {key === 'dental' ? 'Dental Experiences' : key === 'academic' ? 'Academic Enrichment' : key}
+                        <h4 className="text-base font-semibold text-white">
+                          {CATEGORY_LABELS[key as CategoryKey]}
                         </h4>
-                        <Badge variant={statusToBadgeVariant(cat.status)}>{cat.status}</Badge>
+                        <Badge variant={statusToBadgeVariant(cat.status || 'Developing')}>
+                          {cat.status || 'Developing'}
+                        </Badge>
                       </div>
                       <p className="text-sm text-slate-500">{calculateCurrentMetrics(key)}</p>
                     </div>
@@ -850,11 +892,21 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                     >
                       <div className="px-4 pb-4 md:px-5 md:pb-5 space-y-4 border-t border-slate-800 pt-4">
+                        {isEditing && (
+                          <FormField label="Category status" className="max-w-xs">
+                            <SelectMenu
+                              value={cat.status || 'Developing'}
+                              onChange={(status) => updateCategory({ status })}
+                              options={DEXTERITY_STATUS_OPTIONS}
+                            />
+                          </FormField>
+                        )}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                           <div className="space-y-4">
                             {(key === 'shadowing' || key === 'volunteering' || key === 'research' || key === 'dental' || key === 'academic') && cat.subGoals ? (
                               <div className="space-y-3">
                                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Detailed Progress Tracking</p>
+                                <p className="text-[11px] text-slate-600">Current values sync from the student Hour Tracker.</p>
                                 <div className="space-y-3">
                                   {cat.subGoals.map((subGoal: any, sgIdx: number) => {
                                     const current = calculateSubGoalStatus(key, subGoal.id);
@@ -865,6 +917,10 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                                         <div className="flex justify-between items-center gap-2">
                                           <span className="text-sm font-medium text-slate-400">{subGoal.label}</span>
                                           <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-semibold text-white tabular-nums">
+                                              {current}
+                                              <span className="text-slate-500"> / </span>
+                                            </span>
                                             {isEditing ? (
                                               <FormField label={`${subGoal.label} target`} className="mb-0 [&_label]:sr-only">
                                                 <div className="flex items-center gap-1.5">
@@ -884,7 +940,9 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                                                 </div>
                                               </FormField>
                                             ) : (
-                                              <span className="text-xs font-semibold text-white">{current} / {subGoal.target} {subGoal.unit}</span>
+                                              <span className="text-xs font-semibold text-slate-300">
+                                                {subGoal.target} {subGoal.unit}
+                                              </span>
                                             )}
                                           </div>
                                         </div>
@@ -931,19 +989,15 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                               {isEditing ? (
                                 <FormField label="Strategic action plan">
                                   <Textarea
-                                    value={cat.actionPlan}
-                                    onChange={(e) => setEditPlan({
-                                      ...editPlan,
-                                      categories: {
-                                        ...(editPlan.categories || {}),
-                                        [key]: { ...cat, actionPlan: e.target.value }
-                                      }
-                                    })}
+                                    value={cat.actionPlan || ''}
+                                    onChange={(e) => updateCategory({ actionPlan: e.target.value })}
                                     className="min-h-[80px] text-sm"
                                   />
                                 </FormField>
                               ) : (
-                                <p className="text-sm text-slate-300 leading-relaxed">{cat.actionPlan}</p>
+                                <p className="text-sm text-slate-300 leading-relaxed">
+                                  {cat.actionPlan || 'No action plan yet.'}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -958,14 +1012,14 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                                     size="icon"
                                     variant="secondary"
                                     className="h-7 w-7"
-                                    onClick={() => {
-                                      const newCats = { ...(editPlan.categories || {}) };
-                                      if (newCats[key]) {
-                                        const recommended = newCats[key].recommended || [];
-                                        newCats[key] = { ...newCats[key], recommended: [...recommended, 'New recommendation...'] };
-                                        setEditPlan({ ...editPlan, categories: newCats });
-                                      }
-                                    }}
+                                    onClick={() =>
+                                      updateCategory({
+                                        recommended: [
+                                          ...recommendations,
+                                          { label: 'New recommendation', url: '' },
+                                        ],
+                                      })
+                                    }
                                     aria-label="Add recommendation"
                                   >
                                     <Plus size={12} />
@@ -973,55 +1027,71 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                                 )}
                               </div>
                               <div className="grid grid-cols-1 gap-2">
-                                {cat.recommended.map((rec: string, idx: number) => (
-                                  <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950/40 group/rec hover:border-indigo-500/30 transition-all">
-                                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                                      {isEditing ? (
-                                        <Input
-                                          value={rec}
-                                          onChange={(e) => {
-                                            const newCats = { ...(editPlan.categories || {}) };
-                                            if (newCats[key] && newCats[key].recommended) {
-                                              const recommended = [...newCats[key].recommended];
-                                              recommended[idx] = e.target.value;
-                                              newCats[key] = { ...newCats[key], recommended };
-                                              setEditPlan({ ...editPlan, categories: newCats });
-                                            }
-                                          }}
-                                          className="h-8 text-sm"
-                                        />
-                                      ) : (
-                                        <p className="text-sm font-medium text-slate-300">{rec}</p>
-                                      )}
-                                    </div>
-                                    {!isEditing && (
-                                      <Button type="button" size="sm" className="shrink-0 h-7 text-xs">
-                                        {cat.cta}
-                                      </Button>
-                                    )}
-                                    {isEditing && (
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-7 w-7 text-rose-500 hover:text-rose-400 shrink-0"
-                                        onClick={() => {
-                                          const newCats = { ...(editPlan.categories || {}) };
-                                          if (newCats[key] && newCats[key].recommended) {
-                                            const recommended = [...newCats[key].recommended];
-                                            recommended.splice(idx, 1);
-                                            newCats[key] = { ...newCats[key], recommended };
-                                            setEditPlan({ ...editPlan, categories: newCats });
-                                          }
-                                        }}
-                                        aria-label="Remove recommendation"
+                                {recommendations.length === 0 && !isEditing ? (
+                                  <p className="text-sm text-slate-600">No recommendations yet.</p>
+                                ) : (
+                                  recommendations.map((rec, idx) => {
+                                    const item = normalizeRecommendation(rec);
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className="flex items-start justify-between gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950/40"
                                       >
-                                        <Trash2 size={12} />
-                                      </Button>
-                                    )}
-                                  </div>
-                                ))}
+                                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                          <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                          {isEditing ? (
+                                            <div className="flex-1 space-y-2 min-w-0">
+                                              <Input
+                                                value={item.label}
+                                                onChange={(e) =>
+                                                  updateRecommendation(idx, { label: e.target.value })
+                                                }
+                                                placeholder="Recommendation title"
+                                                className="h-8 text-sm"
+                                              />
+                                              <Input
+                                                value={item.url || ''}
+                                                onChange={(e) =>
+                                                  updateRecommendation(idx, { url: e.target.value })
+                                                }
+                                                placeholder="Resource link (https://…)"
+                                                className="h-8 text-sm"
+                                              />
+                                            </div>
+                                          ) : item.url ? (
+                                            <a
+                                              href={item.url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-300 hover:text-indigo-200 cursor-pointer"
+                                            >
+                                              {item.label}
+                                              <ExternalLink size={12} className="opacity-70" />
+                                            </a>
+                                          ) : (
+                                            <p className="text-sm font-medium text-slate-300">{item.label}</p>
+                                          )}
+                                        </div>
+                                        {isEditing && (
+                                          <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-7 w-7 text-rose-500 hover:text-rose-400 shrink-0"
+                                            onClick={() => {
+                                              const next = [...recommendations];
+                                              next.splice(idx, 1);
+                                              updateCategory({ recommended: next });
+                                            }}
+                                            aria-label="Remove recommendation"
+                                          >
+                                            <Trash2 size={12} />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                )}
                               </div>
                             </div>
 
@@ -1033,20 +1103,14 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                               {isEditing ? (
                                 <FormField label="Mentor insights">
                                   <Textarea
-                                    value={cat.mentorNotes}
-                                    onChange={(e) => setEditPlan({
-                                      ...editPlan,
-                                      categories: {
-                                        ...(editPlan.categories || {}),
-                                        [key]: { ...cat, mentorNotes: e.target.value }
-                                      }
-                                    })}
+                                    value={cat.mentorNotes || ''}
+                                    onChange={(e) => updateCategory({ mentorNotes: e.target.value })}
                                     className="min-h-[60px] text-sm italic"
                                   />
                                 </FormField>
                               ) : (
                                 <p className="text-sm text-slate-400 italic leading-relaxed">
-                                  &quot;{cat.mentorNotes}&quot;
+                                  {cat.mentorNotes ? `"${cat.mentorNotes}"` : 'No mentor notes yet.'}
                                 </p>
                               )}
                             </div>
@@ -1091,24 +1155,11 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
               )}
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                {isEditing ? (
-                  <FormField label="Description">
-                    <Textarea
-                      value={(editPlan.manualDexterity?.description || '')}
-                      onChange={(e) => setEditPlan({
-                        ...editPlan,
-                        manualDexterity: { ...editPlan.manualDexterity, description: e.target.value }
-                      })}
-                      className="min-h-[60px] text-sm max-w-3xl"
-                    />
-                  </FormField>
-                ) : (
-                  <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
-                    {(editPlan.manualDexterity?.description || '')}
-                  </p>
-                )}
-              </div>
+              {!isEditing && editPlan.manualDexterity?.description ? (
+                <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
+                  {editPlan.manualDexterity.description}
+                </p>
+              ) : null}
 
               <div className="rounded-xl border border-indigo-500/10 bg-indigo-500/5 p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -1143,7 +1194,7 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                     {(editPlan.manualDexterity?.recommendations || []).map((rec, idx) => (
                       <div key={idx} className="flex items-center justify-between gap-3 bg-slate-950/50 p-3 rounded-xl border border-slate-800 group/mdrec">
                         <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                          <Sparkles size={12} className="text-indigo-500 shrink-0" />
+                          <Hand size={14} className="text-indigo-400 shrink-0" />
                           {isEditing ? (
                             <FormField label={`Recommendation ${idx + 1}`} className="mb-0 w-full [&_label]:sr-only">
                               <Input
@@ -1193,6 +1244,20 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
           </Card>
         </motion.div>
       </div>
+
+      {student && (
+        <Modal
+          open={hourTrackerOpen}
+          onClose={() => setHourTrackerOpen(false)}
+          title="Student Hour Tracker"
+          description="Read-only view of what the student has logged in their hub."
+          size="2xl"
+        >
+          <div className="max-h-[70vh] overflow-y-auto pr-1">
+            <HourTrackerTab student={student} experiences={experiences} readOnly />
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

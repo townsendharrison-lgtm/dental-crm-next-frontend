@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "./client";
-import type { Milestone } from "@/lib/types";
+import type { Milestone, TimelineCardType, TimelineResourceLink } from "@/lib/types";
 
 export interface CreateMilestonePayload {
   studentId?: string;
@@ -8,6 +8,10 @@ export interface CreateMilestonePayload {
   status?: string;
   isCustom?: boolean;
   sortOrder?: number;
+  cardType?: TimelineCardType;
+  description?: string;
+  resourceLinks?: TimelineResourceLink[];
+  targetDate?: string | null;
 }
 
 export interface UpdateMilestonePayload {
@@ -16,6 +20,10 @@ export interface UpdateMilestonePayload {
   status?: string;
   sortOrder?: number;
   isCustom?: boolean;
+  cardType?: TimelineCardType;
+  description?: string;
+  resourceLinks?: TimelineResourceLink[];
+  targetDate?: string | null;
 }
 
 export const milestonesApi = {

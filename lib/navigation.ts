@@ -54,7 +54,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
   MENTOR_MANAGER: [
     { label: "Compliance Hub", href: "/mentor-manager/compliance-hub", icon: ShieldAlert },
     { label: "Schedule", href: "/mentor-manager/schedule", icon: CalendarIcon },
-    { label: "My Tasks", href: "/mentor-manager/tasks", icon: CheckSquare },
+    { label: "Tasks", href: "/mentor-manager/tasks", icon: CheckSquare },
     { label: "Engagement & Comms", href: "/mentor-manager/engagement", icon: Megaphone },
     { label: "Mentor List", href: "/mentor-manager/mentors", icon: UserCog },
     { label: "Inbox", href: "/mentor-manager/messages", icon: MessageSquare },

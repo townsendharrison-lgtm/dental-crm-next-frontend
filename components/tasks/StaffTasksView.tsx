@@ -106,7 +106,15 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
   );
 
   const assignOptions = React.useMemo(() => {
-    const people = [...assignableStaff].sort((a, b) => {
+    // Mentor managers may only assign to themselves or mentors (not students / other managers)
+    const pool =
+      role === "MENTOR_MANAGER"
+        ? assignableStaff.filter(
+            (m) => m.id === currentUserId || (m.role || "MENTOR") === "MENTOR",
+          )
+        : assignableStaff;
+
+    const people = [...pool].sort((a, b) => {
       const order = (r?: string) =>
         r === "ADMIN" ? 0 : r === "MENTOR_MANAGER" ? 1 : r === "MENTOR" ? 2 : 3;
       const byRole = order(a.role) - order(b.role);
@@ -114,12 +122,32 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
       return (a.name || "").localeCompare(b.name || "");
     });
 
+    const mentorPeople = people.filter((m) => (m.role || "MENTOR") === "MENTOR");
+    const mmMentorCount = mentorPeople.length;
+
     if (editingTask) {
       return [
         { value: "", label: "Select Staff Member" },
         ...people.map((m) => ({
           value: m.id,
           label: `${m.name}${m.id === currentUserId ? " (You)" : ""} (${roleLabel(m.role)})`,
+        })),
+      ];
+    }
+
+    if (role === "MENTOR_MANAGER") {
+      return [
+        { value: "", label: "Select assignee…" },
+        { value: ASSIGN_SELF, label: `Myself${currentUserName ? ` — ${currentUserName}` : ""}` },
+        {
+          value: ASSIGN_ALL_MENTORS,
+          label: `All Mentors (${mmMentorCount})`,
+          disabled: mmMentorCount === 0,
+        },
+        { value: "__people__", label: "—— Specific mentors ——", disabled: true },
+        ...mentorPeople.map((m) => ({
+          value: m.id,
+          label: `${m.name}${m.id === currentUserId ? " (You)" : ""} (Mentor)`,
         })),
       ];
     }
@@ -150,24 +178,32 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
     editingTask,
     mentorCount,
     managerCount,
+    role,
   ]);
 
-  const canManageTasks = role === "ADMIN";
+  const canCreateTasks =
+    role === "ADMIN" || role === "MENTOR_MANAGER" || role === "MENTOR";
+  const canAssignToOthers = role === "ADMIN" || role === "MENTOR_MANAGER";
+  const canSeeAssignees = role === "ADMIN" || role === "MENTOR_MANAGER";
   const canDeleteTask = (task: StaffTask) =>
-    canManageTasks || taskAssignedBy(task) === currentUserId;
+    role === "ADMIN" || taskAssignedBy(task) === currentUserId;
   const canEditTask = (task: StaffTask) =>
-    canManageTasks || taskAssignedBy(task) === currentUserId;
+    role === "ADMIN" || taskAssignedBy(task) === currentUserId;
 
   const openCreateModal = () => {
     setEditingTask(null);
-    setNewTask(emptyTask());
+    setNewTask({
+      ...emptyTask(),
+      // Mentors can only create self-assigned tasks
+      assignedTo: role === "MENTOR" ? ASSIGN_SELF : "",
+    });
     setIsAddModalOpen(true);
   };
 
   usePageHeaderAction(
-    canManageTasks
+    canCreateTasks
       ? {
-          label: "Assign Task",
+          label: role === "MENTOR" ? "Add Task" : "Assign Task",
           icon: <Plus className="w-4 h-4" />,
           onClick: openCreateModal,
         }
@@ -175,8 +211,8 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
   );
 
   const visibleTasks = tasks.filter((t) => {
-    if (role === "ADMIN") return true;
-    // Mentors / managers: only tasks assigned to them (not ones they created for others)
+    if (role === "ADMIN" || role === "MENTOR_MANAGER") return true;
+    // Mentors: only tasks assigned to them
     return taskAssignedTo(t) === currentUserId;
   });
 
@@ -200,7 +236,13 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTask.task?.trim() || !newTask.dueDate) return;
-    if (role === "ADMIN" && !editingTask && !newTask.assignedTo) return;
+
+    const assignedTo =
+      role === "MENTOR"
+        ? ASSIGN_SELF
+        : newTask.assignedTo || (editingTask ? taskAssignedTo(editingTask) : "");
+
+    if (!editingTask && canAssignToOthers && !assignedTo) return;
 
     const [y, m, d] = (newTask.dueDate || "").split("-").map(Number);
     const date = new Date(y, m - 1, d, 12, 0, 0);
@@ -209,12 +251,13 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
       onUpdateTask({
         ...editingTask,
         ...newTask,
-        assignedTo: newTask.assignedTo || taskAssignedTo(editingTask),
+        assignedTo: assignedTo || taskAssignedTo(editingTask),
         dueDate: date.toISOString(),
       } as StaffTask);
     } else {
       onAddTask({
         ...newTask,
+        assignedTo,
         assignedBy: currentUserId,
         status: "PENDING",
         dueDate: date.toISOString(),
@@ -385,7 +428,7 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
                           {taskStudentName(task)}
                         </div>
                       )}
-                      {role === "ADMIN" && (
+                      {canSeeAssignees && (
                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                           <User className="w-3 h-3 text-indigo-400" />
                           {task.assignedToUser?.name ||
@@ -434,11 +477,26 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
           <div className="py-16 text-center bg-slate-900/50 border border-dashed border-slate-800 rounded-xl">
             <CheckSquare className="w-12 h-12 text-slate-800 mx-auto mb-4" />
             <h4 className="text-lg font-bold text-white mb-1">No tasks found</h4>
-            <p className="text-slate-500 text-sm max-w-xs mx-auto">
-              {filterStatus === "ALL"
-                ? "You're all caught up. Assigned tasks will show up here."
-                : `No ${filterStatus.toLowerCase()} tasks right now.`}
-            </p>
+            <div className="space-y-3">
+              <p className="text-slate-500 text-sm max-w-xs mx-auto">
+                {filterStatus === "ALL"
+                  ? canCreateTasks
+                    ? role === "MENTOR"
+                      ? "You're all caught up. Add a personal task to get started."
+                      : "You're all caught up. Assign a task to yourself or your team."
+                    : "You're all caught up. Assigned tasks will show up here."
+                  : `No ${filterStatus.toLowerCase()} tasks right now.`}
+              </p>
+              {canCreateTasks && filterStatus === "ALL" && (
+                <Button
+                  size="sm"
+                  leftIcon={<Plus className="w-4 h-4" />}
+                  onClick={openCreateModal}
+                >
+                  {role === "MENTOR" ? "Add Task" : "Assign Task"}
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -446,8 +504,18 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
       <Modal
         open={isAddModalOpen}
         onClose={handleCloseModal}
-        title={editingTask ? "Edit Task" : "Assign New Task"}
-        description="Internal staff assignment"
+        title={
+          editingTask
+            ? "Edit Task"
+            : role === "MENTOR"
+              ? "Add Personal Task"
+              : "Assign New Task"
+        }
+        description={
+          role === "MENTOR"
+            ? "Create a task for your own to-do list."
+            : "Internal staff assignment"
+        }
         size="lg"
         footer={
           <div className="flex gap-3 w-full">
@@ -462,7 +530,11 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
                 form?.requestSubmit();
               }}
             >
-              {editingTask ? "Update Task" : "Assign Task"}
+              {editingTask
+                ? "Update Task"
+                : role === "MENTOR"
+                  ? "Add Task"
+                  : "Assign Task"}
             </Button>
           </div>
         }
@@ -511,7 +583,7 @@ const StaffTasksView: React.FC<StaffTasksViewProps> = ({
             </FormField>
           </div>
 
-          {role === "ADMIN" && (
+          {canAssignToOthers && (
             <FormField
               label="Assign To"
               required

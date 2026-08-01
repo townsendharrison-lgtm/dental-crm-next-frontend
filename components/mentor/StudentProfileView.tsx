@@ -103,6 +103,7 @@ function mapInitialTab(initialTab?: string): PrimaryTab {
     case "hub":
     case "applications":
     case "path":
+    case "timeline":
       return "plan";
     case "meetings":
     case "tasks":
@@ -1051,6 +1052,15 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
             experiences={experiences}
             optimizationPlan={optimizationPlan}
             platformConfig={platformConfig}
+            initialSection={
+              initialTab === "timeline"
+                ? "timeline"
+                : initialTab === "applications"
+                  ? "applications"
+                  : initialTab === "path" || initialTab === "hub"
+                    ? "schools"
+                    : "strategy"
+            }
             onUpdatePlan={(plan) => onUpdateOptimizationPlan?.(plan)}
             onCreatePlan={(payload) =>
               onUpdateOptimizationPlan?.({

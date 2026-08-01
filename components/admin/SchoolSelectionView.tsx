@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Target,
-  Plus,
-  Trash2,
+import { 
+  Target, 
+  Plus, 
+  Trash2, 
   Sparkles,
   Brain,
   AlertCircle,
@@ -210,14 +210,14 @@ function SectionCard({
         <div className="flex items-center gap-3">
           <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", iconClass)}>
             <Icon className="h-5 w-5" />
-          </div>
+        </div>
           <div>
             <h3 className="text-sm font-semibold text-white">{title}</h3>
             {subtitle ? <p className="text-xs text-slate-500">{subtitle}</p> : null}
           </div>
-        </div>
+          </div>
         {actions}
-      </div>
+        </div>
       {children}
     </section>
   );
@@ -270,7 +270,7 @@ function StringListEditor({
         >
           Add
         </Button>
-      </div>
+              </div>
     </FormField>
   );
 }
@@ -301,8 +301,8 @@ function StrengthDonut({ score }: { score: number }) {
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-2xl font-bold tabular-nums leading-none text-white">{clamped}</span>
         <span className="mt-0.5 text-[10px] text-slate-500">/ 100</span>
-      </div>
-    </div>
+                </div>
+              </div>
   );
 }
 
@@ -403,11 +403,11 @@ function PlanPreviewBody({
                   year: "numeric",
                 })}
               </p>
-            </div>
           </div>
+      </div>
           <div className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3">
             <StrengthDonut score={draft.overallScore} />
-            <div>
+                  <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 Overall strength
               </p>
@@ -417,9 +417,9 @@ function PlanPreviewBody({
                   {draft.improvementLeverageScore}%
                 </span>
               </p>
-            </div>
-          </div>
-        </div>
+                  </div>
+                </div>
+                  </div>
       </header>
 
       <div className="space-y-8 px-5 py-6 sm:px-6 sm:py-7">
@@ -450,11 +450,11 @@ function PlanPreviewBody({
                   <p className={cn("mt-1.5 text-sm font-bold", tone.text)}>{value}</p>
                   <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
                     <div className={cn("h-full rounded-full", tone.bar, tone.width)} />
-                  </div>
-                </div>
+                        </div>
+                    </div>
               );
             })}
-          </div>
+                  </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2">
@@ -474,7 +474,7 @@ function PlanPreviewBody({
                 <li className="text-sm italic text-slate-600">None listed</li>
               )}
             </ul>
-          </div>
+                  </div>
           <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
             <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-400">
               <AlertCircle className="h-3.5 w-3.5" />
@@ -493,7 +493,7 @@ function PlanPreviewBody({
                 <li className="text-sm italic text-slate-600">None listed</li>
               )}
             </ul>
-          </div>
+              </div>
         </section>
 
         <section>
@@ -535,7 +535,7 @@ function PlanPreviewBody({
                     <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold tabular-nums text-slate-400">
                       {inCat.length}
                     </span>
-                  </div>
+                </div>
                   <ul className="divide-y divide-slate-800/80">
                     {inCat.map((s) => (
                       <li key={s.selectionId || s.id} className="px-3.5 py-3">
@@ -546,7 +546,7 @@ function PlanPreviewBody({
                       </li>
                     ))}
                   </ul>
-                </div>
+              </div>
               ))}
             </div>
           )}
@@ -576,17 +576,17 @@ function PlanPreviewBody({
                       </li>
                     ))}
                   </ol>
-                </div>
+                      </div>
               ))}
-            </div>
-          </section>
+                    </div>
+                  </section>
         )}
 
         {leverage.length > 0 && (
-          <section>
+                    <section>
             <h4 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               Leverage actions
-            </h4>
+                      </h4>
             <div className="grid gap-3 sm:grid-cols-2">
               {leverage.map((action, idx) => (
                 <div
@@ -609,18 +609,18 @@ function PlanPreviewBody({
                       {action.description}
                     </p>
                   )}
-                </div>
-              ))}
-            </div>
-          </section>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
         )}
 
         {risks.length > 0 && (
-          <section>
+                    <section>
             <h4 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               Risk factors
-            </h4>
-            <div className="space-y-3">
+                      </h4>
+                      <div className="space-y-3">
               {risks.map((risk, idx) => (
                 <div
                   key={idx}
@@ -648,13 +648,13 @@ function PlanPreviewBody({
                       {risk.mitigation}
                     </p>
                   )}
-                </div>
-              ))}
-            </div>
-          </section>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
         )}
-      </div>
-    </div>
+                  </div>
+                      </div>
   );
 }
 
@@ -998,14 +998,14 @@ export default function SchoolSelectionView() {
               >
                 <Icon className="h-4 w-4" />
                 {item.label}
-              </button>
+                        </button>
             );
           })}
-        </div>
-      </div>
+                      </div>
+                    </div>
 
       {mainTab === "reports" && (
-        <div className="space-y-4">
+                      <div className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative max-w-md flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -1015,14 +1015,14 @@ export default function SchoolSelectionView() {
                 placeholder="Search by student name…"
                 className="h-9 rounded-lg border-slate-800 bg-slate-900/50 pl-9 text-sm"
               />
-            </div>
+                            </div>
             <p className="shrink-0 text-xs text-slate-500">
               <span className="font-semibold text-slate-300">
                 {reportsLoading ? "…" : planReports.length}
               </span>{" "}
               {planReports.length === 1 ? "report" : "reports"}
             </p>
-          </div>
+                          </div>
 
           {reportsLoading ? (
             <div className="flex h-48 items-center justify-center">
@@ -1099,7 +1099,7 @@ export default function SchoolSelectionView() {
                           {external ? (
                             <span className="rounded border border-slate-700 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-slate-400">
                               External
-                            </span>
+                          </span>
                           ) : null}
                         </div>
                         <p className="truncate text-xs text-slate-500">
@@ -1108,8 +1108,8 @@ export default function SchoolSelectionView() {
                             ? ` · Updated ${new Date(updated).toLocaleDateString()}`
                             : ""}
                         </p>
+                        </div>
                       </div>
-                    </div>
 
                     <div className="mt-4">
                       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -1119,14 +1119,14 @@ export default function SchoolSelectionView() {
                         <span className="text-sm font-bold tabular-nums text-indigo-300">
                           {score}%
                         </span>
-                      </div>
+                            </div>
                       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
                         <div
                           className="h-full rounded-full bg-indigo-500"
                           style={{ width: `${score}%` }}
                         />
-                      </div>
-                    </div>
+                          </div>
+                        </div>
 
                     <p className="mt-3 line-clamp-2 min-h-[2.5rem] flex-1 text-sm text-slate-400">
                       {snapshot}
@@ -1161,17 +1161,17 @@ export default function SchoolSelectionView() {
                       >
                         Download PDF
                       </Button>
-                    </div>
+                            </div>
                   </div>
                 );
               })}
-            </div>
-          )}
-        </div>
+                            </div>
+                          )}
+                        </div>
       )}
 
       {mainTab === "create" && (
-        <div className="space-y-4">
+                      <div className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
@@ -1202,13 +1202,13 @@ export default function SchoolSelectionView() {
                     {item.id === "ai" && (
                       <span className="rounded border border-amber-500/20 bg-amber-500/15 px-1 py-0.5 text-[9px] uppercase tracking-wide text-amber-300">
                         Soon
-                      </span>
+                          </span>
                     )}
                   </button>
                 );
               })}
-            </div>
-          </div>
+                        </div>
+                      </div>
 
           {createMode === "ai" && (
             <EmptyState
@@ -1258,7 +1258,7 @@ export default function SchoolSelectionView() {
                   disabled={studentsLoading}
                 />
               </FormField>
-            </div>
+                          </div>
             {selectedStudent ? (
               <p className="text-xs text-slate-500">
                 Internal student ·{" "}
@@ -1285,7 +1285,7 @@ export default function SchoolSelectionView() {
             <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/40 py-16 text-sm text-slate-400">
               <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
               Loading plan…
-            </div>
+                            </div>
           ) : (
             <div className="space-y-4">
               <SectionCard
@@ -1323,7 +1323,7 @@ export default function SchoolSelectionView() {
                       }
                     />
                   </FormField>
-                </div>
+                          </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {(
                     [
@@ -1343,8 +1343,8 @@ export default function SchoolSelectionView() {
                         className="w-full"
                       />
                     </FormField>
-                  ))}
-                </div>
+                            ))}
+                          </div>
               </SectionCard>
 
               <SectionCard
@@ -1393,7 +1393,7 @@ export default function SchoolSelectionView() {
                       }
                     }}
                   />
-                </div>
+                            </div>
               </SectionCard>
 
               <SectionCard
@@ -1472,7 +1472,7 @@ export default function SchoolSelectionView() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                    </div>
+                      </div>
                     <Textarea
                       value={action.description}
                       onChange={(e) => {
@@ -1483,8 +1483,8 @@ export default function SchoolSelectionView() {
                       placeholder="Description…"
                       className="min-h-[64px]"
                     />
-                  </div>
-                ))}
+                        </div>
+                      ))}
               </SectionCard>
 
               <SectionCard
@@ -1568,14 +1568,14 @@ export default function SchoolSelectionView() {
                       placeholder="Mitigation…"
                       className="min-h-[56px]"
                     />
-                  </div>
-                ))}
+                        </div>
+                      ))}
               </SectionCard>
-            </div>
+                    </div>
           )}
-        </div>
+                          </div>
           )}
-        </div>
+                      </div>
       )}
 
       <Modal
@@ -1604,7 +1604,7 @@ export default function SchoolSelectionView() {
             >
               Download PDF
             </Button>
-          </div>
+                </div>
         }
       >
         {canEditPlan && (
