@@ -105,7 +105,15 @@ export default function AnalyticsTab({
   experiences,
   optimizationPlan,
 }: AnalyticsTabProps) {
-  const overallScore = optimizationPlan?.overallScore ?? optimizationPlan?.overall_score ?? 0;
+  const strengthScore = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        Number(student.strengthScore ?? student.profile?.strength_score ?? 0) || 0,
+      ),
+    ),
+  );
   const { data: remoteBenchmarks } = useNationalBenchmarks();
   const { data: strengthHistory = [] } = useStudentStrengthHistory(student.id);
 
@@ -228,7 +236,7 @@ export default function AnalyticsTab({
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-6 relative z-10">Overall Strength</h3>
 
-          <div className="relative w-48 h-48 mb-4 z-10">
+          <div className="relative w-48 h-48 z-10">
             <svg className="w-full h-full transform -rotate-90">
               <circle
                 cx="96"
@@ -248,32 +256,25 @@ export default function AnalyticsTab({
                 fill="transparent"
                 strokeDasharray={552.92}
                 initial={{ strokeDashoffset: 552.92 }}
-                animate={{ strokeDashoffset: 552.92 - (552.92 * overallScore) / 100 }}
+                animate={{ strokeDashoffset: 552.92 - (552.92 * strengthScore) / 100 }}
                 transition={{ duration: 1.5, ease: "easeOut" }}
                 strokeLinecap="round"
                 className="text-indigo-500"
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-5xl font-semibold text-white">{overallScore}</span>
-              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Index Score</span>
+              <span className="text-5xl font-semibold text-white">{strengthScore}</span>
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                Strength Score
+              </span>
             </div>
-          </div>
-
-          <div className="text-center relative z-10">
-            <p className="text-sm text-slate-400">Your application is currently in the</p>
-            <p className="text-sm font-semibold text-indigo-400 uppercase tracking-wider mt-1">
-              {overallScore > 80 ? 'Elite Competitive' :
-               overallScore > 60 ? 'Strong Competitive' :
-               'Developing'} Range
-            </p>
           </div>
         </div>
 
         <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900 p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <History className="text-indigo-400" size={20} /> Strength Score
+              <History className="text-indigo-400" size={20} /> Strength Score Growth
             </h3>
             <Badge variant="outline">Last 6 months</Badge>
           </div>

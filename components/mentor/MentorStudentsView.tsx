@@ -66,7 +66,14 @@ function riskLabel(status?: ReadinessStatus | string) {
   if (status === ReadinessStatus.GREEN || status === "GREEN") return "Low Risk";
   if (status === ReadinessStatus.YELLOW || status === "YELLOW") return "Moderate";
   if (status === ReadinessStatus.RED || status === "RED") return "High Risk";
-  return "Unknown";
+  return "Moderate";
+}
+
+function readinessFromProgress(progress?: number | null) {
+  const p = Math.max(0, Math.min(100, Number(progress) || 0));
+  if (p >= 70) return ReadinessStatus.GREEN;
+  if (p >= 40) return ReadinessStatus.YELLOW;
+  return ReadinessStatus.RED;
 }
 
 function assignmentStudentId(a: StudentAssignment) {
@@ -114,16 +121,17 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
     const byId = new Map<string, RosterRow>();
 
     assignedStudents.forEach((s) => {
+      const progress = s.progress ?? s.profile?.progress;
       byId.set(s.id, {
         id: s.id,
         name: s.name,
         email: s.email,
         avatar: s.avatar,
-        readiness: s.readiness,
+        readiness: readinessFromProgress(progress),
         strengthScore: s.strengthScore ?? s.profile?.strength_score,
         gpa: s.gpa ?? s.profile?.gpa,
         datScore: preferredDatScore(s),
-        progress: s.progress ?? s.profile?.progress,
+        progress,
         applicationCycle: s.applicationCycle ?? s.profile?.application_cycle,
         lastMeetingDate: s.lastMeetingDate ?? s.profile?.last_meeting_date,
         lastContactDate: s.lastContactDate ?? s.profile?.last_contact_date,
@@ -139,12 +147,14 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
       const fromAssignment = assignment.student;
       const existing = byId.get(sid);
 
+      const progress =
+        fromList?.progress ?? fromList?.profile?.progress ?? existing?.progress;
       byId.set(sid, {
         id: sid,
         name: fromList?.name || fromAssignment?.name || existing?.name || "Student",
         email: fromList?.email || fromAssignment?.email || existing?.email || "",
         avatar: fromList?.avatar || fromAssignment?.avatar || existing?.avatar || undefined,
-        readiness: fromList?.readiness ?? existing?.readiness,
+        readiness: readinessFromProgress(progress),
         strengthScore:
           fromList?.strengthScore ??
           fromList?.profile?.strength_score ??
@@ -154,7 +164,7 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
           preferredDatScore(fromList) ??
           preferredDatScore(fromAssignment as Student | undefined) ??
           existing?.datScore,
-        progress: fromList?.progress ?? fromList?.profile?.progress ?? existing?.progress,
+        progress,
         applicationCycle:
           fromList?.applicationCycle ??
           fromList?.profile?.application_cycle ??

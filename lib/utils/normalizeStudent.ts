@@ -1,5 +1,6 @@
-import type { Student, ReadinessStatus } from "@/lib/types";
+import type { Student } from "@/lib/types";
 import { preferredDatScore } from "@/lib/utils/studentMetrics";
+import { readinessStatusFromPercent } from "@/lib/utils/applicationReadiness";
 
 /** Flatten nested profile fields the UI expects as top-level camelCase. */
 export function normalizeStudent(s: Student): Student {
@@ -7,11 +8,13 @@ export function normalizeStudent(s: Student): Student {
   const datAA = s.datAA ?? profile?.dat_aa ?? null;
   const datTS = s.datTS ?? profile?.dat_ts ?? null;
   const rawDatScore = s.datScore ?? profile?.dat_score ?? null;
+  const progress = s.progress ?? profile?.progress ?? 0;
   const flattened: Student = {
     ...s,
     mentorId: s.mentorId ?? profile?.mentor_id ?? undefined,
-    readiness: (s.readiness ?? profile?.readiness) as ReadinessStatus | undefined,
-    progress: s.progress ?? profile?.progress,
+    // Traffic light follows Application Readiness progress %
+    readiness: readinessStatusFromPercent(progress),
+    progress,
     gpa: s.gpa ?? profile?.gpa,
     strengthScore: s.strengthScore ?? profile?.strength_score,
     datScore: rawDatScore,

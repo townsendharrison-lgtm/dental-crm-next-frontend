@@ -6,6 +6,18 @@ import type {
   Student,
   StudentCredential,
 } from "@/lib/types";
+import { ReadinessStatus } from "@/lib/types";
+
+/**
+ * Traffic-light band from Application Readiness completion %.
+ * RED under 40 · YELLOW 40–69 · GREEN 70+
+ */
+export function readinessStatusFromPercent(percent: number): ReadinessStatus {
+  const p = Math.max(0, Math.min(100, Number(percent) || 0));
+  if (p >= 70) return ReadinessStatus.GREEN;
+  if (p >= 40) return ReadinessStatus.YELLOW;
+  return ReadinessStatus.RED;
+}
 
 export type ReadinessItemSource = "manual" | "linked";
 

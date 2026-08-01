@@ -98,7 +98,10 @@ import { usersApi } from "@/lib/api/users";
 import { ProfileDetailsEditModal } from "@/components/student/ProfileDetailsEditModal";
 import ApplicationReadinessPanel from "@/components/student/ApplicationReadinessPanel";
 import { DAT_TYPES, isUnitedStates } from "@/lib/profile/profileOptions";
-import { buildApplicationReadiness } from "@/lib/utils/applicationReadiness";
+import {
+  buildApplicationReadiness,
+  readinessStatusFromPercent,
+} from "@/lib/utils/applicationReadiness";
 
 interface StudentProfileDocumentsViewProps {
   student: Student;
@@ -1042,14 +1045,14 @@ export function StudentProfileDocumentsView({
                   </span>
                   <span
                     className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                      (student.readiness || student.profile?.readiness) === "GREEN"
+                      readinessStatusFromPercent(readinessProgress) === "GREEN"
                         ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                        : (student.readiness || student.profile?.readiness) === "RED"
+                        : readinessStatusFromPercent(readinessProgress) === "RED"
                           ? "border-rose-500/25 bg-rose-500/10 text-rose-300"
                           : "border-amber-500/25 bg-amber-500/10 text-amber-300"
                     }`}
                   >
-                    {(student.readiness || student.profile?.readiness || "YELLOW").toLowerCase()} readiness
+                    {readinessStatusFromPercent(readinessProgress).toLowerCase()} readiness
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">

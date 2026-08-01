@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -20,6 +20,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { cn } from "@/lib/utils/cn";
 import {
   buildApplicationReadiness,
+  readinessStatusFromPercent,
   toggleManualReadinessFlag,
   type ReadinessManualKey,
 } from "@/lib/utils/applicationReadiness";
@@ -77,6 +78,7 @@ export default function ApplicationReadinessPanel({
   const updateStudent = useUpdateStudent();
   const [savingKey, setSavingKey] = useState<ReadinessManualKey | null>(null);
   const [openSection, setOpenSection] = useState<string | null>("dat");
+  const syncingRef = useRef(false);
 
   const readiness = useMemo(
     () =>
@@ -88,6 +90,41 @@ export default function ApplicationReadinessPanel({
       }),
     [student, experiences, lorRequests, credentials],
   );
+
+  const band = readinessStatusFromPercent(readiness.percent);
+  const flagsKey = JSON.stringify(readiness.flags);
+
+  // Keep stored progress + traffic-light readiness aligned with live checklist %
+  useEffect(() => {
+    if (!canEdit || syncingRef.current || savingKey) return;
+    const storedProgress = Math.round(
+      Number(student.progress ?? student.profile?.progress ?? 0) || 0,
+    );
+    const storedBand = String(
+      student.profile?.readiness ?? student.readiness ?? "",
+    ).toUpperCase();
+    // student.readiness is already derived from progress in normalizeStudent —
+    // compare against the persisted profile band when present.
+    if (storedProgress === readiness.percent && storedBand === band) return;
+
+    syncingRef.current = true;
+    updateStudent
+      .mutateAsync({
+        id: student.id,
+        updates: {
+          application_readiness: readiness.flags,
+          progress: readiness.percent,
+          readiness: band,
+        },
+      })
+      .catch(() => {
+        /* silent background sync */
+      })
+      .finally(() => {
+        syncingRef.current = false;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync on percent/flags drift only
+  }, [canEdit, savingKey, student.id, student.progress, student.profile?.progress, student.profile?.readiness, readiness.percent, flagsKey, band]);
 
   const handleToggle = async (key: ReadinessManualKey) => {
     if (!canEdit || savingKey) return;
@@ -103,6 +140,7 @@ export default function ApplicationReadinessPanel({
       lorRequests,
       credentials,
     }).percent;
+    const nextBand = readinessStatusFromPercent(nextPercent);
 
     setSavingKey(key);
     try {
@@ -111,6 +149,7 @@ export default function ApplicationReadinessPanel({
         updates: {
           application_readiness: nextFlags,
           progress: nextPercent,
+          readiness: nextBand,
         },
       });
       onUpdated?.(
@@ -119,8 +158,14 @@ export default function ApplicationReadinessPanel({
           : {
               ...student,
               progress: nextPercent,
+              readiness: nextBand,
               profile: student.profile
-                ? { ...student.profile, application_readiness: nextFlags, progress: nextPercent }
+                ? {
+                    ...student.profile,
+                    application_readiness: nextFlags,
+                    progress: nextPercent,
+                    readiness: nextBand,
+                  }
                 : student.profile,
             },
       );

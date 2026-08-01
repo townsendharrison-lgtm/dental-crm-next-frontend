@@ -133,6 +133,14 @@ function riskLabel(status?: ReadinessStatus | string) {
   return "Unknown";
 }
 
+/** Traffic light from Application Readiness progress % (RED under 40 · YELLOW 40–69 · GREEN 70+). */
+function readinessFromProgress(progress?: number | null): ReadinessStatus {
+  const p = Math.max(0, Math.min(100, Number(progress) || 0));
+  if (p >= 70) return RS.GREEN;
+  if (p >= 40) return RS.YELLOW;
+  return RS.RED;
+}
+
 /** Mini 12-month strength sparkline for mentor student roster cards. */
 function StrengthYearSparkline({ scores }: { scores: number[] }) {
   if (!scores.length) return null;
@@ -274,22 +282,30 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
 
   const students = useMemo(() => {
     const byId = new Map<string, Student>();
-    assignedStudents.forEach((s) => byId.set(s.id, s));
+    assignedStudents.forEach((s) => {
+      const progress = s.progress ?? s.profile?.progress;
+      byId.set(s.id, {
+        ...s,
+        progress,
+        readiness: readinessFromProgress(progress),
+      });
+    });
     pendingAssignments.forEach((a) => {
       const sid = assignmentStudentId(a);
       if (!sid || byId.has(sid)) return;
       const fromAll = allStudents.find((s) => s.id === sid);
       const fromA = a.student;
+      const progress = fromAll?.progress ?? fromAll?.profile?.progress;
       byId.set(sid, {
         id: sid,
         name: fromAll?.name || fromA?.name || "Student",
         email: fromAll?.email || fromA?.email || "",
         avatar: fromAll?.avatar || fromA?.avatar || undefined,
-        readiness: fromAll?.readiness,
+        readiness: readinessFromProgress(progress),
         strengthScore: fromAll?.strengthScore,
         gpa: fromAll?.gpa,
         datScore: fromAll?.datScore,
-        progress: fromAll?.progress,
+        progress,
         undergradInstitution: fromAll?.undergradInstitution,
         state: fromAll?.state,
         applicationCycle: fromAll?.applicationCycle,
