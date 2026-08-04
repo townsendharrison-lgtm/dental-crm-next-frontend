@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import { OptimizationPlan, Experience, Student, CategoryRecommendation } from '@/lib/types';
 import {
   Edit3,
@@ -19,7 +20,18 @@ import {
   ExternalLink,
   Clock,
   Hand,
+  CheckCircle2,
+  Loader2,
+  Square,
+  TrendingUp,
 } from 'lucide-react';
+import { useUpdateStudent } from '@/lib/hooks/useStudentProfile';
+import {
+  getApplicationJourneyFlags,
+  journeyPhaseLabel,
+  toggleJourneyPhase,
+  type ApplicationJourneyPhaseId,
+} from '@/lib/utils/applicationJourney';
 import {
   Badge,
   Button,
@@ -49,13 +61,14 @@ import HourTrackerTab from '@/components/student/hub/HourTrackerTab';
 interface ApplicationOptimizationPlanProps {
   studentName: string;
   studentCreatedAt?: string;
-  /** Needed for mentor Hour Tracker preview */
+  /** Needed for mentor Hour Tracker preview + journey check-off */
   student?: Student | null;
   plan?: OptimizationPlan;
   experiences: Experience[];
   isEditable?: boolean;
   onUpdatePlan?: (plan: OptimizationPlan) => void;
   onDeletePlan?: () => void;
+  onStudentUpdated?: (student: Student) => void;
 }
 
 const KPI_STATUS_OPTIONS = [
@@ -70,6 +83,18 @@ const DEXTERITY_STATUS_OPTIONS = [
   { value: 'Moderate', label: 'Moderate' },
   { value: 'Developing', label: 'Developing' },
   { value: 'Needs Improvement', label: 'Needs Improvement' },
+];
+
+const LEVERAGE_IMPACT_OPTIONS = [
+  { value: 'High', label: 'High Impact' },
+  { value: 'Moderate', label: 'Moderate Impact' },
+  { value: 'Lower', label: 'Lower Impact' },
+];
+
+const RISK_SEVERITY_OPTIONS = [
+  { value: 'High', label: 'High Risk' },
+  { value: 'Medium', label: 'Medium Risk' },
+  { value: 'Low', label: 'Low Risk' },
 ];
 
 const statusToBadgeVariant = (status: string): 'success' | 'primary' | 'warning' | 'danger' | 'default' => {
@@ -92,13 +117,13 @@ const statusToBadgeVariant = (status: string): 'success' | 'primary' | 'warning'
 
 const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = ({
   studentName,
-  studentCreatedAt,
   student,
   plan,
   experiences,
   isEditable = false,
   onUpdatePlan,
   onDeletePlan,
+  onStudentUpdated,
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -106,31 +131,36 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [expandedRiskTips, setExpandedRiskTips] = useState<Record<number, boolean>>({});
   const [hourTrackerOpen, setHourTrackerOpen] = useState(false);
+  const [savingPhase, setSavingPhase] = useState<ApplicationJourneyPhaseId | null>(null);
+  const updateStudent = useUpdateStudent();
+  const journeyFlags = student ? getApplicationJourneyFlags(student) : {};
 
-  const getPhaseLabel = (phaseNum: number) => {
-    const ranges = [
-      { start: 0, end: 3 },
-      { start: 4, end: 6 },
-      { start: 7, end: 9 },
-      { start: 10, end: 12 }
-    ];
-    const { start: startMonth, end: endMonth } = ranges[phaseNum - 1];
-
-    if (!studentCreatedAt) {
-      return `Phase ${phaseNum} (${startMonth}-${endMonth} months)`;
+  const handleToggleJourneyPhase = async (phaseId: ApplicationJourneyPhaseId) => {
+    if (!isEditable || !student || savingPhase) return;
+    const nextFlags = toggleJourneyPhase(journeyFlags, phaseId);
+    setSavingPhase(phaseId);
+    try {
+      const updated = await updateStudent.mutateAsync({
+        id: student.id,
+        updates: { application_journey: nextFlags },
+      });
+      onStudentUpdated?.(
+        updated.profile
+          ? updated
+          : {
+              ...student,
+              profile: student.profile
+                ? { ...student.profile, application_journey: nextFlags }
+                : student.profile,
+            },
+      );
+      toast.success('Application Journey updated');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not update journey';
+      toast.error(message);
+    } finally {
+      setSavingPhase(null);
     }
-
-    const createdDate = new Date(studentCreatedAt);
-
-    const startDate = new Date(createdDate);
-    startDate.setMonth(createdDate.getMonth() + startMonth);
-
-    const endDate = new Date(createdDate);
-    endDate.setMonth(createdDate.getMonth() + endMonth);
-
-    const format = (date: Date) => date.toLocaleString('default', { month: 'short', year: 'numeric' });
-
-    return `Phase ${phaseNum} (${format(startDate)} - ${format(endDate)})`;
   };
 
   useEffect(() => {
@@ -534,7 +564,7 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
           >
             <Card className="border-slate-800 bg-slate-900/60 shadow-none h-full overflow-hidden">
               <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-                <CardTitle className="text-lg text-white">Strategic Flow Roadmap</CardTitle>
+                <CardTitle className="text-lg text-white">Application Journey</CardTitle>
                 <Badge variant="primary" className="gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                   Active Path
@@ -545,26 +575,34 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                   {(['phase1', 'phase2', 'phase3', 'phase4'] as const).map((phase, idx, phases) => {
                     const items = roadmap[phase] || [];
                     const isLast = idx === phases.length - 1;
+                    const phaseDone = Boolean(journeyFlags[phase]);
+                    const phaseBusy = savingPhase === phase;
                     return (
                       <div key={phase} className="relative flex gap-4 group/node">
                         {/* Step rail: marker + connector centered on the icon */}
                         <div className="relative flex w-8 shrink-0 flex-col items-center">
                           <div
                             className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-lg border-2 transition-all duration-500 ${
-                              idx === 0
+                              phaseDone
+                                ? 'bg-emerald-500 border-emerald-400'
+                                : idx === 0
                                 ? 'bg-indigo-500 border-indigo-400'
                                 : 'bg-slate-950 border-slate-800 group-hover/node:border-indigo-500/50'
                             }`}
                           >
-                            <span
-                              className={`text-sm font-semibold ${
-                                idx === 0
-                                  ? 'text-white'
-                                  : 'text-slate-500 group-hover/node:text-indigo-400'
-                              }`}
-                            >
-                              {idx + 1}
-                            </span>
+                            {phaseDone ? (
+                              <CheckCircle2 className="h-4 w-4 text-white" />
+                            ) : (
+                              <span
+                                className={`text-sm font-semibold ${
+                                  idx === 0
+                                    ? 'text-white'
+                                    : 'text-slate-500 group-hover/node:text-indigo-400'
+                                }`}
+                              >
+                                {idx + 1}
+                              </span>
+                            )}
                           </div>
                           {!isLast && (
                             <div
@@ -576,14 +614,38 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                         </div>
 
                         <div className="min-w-0 flex-1 space-y-3">
-                          <Badge variant="outline" className="rounded-md">
-                            {getPhaseLabel(idx + 1)}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="rounded-md">
+                              {journeyPhaseLabel(idx + 1)}
+                            </Badge>
+                            {isEditable && student ? (
+                              <button
+                                type="button"
+                                disabled={!!savingPhase}
+                                onClick={() => handleToggleJourneyPhase(phase)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-950/60 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300 transition-colors hover:border-indigo-500/40 hover:text-white disabled:opacity-60"
+                              >
+                                {phaseBusy ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+                                ) : phaseDone ? (
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                ) : (
+                                  <Square className="h-3.5 w-3.5" />
+                                )}
+                                {phaseDone ? 'Complete' : 'Mark complete'}
+                              </button>
+                            ) : phaseDone ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Complete
+                              </span>
+                            ) : null}
+                          </div>
 
                           {!isEditing && items.length === 0 ? (
                             <EmptyState
                               title="No items in this phase"
-                              description="Add roadmap tasks when editing the plan."
+                              description="Add next steps your student should focus on in this phase."
                               className="py-4 px-3 bg-slate-950/40 border-slate-800"
                             />
                           ) : (
@@ -637,7 +699,7 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                                   leftIcon={<Plus size={12} />}
                                   onClick={() => {
                                     const newRoadmap = { ...editPlan.roadmap };
-                                    (newRoadmap as any)[phase].push('New task...');
+                                    (newRoadmap as any)[phase].push('New item...');
                                     setEditPlan({ ...editPlan, roadmap: newRoadmap });
                                   }}
                                 >
@@ -662,10 +724,10 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
           animate={isLoaded ? { opacity: 1, y: 0 } : {}}
         >
           <Card className="border-slate-800 bg-slate-900/60 shadow-none">
-            <CardHeader>
+            <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
-                  <Sparkles size={16} className="text-white" />
+                  <TrendingUp size={16} className="text-white" />
                 </div>
                 <div>
                   <CardTitle className="text-lg text-white">Improvement Leverage Actions</CardTitle>
@@ -674,13 +736,41 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                   </CardDescription>
                 </div>
               </div>
+              {isEditing && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-dashed"
+                  leftIcon={<Plus size={12} />}
+                  onClick={() => {
+                    setEditPlan({
+                      ...editPlan,
+                      leverageActions: [
+                        ...(editPlan.leverageActions || []),
+                        {
+                          title: 'New action',
+                          description: '',
+                          impact: 'Moderate',
+                        },
+                      ],
+                    });
+                  }}
+                >
+                  Add
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {!editPlan.leverageActions?.length ? (
                 <EmptyState
-                  icon={<Sparkles size={20} />}
+                  icon={<TrendingUp size={20} />}
                   title="No leverage actions yet"
-                  description="Add high-impact actions when editing this plan."
+                  description={
+                    isEditing
+                      ? 'Click Add to create a high-impact action.'
+                      : 'Add high-impact actions when editing this plan.'
+                  }
                   className="py-8 bg-slate-950/40 border-slate-800"
                 />
               ) : (
@@ -688,19 +778,81 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                   {editPlan.leverageActions.map((action, idx) => (
                     <motion.div
                       key={idx}
-                      whileHover={{ y: -2 }}
+                      whileHover={isEditing ? undefined : { y: -2 }}
                       className="relative group"
                     >
                       <div className="relative rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3 hover:border-indigo-500/30 transition-all h-full flex flex-col">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-2xl font-semibold text-slate-800/60 group-hover:text-indigo-500/20 transition-colors">{idx + 1}</span>
-                          <Badge variant={statusToBadgeVariant(action.impact)}>
-                            {action.impact} Impact
-                          </Badge>
+                          {isEditing ? (
+                            <div className="flex items-center gap-1.5">
+                              <SelectMenu
+                                value={action.impact}
+                                onChange={(value) => {
+                                  const next = [...(editPlan.leverageActions || [])];
+                                  next[idx] = {
+                                    ...next[idx],
+                                    impact: value as 'High' | 'Moderate' | 'Lower',
+                                  };
+                                  setEditPlan({ ...editPlan, leverageActions: next });
+                                }}
+                                options={LEVERAGE_IMPACT_OPTIONS}
+                                className="w-[140px]"
+                              />
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-rose-500 hover:text-rose-400 shrink-0"
+                                onClick={() => {
+                                  const next = [...(editPlan.leverageActions || [])];
+                                  next.splice(idx, 1);
+                                  setEditPlan({ ...editPlan, leverageActions: next });
+                                }}
+                                aria-label="Remove leverage action"
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Badge variant={statusToBadgeVariant(action.impact)}>
+                              {action.impact} Impact
+                            </Badge>
+                          )}
                         </div>
-                        <div className="flex-1">
-                          <h4 className="text-sm font-semibold text-white mb-1.5 group-hover:text-indigo-400 transition-colors">{action.title}</h4>
-                          <p className="text-sm text-slate-400 leading-relaxed">{action.description}</p>
+                        <div className="flex-1 space-y-2">
+                          {isEditing ? (
+                            <>
+                              <FormField label={`Action ${idx + 1} title`} className="mb-0 [&_label]:sr-only">
+                                <Input
+                                  value={action.title}
+                                  onChange={(e) => {
+                                    const next = [...(editPlan.leverageActions || [])];
+                                    next[idx] = { ...next[idx], title: e.target.value };
+                                    setEditPlan({ ...editPlan, leverageActions: next });
+                                  }}
+                                  placeholder="Action title"
+                                />
+                              </FormField>
+                              <FormField label={`Action ${idx + 1} description`} className="mb-0 [&_label]:sr-only">
+                                <Textarea
+                                  value={action.description}
+                                  onChange={(e) => {
+                                    const next = [...(editPlan.leverageActions || [])];
+                                    next[idx] = { ...next[idx], description: e.target.value };
+                                    setEditPlan({ ...editPlan, leverageActions: next });
+                                  }}
+                                  placeholder="Describe the action and why it matters"
+                                  rows={3}
+                                />
+                              </FormField>
+                            </>
+                          ) : (
+                            <>
+                              <h4 className="text-sm font-semibold text-white mb-1.5 group-hover:text-indigo-400 transition-colors">{action.title}</h4>
+                              <p className="text-sm text-slate-400 leading-relaxed">{action.description}</p>
+                            </>
+                          )}
                         </div>
                       </div>
                     </motion.div>
@@ -717,7 +869,7 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
           animate={isLoaded ? { opacity: 1, y: 0 } : {}}
         >
           <Card className="border-rose-500/20 bg-rose-500/5 shadow-none">
-            <CardHeader>
+            <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
               <div className="flex items-center gap-3">
                 <AlertCircle className="text-rose-500" size={18} />
                 <div>
@@ -725,13 +877,42 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                   <CardDescription className="text-slate-500">Mentor-identified risks</CardDescription>
                 </div>
               </div>
+              {isEditing && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-dashed"
+                  leftIcon={<Plus size={12} />}
+                  onClick={() => {
+                    setEditPlan({
+                      ...editPlan,
+                      riskFactors: [
+                        ...(editPlan.riskFactors || []),
+                        {
+                          factor: 'New risk factor',
+                          severity: 'Medium',
+                          description: '',
+                          mitigation: '',
+                        },
+                      ],
+                    });
+                  }}
+                >
+                  Add
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {!editPlan.riskFactors?.length ? (
                 <EmptyState
                   icon={<AlertCircle size={20} />}
                   title="No risk factors yet"
-                  description="Document application risks and mitigations when editing."
+                  description={
+                    isEditing
+                      ? 'Click Add to document a risk and mitigation.'
+                      : 'Document application risks and mitigations when editing.'
+                  }
                   className="py-8 bg-slate-950/40 border-slate-800"
                 />
               ) : (
@@ -739,45 +920,129 @@ const ApplicationOptimizationPlan: React.FC<ApplicationOptimizationPlanProps> = 
                   {editPlan.riskFactors.map((risk, idx) => (
                     <div key={idx} className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
                       <div className="flex items-center justify-between gap-3">
-                        <h4 className="text-sm font-semibold text-white">{risk.factor}</h4>
-                        <Badge variant={statusToBadgeVariant(risk.severity)}>
-                          {risk.severity} Risk
-                        </Badge>
+                        {isEditing ? (
+                          <>
+                            <FormField label={`Risk ${idx + 1} title`} className="mb-0 flex-1 [&_label]:sr-only">
+                              <Input
+                                value={risk.factor}
+                                onChange={(e) => {
+                                  const next = [...(editPlan.riskFactors || [])];
+                                  next[idx] = { ...next[idx], factor: e.target.value };
+                                  setEditPlan({ ...editPlan, riskFactors: next });
+                                }}
+                                placeholder="Risk factor"
+                              />
+                            </FormField>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <SelectMenu
+                                value={risk.severity}
+                                onChange={(value) => {
+                                  const next = [...(editPlan.riskFactors || [])];
+                                  next[idx] = {
+                                    ...next[idx],
+                                    severity: value as 'High' | 'Medium' | 'Low',
+                                  };
+                                  setEditPlan({ ...editPlan, riskFactors: next });
+                                }}
+                                options={RISK_SEVERITY_OPTIONS}
+                                className="w-[130px]"
+                              />
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-rose-500 hover:text-rose-400"
+                                onClick={() => {
+                                  const next = [...(editPlan.riskFactors || [])];
+                                  next.splice(idx, 1);
+                                  setEditPlan({ ...editPlan, riskFactors: next });
+                                  setExpandedRiskTips((prev) => {
+                                    const copy = { ...prev };
+                                    delete copy[idx];
+                                    return copy;
+                                  });
+                                }}
+                                aria-label="Remove risk factor"
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <h4 className="text-sm font-semibold text-white">{risk.factor}</h4>
+                            <Badge variant={statusToBadgeVariant(risk.severity)}>
+                              {risk.severity} Risk
+                            </Badge>
+                          </>
+                        )}
                       </div>
-                      <p className="text-sm text-slate-400 leading-relaxed">{risk.description}</p>
 
-                      <div className="pt-3 border-t border-slate-800">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-0 text-emerald-400 hover:text-emerald-300 hover:bg-transparent"
-                          leftIcon={<Target size={14} />}
-                          rightIcon={
-                            <motion.span animate={{ rotate: expandedRiskTips[idx] ? 180 : 0 }} className="inline-flex">
-                              <ChevronDown size={12} />
-                            </motion.span>
-                          }
-                          onClick={() => setExpandedRiskTips(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                        >
-                          Recommended Expert Tip
-                        </Button>
+                      {isEditing ? (
+                        <>
+                          <FormField label={`Risk ${idx + 1} description`} className="mb-0 [&_label]:sr-only">
+                            <Textarea
+                              value={risk.description}
+                              onChange={(e) => {
+                                const next = [...(editPlan.riskFactors || [])];
+                                next[idx] = { ...next[idx], description: e.target.value };
+                                setEditPlan({ ...editPlan, riskFactors: next });
+                              }}
+                              placeholder="Describe the risk"
+                              rows={3}
+                            />
+                          </FormField>
+                          <FormField label={`Risk ${idx + 1} mitigation`} className="mb-0 [&_label]:sr-only">
+                            <Textarea
+                              value={risk.mitigation}
+                              onChange={(e) => {
+                                const next = [...(editPlan.riskFactors || [])];
+                                next[idx] = { ...next[idx], mitigation: e.target.value };
+                                setEditPlan({ ...editPlan, riskFactors: next });
+                              }}
+                              placeholder="Recommended mitigation / expert tip"
+                              rows={2}
+                            />
+                          </FormField>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-slate-400 leading-relaxed">{risk.description}</p>
 
-                        <AnimatePresence>
-                          {expandedRiskTips[idx] && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
+                          <div className="pt-3 border-t border-slate-800">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto px-0 text-emerald-400 hover:text-emerald-300 hover:bg-transparent"
+                              leftIcon={<Target size={14} />}
+                              rightIcon={
+                                <motion.span animate={{ rotate: expandedRiskTips[idx] ? 180 : 0 }} className="inline-flex">
+                                  <ChevronDown size={12} />
+                                </motion.span>
+                              }
+                              onClick={() => setExpandedRiskTips(prev => ({ ...prev, [idx]: !prev[idx] }))}
                             >
-                              <p className="text-sm text-emerald-400/80 font-medium italic mt-3 pl-4 border-l border-emerald-500/20">
-                                Mitigation: {risk.mitigation}
-                              </p>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
+                              Recommended Expert Tip
+                            </Button>
+
+                            <AnimatePresence>
+                              {expandedRiskTips[idx] && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  className="overflow-hidden"
+                                >
+                                  <p className="text-sm text-emerald-400/80 font-medium italic mt-3 pl-4 border-l border-emerald-500/20">
+                                    Mitigation: {risk.mitigation}
+                                  </p>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>

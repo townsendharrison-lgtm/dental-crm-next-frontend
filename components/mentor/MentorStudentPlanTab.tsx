@@ -312,6 +312,14 @@ export function MentorStudentPlanTab({
                 isEditable
                 onUpdatePlan={onUpdatePlan}
                 onDeletePlan={onDeletePlan ? () => setDeleteOpen(true) : undefined}
+                onStudentUpdated={
+                  onUpdateStudent
+                    ? (updated) =>
+                        onUpdateStudent({
+                          profile: updated.profile,
+                        })
+                    : undefined
+                }
               />
             </div>
           </>

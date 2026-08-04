@@ -146,8 +146,66 @@ export function PlanPdfDocument({
     border: "1px solid #1e293b",
     background: "#0f172a",
     borderRadius: 10,
-    padding: 14,
+    padding: "16px 16px 14px",
     boxSizing: "border-box",
+    overflow: "visible",
+  };
+
+  /** html2canvas clips flex-centered pills; table + table-cell centers reliably */
+  const pdfBadge = (bg: string, color: string): React.CSSProperties => ({
+    display: "table",
+    background: bg,
+    color,
+    borderRadius: 4,
+    padding: "0 10px",
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    height: 22,
+    boxSizing: "border-box",
+  });
+
+  const pdfBadgeCell: React.CSSProperties = {
+    display: "table-cell",
+    verticalAlign: "middle",
+    textAlign: "center",
+    lineHeight: 1,
+    height: 22,
+  };
+
+  const pdfCountBadge: React.CSSProperties = {
+    display: "table",
+    background: "#1e293b",
+    color: "#94a3b8",
+    borderRadius: 4,
+    padding: "0 10px",
+    fontSize: 10,
+    fontWeight: 700,
+    height: 22,
+    minWidth: 28,
+    boxSizing: "border-box",
+  };
+
+  const pdfStepNum: React.CSSProperties = {
+    display: "table",
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    background: "#312e81",
+    color: "#a5b4fc",
+    fontSize: 10,
+    fontWeight: 700,
+    boxSizing: "border-box",
+  };
+
+  const pdfStepNumCell: React.CSSProperties = {
+    display: "table-cell",
+    verticalAlign: "middle",
+    textAlign: "center",
+    lineHeight: 1,
+    width: 20,
+    height: 20,
   };
 
   return (
@@ -468,7 +526,7 @@ export function PlanPdfDocument({
                     border: "1px solid #1e293b",
                     background: "#0f172a",
                     borderRadius: 10,
-                    overflow: "hidden",
+                    overflow: "visible",
                     boxSizing: "border-box",
                   }}
                 >
@@ -485,12 +543,13 @@ export function PlanPdfDocument({
                       <tr>
                         <td
                           style={{
-                            padding: "10px 14px",
+                            padding: "12px 14px",
                             fontSize: 10,
                             fontWeight: 700,
                             letterSpacing: "0.08em",
                             textTransform: "uppercase",
                             color: cat.color || "#818cf8",
+                            verticalAlign: "middle",
                             ...wrapText,
                           }}
                         >
@@ -498,27 +557,14 @@ export function PlanPdfDocument({
                         </td>
                         <td
                           style={{
-                            padding: "10px 14px",
+                            padding: "12px 14px",
                             textAlign: "right",
-                            width: 48,
+                            width: 56,
                             verticalAlign: "middle",
                           }}
                         >
-                          <span
-                            style={{
-                              display: "inline-block",
-                              background: "#1e293b",
-                              color: "#94a3b8",
-                              borderRadius: 8,
-                              padding: "3px 9px",
-                              fontSize: 10,
-                              fontWeight: 700,
-                              lineHeight: 1.2,
-                              minWidth: 18,
-                              textAlign: "center",
-                            }}
-                          >
-                            {inCat.length}
+                          <span style={pdfCountBadge}>
+                            <span style={pdfBadgeCell}>{inCat.length}</span>
                           </span>
                         </td>
                       </tr>
@@ -572,54 +618,52 @@ export function PlanPdfDocument({
             <h4 style={sectionLabel}>Strategic roadmap</h4>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {roadmapPhases.map(({ phase, idx, tasks }) => (
-                <div key={phase} style={card}>
+                <div key={phase} style={{ ...card, padding: "18px 16px 14px" }}>
                   <p
                     style={{
-                      margin: "0 0 8px",
+                      margin: "0 0 12px",
+                      padding: 0,
                       fontSize: 10,
                       fontWeight: 700,
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       color: "#818cf8",
+                      lineHeight: "14px",
                     }}
                   >
                     Phase {idx + 1}
                   </p>
-                  <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-                    {tasks.map((t, i) => (
-                      <li
-                        key={i}
-                        style={{
-                          display: "flex",
-                          gap: 10,
-                          fontSize: 12,
-                          lineHeight: 1.5,
-                          color: "#cbd5e1",
-                          marginBottom: 6,
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: 999,
-                            background: "#312e81",
-                            color: "#a5b4fc",
-                            fontSize: 9,
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            flexShrink: 0,
-                            marginTop: 1,
-                          }}
-                        >
-                          {i + 1}
-                        </span>
-                        <span style={wrapText}>{t}</span>
-                      </li>
-                    ))}
-                  </ol>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <tbody>
+                      {tasks.map((t, i) => (
+                        <tr key={i}>
+                          <td
+                            style={{
+                              width: 28,
+                              padding: "0 10px 10px 0",
+                              verticalAlign: "top",
+                            }}
+                          >
+                            <span style={pdfStepNum}>
+                              <span style={pdfStepNumCell}>{i + 1}</span>
+                            </span>
+                          </td>
+                          <td
+                            style={{
+                              padding: "0 0 10px",
+                              fontSize: 12,
+                              lineHeight: 1.5,
+                              color: "#cbd5e1",
+                              verticalAlign: "top",
+                              ...wrapText,
+                            }}
+                          >
+                            {t}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ))}
             </div>
@@ -644,29 +688,27 @@ export function PlanPdfDocument({
                       ? { bg: "#312e81", color: "#a5b4fc" }
                       : { bg: "#1e293b", color: "#94a3b8" };
                 return (
-                  <div key={idx} style={{ ...card, boxSizing: "border-box", width: "100%" }}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        borderRadius: 6,
-                        padding: "3px 8px",
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: "0.06em",
-                        textTransform: "uppercase",
-                        background: badge.bg,
-                        color: badge.color,
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      {action.impact} impact
-                    </span>
+                  <div
+                    key={idx}
+                    style={{
+                      ...card,
+                      padding: "18px 16px 14px",
+                      boxSizing: "border-box",
+                      width: "100%",
+                    }}
+                  >
+                    <div style={{ marginBottom: 10, lineHeight: "22px" }}>
+                      <span style={pdfBadge(badge.bg, badge.color)}>
+                        <span style={pdfBadgeCell}>{action.impact} impact</span>
+                      </span>
+                    </div>
                     <h5
                       style={{
-                        margin: "10px 0 0",
+                        margin: 0,
                         fontSize: 13,
                         fontWeight: 700,
                         color: "#fff",
+                        lineHeight: 1.35,
                         ...wrapText,
                       }}
                     >
@@ -725,20 +767,8 @@ export function PlanPdfDocument({
                       >
                         {risk.factor}
                       </h5>
-                      <span
-                        style={{
-                          flexShrink: 0,
-                          borderRadius: 6,
-                          padding: "2px 8px",
-                          fontSize: 9,
-                          fontWeight: 700,
-                          letterSpacing: "0.06em",
-                          textTransform: "uppercase",
-                          background: badge.bg,
-                          color: badge.color,
-                        }}
-                      >
-                        {risk.severity}
+                      <span style={pdfBadge(badge.bg, badge.color)}>
+                        <span style={pdfBadgeCell}>{risk.severity}</span>
                       </span>
                     </div>
                     {risk.description ? (

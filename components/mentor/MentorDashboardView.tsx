@@ -2,9 +2,9 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
-import {
-  Calendar,
-  AlertCircle,
+import { 
+  Calendar, 
+  AlertCircle, 
   ClipboardList,
   Clock,
   UserPlus,
@@ -27,7 +27,7 @@ import {
   Video,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
+import { 
   LineChart,
   Line,
   XAxis,
@@ -209,8 +209,8 @@ type SmartAlert = {
   kind: "no-meeting" | "task" | "action";
 };
 
-const MentorDashboard: React.FC<MentorDashboardProps> = ({
-  onSelectStudent,
+const MentorDashboard: React.FC<MentorDashboardProps> = ({ 
+  onSelectStudent, 
   onMessageStudent,
   onQuickCreateMeeting,
   onSendScheduleSuggestMessage,
@@ -525,7 +525,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       const upcoming = mentorMeetings.find(
         (m) =>
           studentIdOf(m) === student.id &&
-          !m.completed &&
+        !m.completed && 
           isUpcomingMeetingDate(m.date, now),
       );
       if (!upcoming) {
@@ -548,7 +548,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         const due = dueDateOf(task);
         if (!due) return;
         const dueDate = new Date(due);
-        const isOverdue = dueDate < now;
+      const isOverdue = dueDate < now;
         const isUpcoming =
           !isOverdue && dueDate.getTime() - now.getTime() < 1000 * 60 * 60 * 48;
         if (!isOverdue && !isUpcoming) return;
@@ -573,7 +573,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         const due = dueDateOf(ai);
         if (!due) return;
         const dueDate = new Date(due);
-        const isOverdue = dueDate < now;
+      const isOverdue = dueDate < now;
         const isUpcoming =
           !isOverdue && dueDate.getTime() - now.getTime() < 1000 * 60 * 60 * 48;
         if (!isOverdue && !isUpcoming) return;
@@ -590,7 +590,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         });
       });
 
-    const priority = { rose: 0, amber: 1, indigo: 2 };
+      const priority = { rose: 0, amber: 1, indigo: 2 };
     return alerts.sort(
       (a, b) => (priority[a.color] ?? 3) - (priority[b.color] ?? 3),
     );
@@ -692,10 +692,10 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
     const date = new Date(y, m - 1, d, 12, 0, 0);
 
     if (editingTask) {
-      onUpdateTask({
-        ...editingTask,
-        task: newTaskTitle,
-        priority: newTaskPriority,
+    onUpdateTask({
+      ...editingTask,
+      task: newTaskTitle,
+      priority: newTaskPriority,
         dueDate: date.toISOString(),
       });
     } else {
@@ -718,7 +718,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, "0");
       const day = String(d.getDate()).padStart(2, "0");
-      setNewTaskDueDate(`${year}-${month}-${day}`);
+    setNewTaskDueDate(`${year}-${month}-${day}`);
     }
     setIsAddingTask(true);
   };
@@ -741,7 +741,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
 
   const resolveAlertStudent = (studentId: string | null) => {
     if (!studentId) return null;
-    return (
+  return (
       students.find((s) => s.id === studentId) ||
       allStudents.find((s) => s.id === studentId) ||
       null
@@ -767,22 +767,22 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       </div>
 
       <header className="flex flex-col justify-between gap-6 py-2 md:flex-row md:items-end">
-        <div>
+          <div>
           <div className="mb-3 flex items-center gap-3">
             <div className="h-[2px] w-10 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
             <span className="text-[10px] font-black uppercase tracking-[0.5em] text-indigo-400">
               Operational Command
             </span>
-          </div>
+            </div>
           <h2 className="text-4xl font-black leading-none tracking-tighter text-white sm:text-5xl">
             Mentor{" "}
             <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-emerald-400 bg-clip-text text-transparent">
               Command Center
             </span>
-          </h2>
+            </h2>
           <p className="mt-4 font-medium text-slate-500">Welcome back, {displayName}.</p>
-        </div>
-
+          </div>
+          
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="secondary" size="sm" onClick={() => onNavigate("schedule")}>
             <Calendar className="h-4 w-4" />
@@ -796,8 +796,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
             <MessageSquare className="h-4 w-4" />
             Messages
           </Button>
-        </div>
-      </header>
+          </div>
+        </header>
 
       {/* Insight KPI strip — actual cohort / meeting / compliance data */}
       <div className="grid gap-6 lg:grid-cols-4">
@@ -831,8 +831,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                   <Activity className="h-6 w-6 text-slate-600" />
                 </div>
               </div>
-              <div className="space-y-1">
-                <div className="flex items-baseline gap-2">
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-2">
                   <p className="text-6xl font-black tracking-tight text-white tabular-nums sm:text-7xl">
                     {avgStrength != null ? avgStrength : "—"}
                     {avgStrength != null && (
@@ -840,8 +840,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                         /100
                       </span>
                     )}
-                  </p>
-                </div>
+                      </p>
+                    </div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
                   Avg strength score
                 </p>
@@ -849,8 +849,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                   Live average across your assigned cohort. Chart shows completed meetings by month.
                 </p>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex -space-x-2">
+                    <div className="flex items-center gap-4">
+                      <div className="flex -space-x-2">
                   {assignedStudents.slice(0, 3).map((s) => (
                     <Avatar
                       key={s.id}
@@ -859,22 +859,22 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                       size="sm"
                       className="shadow-lg ring-2 ring-slate-900"
                     />
-                  ))}
-                </div>
-                <div className="flex flex-col">
+                        ))}
+                      </div>
+                      <div className="flex flex-col">
                   <span className="text-[10px] font-black uppercase tracking-widest leading-none text-indigo-400">
                     Monitoring
                   </span>
                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-600">
                     {assignedStudents.length} active · {readyCount} ready · {atRiskCount} at risk
                   </span>
-                </div>
-              </div>
-            </div>
+                      </div>
+                    </div>
+                  </div>
             <div className="relative mt-2 h-[180px] w-full min-w-0 md:mt-0 md:max-w-[260px]">
               <div className="absolute inset-0 rounded-3xl bg-indigo-500/5 blur-2xl" />
               {assignedStudents.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={activityByMonth}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -882,14 +882,14 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                       stroke="#1e293b"
                       opacity={0.5}
                     />
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
+                      <XAxis 
+                        dataKey="month" 
+                        axisLine={false} 
+                        tickLine={false} 
                       tick={{ fill: "#475569", fontSize: 10, fontWeight: "bold" }}
-                    />
+                      />
                     <YAxis hide allowDecimals={false} domain={[0, "auto"]} />
-                    <RechartsTooltip
+                      <RechartsTooltip 
                       contentStyle={{
                         backgroundColor: "#0f172a",
                         border: "1px solid #1e293b",
@@ -908,47 +908,47 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                         fontWeight: 900,
                       }}
                     />
-                    <Line
-                      type="monotone"
+                          <Line
+                            type="monotone"
                       dataKey="meetings"
                       name="Meetings done"
                       stroke="#6366f1"
-                      strokeWidth={3}
-                      dot={false}
-                      activeDot={{ r: 4, strokeWidth: 0 }}
-                      animationDuration={2500}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                            strokeWidth={3}
+                            dot={false}
+                            activeDot={{ r: 4, strokeWidth: 0 }}
+                            animationDuration={2500}
+                          />
+                    </LineChart>
+                  </ResponsiveContainer>
               ) : (
                 <div className="flex h-full items-center justify-center text-xs font-medium text-slate-600">
                   Assign students to see activity
                 </div>
               )}
+              </div>
             </div>
-          </div>
         </div>
 
         <div className="group relative flex flex-col justify-between overflow-hidden rounded-[2.5rem] border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/40">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent" />
-          <div>
+            <div>
             <div className="mb-10 flex items-center justify-between">
-              <div className="space-y-1">
+                <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
                   Latency
                 </p>
                 <div className="h-0.5 w-10 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
-              </div>
+                </div>
               <Clock className="h-6 w-6 text-slate-600 transition-colors duration-500 group-hover:text-indigo-400" />
-            </div>
-            <div className="space-y-2">
+              </div>
+              <div className="space-y-2">
               <p className="text-5xl font-black tracking-tight text-white tabular-nums transition-colors duration-700 group-hover:text-indigo-400 sm:text-6xl">
                 {latencyLabel}
-              </p>
+                  </p>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 Avg reply to student messages
               </p>
-            </div>
+                </div>
             <div
               className={cn(
                 "mt-4 inline-flex items-center gap-2 text-[10px] font-black",
@@ -977,7 +977,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                   ? "Within 12h SLA"
                   : "Above 12h SLA"}
             </div>
-          </div>
+                  </div>
           <div className="mt-10 space-y-3">
             <div className="grid h-10 grid-cols-12 items-end gap-1.5">
               {latencyBars.map((h, i) => (
@@ -992,49 +992,49 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                   style={{ height: `${h}%` }}
                   title="Meetings that week"
                 />
-              ))}
-            </div>
+                ))}
+              </div>
             <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
               Weekly meetings · last 12 weeks
             </p>
-          </div>
+            </div>
         </div>
 
         <div className="group relative flex flex-col justify-between overflow-hidden rounded-[2.5rem] border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/40">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent" />
-          <div>
+            <div>
             <div className="mb-10 flex items-center justify-between">
-              <div className="space-y-1">
+                <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
                   Compliance
                 </p>
                 <div className="h-0.5 w-10 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
-              </div>
+                </div>
               <Check className="h-6 w-6 text-slate-600 transition-colors duration-500 group-hover:text-emerald-400" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-baseline gap-2">
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-baseline gap-2">
                 <p className="text-5xl font-black tracking-tight text-white tabular-nums transition-colors duration-700 group-hover:text-emerald-400 sm:text-6xl">
                   {complianceScore}%
-                </p>
+                  </p>
                 <span className="text-sm font-black uppercase tracking-widest text-slate-600 transition-colors duration-500 group-hover:text-emerald-500/70">
                   Score
                 </span>
-              </div>
+                </div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 Target threshold: 95%
               </p>
+              </div>
             </div>
-          </div>
-          <div className="mt-10 space-y-5">
+            <div className="mt-10 space-y-5">
             <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-slate-950 shadow-inner ring-1 ring-slate-800">
               <div
                 className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-shadow duration-500 group-hover:shadow-[0_0_20px_rgba(52,211,153,0.55)]"
                 style={{ width: `${complianceScore}%` }}
-              />
-            </div>
+                />
+              </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                 <span
                   className={cn(
                     "h-2 w-2 rounded-full",
@@ -1048,7 +1048,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
                   System status
                 </span>
-              </div>
+                </div>
               <span
                 className={cn(
                   "text-[10px] font-black uppercase tracking-[0.3em]",
@@ -1061,23 +1061,23 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               >
                 {complianceStatus}
               </span>
-            </div>
+              </div>
             <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
               {completedMeetings}/{totalMeetings || 0} meetings completed
             </p>
-          </div>
+            </div>
         </div>
-      </div>
+        </div>
 
       {/* Notifications & surveys — below KPI cards */}
       {(unreadNotifications.length > 0 || surveys.length > 0) && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
             <div className="h-[2px] w-8 rounded-full bg-indigo-500/70" />
             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">
               Action required
             </span>
-          </div>
+              </div>
           <div className="grid gap-3 md:grid-cols-2">
             {unreadNotifications.map((notif) => {
               const category = (notif.category || "").toUpperCase();
@@ -1119,7 +1119,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                       ) : (
                         <Info className="h-4 w-4" />
                       )}
-                    </div>
+            </div>
                     <div className="min-w-0">
                       <h4 className="truncate text-sm font-semibold text-white">{notif.title}</h4>
                       <p className="mt-0.5 text-xs opacity-80">{notif.message}</p>
@@ -1183,7 +1183,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       <div className="grid gap-7 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <SectionTitle icon={Zap} tone="amber" title="Priority Intelligence" />
-          {smartAlerts.length > 0 ? (
+              {smartAlerts.length > 0 ? (
             <div className="grid gap-5 sm:grid-cols-2">
               {smartAlerts.slice(0, 4).map((alert) => {
                 const Icon = alert.icon;
@@ -1262,25 +1262,25 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                           <MessageSquare className="h-3.5 w-3.5 shrink-0" />
                           Suggest times
                         </button>
-                      </div>
-                    )}
-                  </div>
+                </div>
+              )}
+            </div>
                 );
               })}
-            </div>
+          </div>
           ) : (
             <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/50 p-8 text-center">
               <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-emerald-500/20" />
               <p className="text-sm font-medium text-slate-500">
                 No critical alerts detected. Systems clear.
               </p>
-            </div>
+              </div>
           )}
-        </div>
+            </div>
 
         <div className="space-y-6">
           <SectionTitle icon={UserPlus} tone="indigo" title="New Assignments" />
-          {pendingAssignments.length > 0 ? (
+              {pendingAssignments.length > 0 ? (
             <div className="space-y-4">
               {pendingAssignments.map((assignment) => {
                 const sid = assignmentStudentId(assignment);
@@ -1288,12 +1288,12 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                   students.find((s) => s.id === sid) ||
                   allStudents.find((s) => s.id === sid) ||
                   assignment.student;
-                return (
+                  return (
                   <div
-                    key={assignment.id}
+                      key={assignment.id}
                     className="flex flex-col gap-4 rounded-3xl border border-indigo-500/20 bg-indigo-600/5 p-5"
-                  >
-                    <div className="flex items-center gap-4">
+                    >
+                      <div className="flex items-center gap-4">
                       <Avatar
                         src={student?.avatar || undefined}
                         name={student?.name || "Student"}
@@ -1307,48 +1307,48 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                         <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400/60">
                           Pending acceptance
                         </p>
+                        </div>
                       </div>
-                    </div>
-                    {decliningAssignmentId === assignment.id ? (
+                        {decliningAssignmentId === assignment.id ? (
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           variant="danger"
                           className="flex-1"
-                          onClick={() => {
-                            onDeclineAssignment(assignment.id);
-                            setDecliningAssignmentId(null);
-                          }}
+                              onClick={() => {
+                                onDeclineAssignment(assignment.id);
+                                setDecliningAssignmentId(null);
+                              }}
                         >
                           Confirm decline
                         </Button>
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => setDecliningAssignmentId(null)}
-                        >
-                          Cancel
+                              onClick={() => setDecliningAssignmentId(null)}
+                            >
+                              Cancel
                         </Button>
-                      </div>
-                    ) : (
+                          </div>
+                        ) : (
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           className="flex-1"
                           onClick={() => setAcceptingAssignment(assignment)}
-                        >
-                          Accept
+                            >
+                              Accept
                         </Button>
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => setDecliningAssignmentId(assignment.id)}
-                        >
-                          Decline
+                              onClick={() => setDecliningAssignmentId(assignment.id)}
+                            >
+                              Decline
                         </Button>
                       </div>
-                    )}
-                  </div>
+                        )}
+                      </div>
                 );
               })}
             </div>
@@ -1359,10 +1359,10 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                 title="No new assignments"
                 description="You’ll see pending student matches here."
               />
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
       {/* Schedule + Tasks */}
       <div className="grid gap-7 lg:grid-cols-3">
@@ -1391,7 +1391,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-slate-800 bg-slate-950 p-0.5">
-                <button
+                <button 
                   type="button"
                   onClick={() => setScheduleTab("weekly")}
                   className={cn(
@@ -1403,7 +1403,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                 >
                   Weekly
                 </button>
-                <button
+                <button 
                   type="button"
                   onClick={() => setScheduleTab("upcoming")}
                   className={cn(
@@ -1464,8 +1464,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                     (t) => new Date(dueDateOf(t)).toDateString() === day.toDateString(),
                   );
                   return (
-                    <button
-                      key={i}
+                    <button 
+                      key={i} 
                       type="button"
                       onClick={() => setSelectedDate(day)}
                       className={cn(
@@ -1556,7 +1556,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                               <Badge className="bg-indigo-500/15 text-indigo-300 border-indigo-500/20 text-[9px]">
                                 Meeting
                               </Badge>
-                            </div>
+                              </div>
                             <p className="text-xs text-slate-400 flex items-center gap-1.5 truncate">
                               <Clock className="w-3 h-3 shrink-0 text-slate-500" />
                               <span className="inline-flex items-center gap-1">
@@ -1586,7 +1586,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                   const due = dueDateOf(task);
                   const dueDate = due ? parseLocalDate(due) : null;
                   const isDone = task.status === "COMPLETED";
-                  return (
+                    return (
                     <div
                       key={`t-${task.id}`}
                       className={cn(
@@ -1603,8 +1603,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                           </span>
                           <span className="text-xl font-semibold text-white leading-none mt-1 tabular-nums">
                             {dueDate ? dueDate.getDate() : "—"}
-                          </span>
-                        </div>
+                              </span>
+                            </div>
                         <div className="min-w-0 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p
@@ -1689,7 +1689,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                     ? formatMeetingLocalTime(meeting.date)
                     : "All day";
                   const joinLink = meeting.link?.trim() || "";
-                  return (
+                    return (
                     <div
                       key={meeting.id}
                       className="group w-full flex items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-800 hover:border-indigo-500/40 bg-slate-950/50 hover:bg-slate-950 transition-colors"
@@ -1706,7 +1706,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                           <span className="text-xl font-semibold text-white leading-none mt-1 tabular-nums">
                             {mDate.getDate()}
                           </span>
-                        </div>
+                          </div>
                         <div className="min-w-0 space-y-1">
                           <p className="text-sm font-semibold text-white truncate group-hover:text-indigo-200 transition-colors">
                             {student?.name || meeting.title}
@@ -1721,8 +1721,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                             </span>
                             <span className="text-slate-700">·</span>
                             <span className="truncate">{meeting.title}</span>
-                          </p>
-                        </div>
+                            </p>
+                          </div>
                       </button>
                       <div className="flex items-center gap-2 shrink-0">
                         <Button
@@ -1750,10 +1750,10 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                         >
                           <ArrowRight className="w-4 h-4" />
                         </button>
+                        </div>
                       </div>
-                    </div>
                   );
-                })
+                 })
               )}
             </div>
           )}
@@ -1788,12 +1788,12 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
             </Button>
           </div>
 
-          {isAddingTask && (
+            {isAddingTask && (
             <div className="mb-4 rounded-xl border border-indigo-500/30 bg-slate-950 p-3 space-y-3">
               <Input
                 placeholder="Task title…"
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
               />
               <DatePicker value={newTaskDueDate} onChange={setNewTaskDueDate} />
               <SelectMenu
@@ -1813,7 +1813,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               >
                 {editingTask ? "Update task" : "Create task"}
               </Button>
-            </div>
+                    </div>
           )}
 
           <div className="space-y-2 flex-1 overflow-y-auto max-h-[380px]">
@@ -1827,30 +1827,30 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               activeTasks.slice(0, 12).map((task) => {
                 const due = dueDateOf(task);
                 return (
-                  <div
-                    key={task.id}
+              <div 
+                key={task.id} 
                     className="rounded-xl border border-slate-800 bg-slate-950/50 p-3"
-                  >
+              >
                     <div className="flex items-start gap-2">
-                      <button
+                  <button 
                         type="button"
                         className="mt-0.5 text-slate-500 hover:text-emerald-400"
                         onClick={() => onUpdateTaskStatus(task.id, "COMPLETED")}
-                      >
+                  >
                         <Circle className="w-4 h-4" />
-                      </button>
+                  </button>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-medium text-white truncate">{task.task}</p>
                           <div className="flex items-center gap-1 shrink-0">
-                            <button
+                      <button 
                               type="button"
                               className="text-slate-600 hover:text-indigo-400"
-                              onClick={() => startEditing(task)}
+                        onClick={() => startEditing(task)}
                               title="Edit task"
-                            >
+                      >
                               <Edit2 className="w-3.5 h-3.5" />
-                            </button>
+                      </button>
                             {onDeleteTask &&
                               (task.assigned_by || task.assignedBy) === mentor.id && (
                               <button
@@ -1865,9 +1865,9 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
-                            )}
-                          </div>
+                          )}
                         </div>
+                      </div>
                         <div className="flex items-center justify-between mt-2 gap-2">
                           <Badge
                             className={cn(
@@ -1885,14 +1885,14 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                             <Clock className="w-3 h-3" />
                             {due ? parseLocalDate(due).toLocaleDateString() : "—"}
                           </span>
-                        </div>
-                      </div>
-                    </div>
+        </div>
+          </div>
                   </div>
-                );
+                </div>
+              );
               })
             )}
-          </div>
+              </div>
 
           <Button
             variant="secondary"
@@ -1901,8 +1901,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
           >
             View all tasks
           </Button>
+            </div>
         </div>
-      </div>
 
       {/* Student Roster — matches original mentor dashboard table */}
       <section className="relative z-10 space-y-6">
@@ -1915,11 +1915,11 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               Student Roster
             </h3>
           </div>
-
+          
           <div className="flex max-w-md flex-1 items-center gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input
+              <input 
                 type="text"
                 placeholder="Search students..."
                 value={studentSearch}
@@ -2035,8 +2035,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                   : null;
 
                 return (
-                  <tr
-                    key={student.id}
+                <tr 
+                  key={student.id}
                     onClick={() => {
                       if (isPending) return;
                       onSelectStudent(student.id, "overview");
@@ -2048,31 +2048,31 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                         : "cursor-pointer hover:bg-slate-800/40",
                     )}
                   >
-                    <td className="px-6 py-4 align-middle">
-                      <div className="flex items-center gap-4">
+                  <td className="px-6 py-4 align-middle">
+                    <div className="flex items-center gap-4">
                         <Avatar
                           src={student.avatar}
                           name={student.name}
                           size="lg"
                           className="rounded-2xl ring-2 ring-slate-800 transition-all group-hover:ring-indigo-500/50"
                         />
-                        <div>
-                          <div className="flex items-center gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
                             <h4 className="text-sm font-bold tracking-tight text-white transition-colors group-hover:text-indigo-400">
                               {student.name}
                             </h4>
                             {isPending && (
                               <span className="shrink-0 rounded border border-indigo-500/30 bg-indigo-500/20 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-indigo-400">
-                                Pending
-                              </span>
-                            )}
-                          </div>
+                              Pending
+                            </span>
+                          )}
                         </div>
                       </div>
-                    </td>
+                    </div>
+                  </td>
 
-                    <td className="px-6 py-4 align-middle">
-                      <div>
+                  <td className="px-6 py-4 align-middle">
+                    <div>
                         <div
                           className={cn(
                             "mb-1 w-fit rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-widest",
@@ -2084,15 +2084,15 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                           )}
                         >
                           {riskLabel(student.readiness)}
-                        </div>
+                      </div>
                         <p className="whitespace-nowrap text-[10px] font-medium text-slate-500">
                           {student.applicationCycle || "—"}
                         </p>
-                      </div>
-                    </td>
+                    </div>
+                  </td>
 
-                    <td className="px-6 py-4 align-middle">
-                      <div>
+                  <td className="px-6 py-4 align-middle">
+                    <div>
                         <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                           GPA:{" "}
                           <span className="ml-1 text-sm text-white">
@@ -2102,8 +2102,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                         <p className="text-[10px] font-medium text-slate-500">
                           DAT: {student.datScore != null ? student.datScore : "N/A"}
                         </p>
-                      </div>
-                    </td>
+                    </div>
+                  </td>
 
                     <td className="px-6 py-4 text-center align-middle">
                       <div className="inline-flex flex-col items-center rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-center shadow-inner">
@@ -2120,10 +2120,10 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                             ]
                           }
                         />
-                      </div>
-                    </td>
+                    </div>
+                  </td>
 
-                    <td className="px-6 py-4 align-middle">
+                  <td className="px-6 py-4 align-middle">
                       <button
                         type="button"
                         title="Open Application Readiness"
@@ -2146,26 +2146,26 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                                     : "#f43f5e",
                             }}
                           />
-                        </div>
+                      </div>
                         <span className="shrink-0 text-xs font-bold text-white">
                           {journey}%
                         </span>
                       </button>
-                    </td>
+                  </td>
 
-                    <td className="px-6 py-4 align-middle">
+                  <td className="px-6 py-4 align-middle">
                       <div className="flex max-w-[200px] items-center gap-3">
                         <div className="shrink-0 rounded-lg bg-indigo-500/10 p-1.5">
                           <Calendar className="h-4 w-4 text-indigo-400" />
-                        </div>
+                      </div>
                         <span className="line-clamp-2 text-[10px] font-medium text-slate-300">
                           {nextMeetingLabel}
-                        </span>
-                      </div>
-                    </td>
+                      </span>
+                    </div>
+                  </td>
 
-                    <td className="px-6 py-4 align-middle">
-                      <div className="whitespace-nowrap">
+                  <td className="px-6 py-4 align-middle">
+                    <div className="whitespace-nowrap">
                         <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
                           Prev:{" "}
                           <span className="ml-1 font-medium capitalize text-slate-300">
@@ -2177,11 +2177,11 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                           <span className="ml-1 font-bold capitalize">
                             {getNextMeetingDate(student.id)}
                           </span>
-                        </p>
-                      </div>
-                    </td>
+                      </p>
+                    </div>
+                  </td>
 
-                    <td className="px-6 py-4 align-middle">
+                  <td className="px-6 py-4 align-middle">
                       <div className="flex items-center justify-end gap-2">
                         {isPending && pendingAssignment ? (
                           decliningAssignmentId === pendingAssignment.id ? (
@@ -2189,8 +2189,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                               <Button
                                 size="sm"
                                 variant="danger"
-                                onClick={(e) => {
-                                  e.stopPropagation();
+                        onClick={(e) => {
+                          e.stopPropagation();
                                   onDeclineAssignment(pendingAssignment.id);
                                   setDecliningAssignmentId(null);
                                 }}
@@ -2235,15 +2235,15 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                           <>
                             <button
                               type="button"
-                              title="Send Message"
+                        title="Send Message"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onMessageStudent?.(student.id);
                               }}
                               className="rounded-xl border border-slate-700 bg-slate-800 p-2.5 text-slate-400 shadow-lg transition-all hover:border-indigo-500 hover:bg-indigo-600 hover:text-white"
-                            >
+                      >
                               <MessageSquare className="h-4 w-4" />
-                            </button>
+                      </button>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -2253,12 +2253,12 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                               className="whitespace-nowrap rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg transition-all group-hover:border-indigo-500 group-hover:bg-indigo-600"
                             >
                               Profile
-                            </button>
+                      </button>
                           </>
                         )}
-                      </div>
-                    </td>
-                  </tr>
+                    </div>
+                  </td>
+                </tr>
                 );
               })}
               {filteredStudents.length === 0 && (
@@ -2291,7 +2291,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
             timezone,
             welcomeMessage,
           );
-          setAcceptingAssignment(null);
+                  setAcceptingAssignment(null);
         }}
       />
 
@@ -2335,7 +2335,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
           }
         }}
       />
-    </div>
+                  </div>
   );
 };
 
@@ -2360,8 +2360,8 @@ function SectionTitle({
       >
         <Icon
           className={cn("h-4 w-4", tone === "amber" && "animate-pulse")}
-        />
-      </div>
+                />
+              </div>
       <h3 className="text-sm font-black uppercase tracking-[0.3em] text-white">{title}</h3>
       <div
         className={cn(

@@ -532,7 +532,7 @@ function PlanPreviewBody({
                     >
                       {cat.name}
                     </p>
-                    <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold tabular-nums text-slate-400">
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-800 px-2 text-[10px] font-bold leading-none tabular-nums text-slate-400">
                       {inCat.length}
                     </span>
                 </div>
@@ -569,7 +569,7 @@ function PlanPreviewBody({
                   <ol className="space-y-2">
                     {tasks.map((t, i) => (
                       <li key={i} className="flex gap-3 text-sm leading-relaxed text-slate-300">
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500/15 text-[10px] font-bold text-indigo-300">
+                        <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-indigo-500/15 text-[10px] font-bold leading-none text-indigo-300 tabular-nums">
                           {i + 1}
                         </span>
                         <span>{t}</span>
@@ -595,7 +595,7 @@ function PlanPreviewBody({
                 >
                   <span
                     className={cn(
-                      "inline-flex rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                      "inline-flex h-5 items-center justify-center rounded-md px-2 text-[10px] font-bold uppercase leading-none tracking-wider",
                       action.impact === "High" && "bg-emerald-500/10 text-emerald-400",
                       action.impact === "Moderate" && "bg-indigo-500/10 text-indigo-300",
                       action.impact === "Lower" && "bg-slate-800 text-slate-400",
@@ -630,7 +630,7 @@ function PlanPreviewBody({
                     <h5 className="text-sm font-bold text-white">{risk.factor}</h5>
                     <span
                       className={cn(
-                        "shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                        "inline-flex h-5 shrink-0 items-center justify-center rounded-md px-2 text-[10px] font-bold uppercase leading-none tracking-wider",
                         risk.severity === "High" && "bg-rose-500/10 text-rose-400",
                         risk.severity === "Medium" && "bg-amber-500/10 text-amber-300",
                         risk.severity === "Low" && "bg-slate-800 text-slate-400",

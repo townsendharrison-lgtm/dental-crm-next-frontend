@@ -15,14 +15,12 @@ import type {
 } from "@/lib/types";
 import {
   Rocket,
-  Target,
   Calendar,
   ArrowRight,
   Award,
   ExternalLink,
   MessageCircle,
   Clock,
-  FileText,
   Video,
   Send,
   AlertCircle,
@@ -43,7 +41,8 @@ import { formatMeetingLocal, parseLocalDate } from "@/lib/utils/dateUtils";
 import { MeetingTimeWithHint } from "@/components/ui/TimezoneHint";
 import { useMentor } from "@/lib/hooks/useMentors";
 import ApplicationTracker from "./ApplicationTracker";
-import ApplicationReadinessPanel from "./ApplicationReadinessPanel";
+import ApplicationJourneyPanel from "./ApplicationJourneyPanel";
+import ApplicationReadinessQuickStats from "./ApplicationReadinessQuickStats";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Textarea, FormField, Input } from "@/components/ui/Form";
@@ -294,13 +293,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     icon: <Sparkles className="w-4 h-4" />,
     onClick: () => onNavigate("mentor-assistant"),
   });
-
-  const targetDate = new Date("2026-06-01");
-  const today = new Date();
-  const daysLeft = Math.max(
-    0,
-    Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
-  );
 
   const earnedBadges =
     (student.badges || [])
@@ -690,7 +682,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       <div className="grid items-stretch gap-6 md:grid-cols-3">
         <div className="flex h-full min-h-0 flex-col gap-6 md:col-span-2">
-          <section className="shrink-0 rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <section className="relative z-20 shrink-0 overflow-visible rounded-xl border border-slate-800 bg-slate-900 p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-bold text-white">Application Readiness</h3>
               <span className="text-2xl font-bold text-indigo-500">{progress}%</span>
@@ -701,46 +693,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              {[
-                {
-                  label: "Strength Score",
-                  value: student.strengthScore ?? student.profile?.strength_score ?? "—",
-                  icon: <Target className="h-5 w-5 text-indigo-400" />,
-                  tone: "bg-indigo-500/10 border-indigo-500/20",
-                },
-                {
-                  label: "DAT",
-                  value: student.datScore ?? student.profile?.dat_score ?? "—",
-                  icon: <CheckCircle className="h-5 w-5 text-emerald-400" />,
-                  tone: "bg-emerald-500/10 border-emerald-500/20",
-                },
-                {
-                  label: "Days Left",
-                  value: daysLeft,
-                  icon: <Calendar className="h-5 w-5 text-amber-400" />,
-                  tone: "bg-amber-500/10 border-amber-500/20",
-                },
-                {
-                  label: "Apps",
-                  value: (student.lorRequired || 0) + 4,
-                  icon: <FileText className="h-5 w-5 text-rose-400" />,
-                  tone: "bg-rose-500/10 border-rose-500/20",
-                },
-              ].map((stat) => (
-                <div key={stat.label} className="flex flex-col items-center text-center">
-                  <div
-                    className={`mb-2 flex h-10 w-10 items-center justify-center rounded-full border ${stat.tone}`}
-                  >
-                    {stat.icon}
-                  </div>
-                  <p className="mb-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                    {stat.label}
-                  </p>
-                  <p className="text-lg font-bold text-white">{stat.value}</p>
-                </div>
-              ))}
-            </div>
+            <ApplicationReadinessQuickStats student={student} />
           </section>
 
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 sm:grid-cols-2 sm:items-stretch">
@@ -892,15 +845,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-        <ApplicationReadinessPanel
+        <ApplicationJourneyPanel
           student={student}
           compact
-          className="h-[520px] min-h-0"
+          className="h-[440px] min-h-0"
         />
 
         <section
           id="active-checklist"
-          className="flex h-[520px] min-h-0 flex-col rounded-xl border border-slate-800 bg-slate-900 p-5"
+          className="flex h-[440px] min-h-0 flex-col rounded-xl border border-slate-800 bg-slate-900 p-5"
         >
           <div className="mb-4 flex shrink-0 items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
@@ -1074,12 +1027,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
                 <ExternalLink className="w-3.5 h-3.5 text-slate-600 group-hover:text-indigo-400" />
               </div>
-              <h4 className="text-sm font-semibold text-white mb-1.5 group-hover:text-indigo-400 transition-colors">
+              <h4 className="text-sm font-semibold text-white group-hover:text-indigo-400 transition-colors">
                 {res.title}
               </h4>
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <Clock className="w-3 h-3" /> {res.estimatedTime}
-              </div>
             </button>
           ))}
         </div>

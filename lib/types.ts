@@ -206,6 +206,14 @@ export interface ApplicationReadinessFlags {
   school_list_finalized?: boolean;
 }
 
+/** Mentor/staff check-off for the four Application Journey phases. */
+export interface ApplicationJourneyFlags {
+  phase1?: boolean;
+  phase2?: boolean;
+  phase3?: boolean;
+  phase4?: boolean;
+}
+
 export interface StudentProfile {
   id: string;
   mentor_id?: string | null;
@@ -270,6 +278,8 @@ export interface StudentProfile {
   timeline_month_goals?: Record<string, string> | null;
   /** Manual Application Readiness checklist flags (student + staff editable). */
   application_readiness?: ApplicationReadinessFlags | null;
+  /** Application Journey phase completion (mentor/staff editable). */
+  application_journey?: ApplicationJourneyFlags | null;
   created_at: string;
   updated_at: string;
 }
