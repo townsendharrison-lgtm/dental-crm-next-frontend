@@ -165,9 +165,9 @@ export function PlanPdfDocument({
     overflow: "visible",
   };
 
-  /** html2canvas clips flex-centered pills; table + table-cell centers reliably */
+  /** inline-block + lineHeight centering — html2canvas reliable */
   const pdfBadge = (bg: string, color: string): React.CSSProperties => ({
-    display: "table",
+    display: "inline-block",
     background: bg,
     color,
     borderRadius: 6,
@@ -177,19 +177,15 @@ export function PlanPdfDocument({
     letterSpacing: "0.05em",
     textTransform: "uppercase",
     height: 20,
+    lineHeight: "20px",
+    textAlign: "center",
+    verticalAlign: "middle",
     boxSizing: "border-box",
+    whiteSpace: "nowrap",
   });
 
-  const pdfBadgeCell: React.CSSProperties = {
-    display: "table-cell",
-    verticalAlign: "middle",
-    textAlign: "center",
-    lineHeight: 1,
-    height: 20,
-  };
-
   const pdfCountBadge: React.CSSProperties = {
-    display: "table",
+    display: "inline-block",
     background: "#1e293b",
     color: "#94a3b8",
     borderRadius: 9999,
@@ -197,29 +193,25 @@ export function PlanPdfDocument({
     fontSize: 10,
     fontWeight: 700,
     height: 20,
+    lineHeight: "20px",
+    textAlign: "center",
+    verticalAlign: "middle",
     minWidth: 20,
     boxSizing: "border-box",
   };
 
   const pdfStepNum: React.CSSProperties = {
-    display: "table",
+    display: "inline-block",
     width: 20,
     height: 20,
+    lineHeight: "20px",
+    textAlign: "center",
     borderRadius: 6,
     background: "#312e81",
     color: "#a5b4fc",
     fontSize: 10,
     fontWeight: 700,
     boxSizing: "border-box",
-  };
-
-  const pdfStepNumCell: React.CSSProperties = {
-    display: "table-cell",
-    verticalAlign: "middle",
-    textAlign: "center",
-    lineHeight: 1,
-    width: 20,
-    height: 20,
   };
 
   /* ── Grid helpers for school groups (match preview responsive) ── */
@@ -263,31 +255,23 @@ export function PlanPdfDocument({
         >
           {/* Left: avatar + name block */}
           <div style={{ display: "flex", alignItems: "flex-start", gap: 16, minWidth: 0, flex: "1 1 auto" }}>
-            {/* Avatar initial (matches h-12 w-12 rounded-xl bg-indigo-600) */}
             <div
               style={{
-                display: "table",
+                display: "inline-block",
                 width: 48,
                 height: 48,
+                lineHeight: "48px",
+                textAlign: "center",
                 flexShrink: 0,
                 borderRadius: 12,
                 background: "#4f46e5",
                 boxSizing: "border-box",
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#fff",
               }}
             >
-              <div
-                style={{
-                  display: "table-cell",
-                  verticalAlign: "middle",
-                  textAlign: "center",
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: "#fff",
-                  lineHeight: 1,
-                }}
-              >
-                {initial}
-              </div>
+              {initial}
             </div>
             <div style={{ minWidth: 0, ...wrapText }}>
               <p
@@ -642,9 +626,7 @@ export function PlanPdfDocument({
                             verticalAlign: "middle",
                           }}
                         >
-                          <span style={pdfCountBadge}>
-                            <span style={pdfBadgeCell}>{inCat.length}</span>
-                          </span>
+                          <span style={pdfCountBadge}>{inCat.length}</span>
                         </td>
                       </tr>
                     </tbody>
@@ -724,9 +706,7 @@ export function PlanPdfDocument({
                               verticalAlign: "top",
                             }}
                           >
-                            <span style={pdfStepNum}>
-                              <span style={pdfStepNumCell}>{i + 1}</span>
-                            </span>
+                            <span style={pdfStepNum}>{i + 1}</span>
                           </td>
                           <td
                             style={{
@@ -779,9 +759,7 @@ export function PlanPdfDocument({
                     }}
                   >
                     <div style={{ marginBottom: 8, lineHeight: "20px" }}>
-                      <span style={pdfBadge(badge.bg, badge.color)}>
-                        <span style={pdfBadgeCell}>{action.impact} impact</span>
-                      </span>
+                      <span style={pdfBadge(badge.bg, badge.color)}>{action.impact} impact</span>
                     </div>
                     <h5
                       style={{
@@ -849,9 +827,7 @@ export function PlanPdfDocument({
                       >
                         {risk.factor}
                       </h5>
-                      <span style={pdfBadge(badge.bg, badge.color)}>
-                        <span style={pdfBadgeCell}>{risk.severity}</span>
-                      </span>
+                      <span style={pdfBadge(badge.bg, badge.color)}>{risk.severity}</span>
                     </div>
                     {risk.description ? (
                       <p
