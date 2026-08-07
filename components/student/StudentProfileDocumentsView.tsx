@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -248,7 +248,7 @@ export function StudentProfileDocumentsView({
 
   const persistProfile = (updates: Record<string, unknown>, opts?: { silent?: boolean }) => {
     if (!onUpdateStudent) {
-      toast.message("Profile editing isn’t available here");
+      toast.message("Profile editing isn't available here");
       return;
     }
     onUpdateStudent(updates as Partial<Student>);
@@ -404,7 +404,7 @@ export function StudentProfileDocumentsView({
   const [credentialYear, setCredentialYear] = useState("");
   const [credentialDescription, setCredentialDescription] = useState("");
 
-  /** Staff edit Application Readiness under Plan → Applications; students keep it here. */
+  /** Staff edit Application Readiness under Plan â†’ Applications; students keep it here. */
   const showReadinessSection = !canReviewDocuments;
 
   const sections = useMemo(() => {
@@ -454,7 +454,8 @@ export function StudentProfileDocumentsView({
       clickingSection.current = id;
       setActiveSection(id);
 
-      const headerOffset = 112;
+      // Mobile sticky section chips + app chrome; desktop sidebar nav is taller offset.
+      const headerOffset = window.matchMedia("(min-width: 1024px)").matches ? 112 : 96;
       if (root) {
         const rootRect = root.getBoundingClientRect();
         const elRect = el.getBoundingClientRect();
@@ -944,20 +945,22 @@ export function StudentProfileDocumentsView({
     icon: any,
     verified?: boolean
   ) => (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/50 p-4 transition-colors hover:border-indigo-500/35">
-      <div className="relative z-10 flex items-center justify-between mb-3">
-        <div className="rounded-lg bg-slate-900 p-2 text-slate-400">
+    <div className="relative min-w-0 overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/50 p-3 transition-colors hover:border-indigo-500/35 sm:rounded-2xl sm:p-4">
+      <div className="relative z-10 mb-2 flex items-center justify-between gap-2 sm:mb-3">
+        <div className="rounded-lg bg-slate-900 p-1.5 text-slate-400 sm:p-2">
           {React.createElement(icon, { size: 16 })}
         </div>
         {verified === true && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
             <ShieldCheck size={10} />
             Verified
           </span>
         )}
       </div>
-      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
-      <p className="mt-1 min-w-0 break-words text-lg font-semibold tabular-nums text-white">
+      <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500 sm:text-[10px]">
+        {label}
+      </p>
+      <p className="mt-1 min-w-0 break-words text-sm font-semibold tabular-nums text-white sm:text-lg">
         {value ?? "—"}
       </p>
     </div>
@@ -966,122 +969,97 @@ export function StudentProfileDocumentsView({
   return (
     <div
       ref={contentRef}
-      className="flex w-full min-w-0 flex-col gap-6 overflow-x-hidden pb-20 lg:flex-row lg:gap-8"
+      className="grid w-full min-w-0 grid-cols-1 gap-4 overflow-x-clip pb-20 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-x-8 lg:gap-y-6"
     >
-      {/* Floating Section Navigation — aside itself is sticky (needs stretch room from flex row) */}
-      <aside
-        aria-label="Records sections"
-        className="sticky top-28 z-20 w-full min-w-0 shrink-0 self-start lg:top-24 lg:w-64"
-      >
-        <nav className="space-y-1 overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-800 bg-slate-950 p-2 no-scrollbar lg:overflow-visible">
-          <div className="flex gap-1 lg:flex-col lg:space-y-1 lg:gap-0">
-            {sections.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => scrollToSection(section.id)}
-                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors lg:w-full lg:gap-3 lg:px-3.5 ${
-                  activeSection === section.id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-slate-500 hover:bg-slate-900/60 hover:text-slate-200"
-                }`}
-              >
-                <section.icon size={16} className="shrink-0" />
-                <span className="truncate">{section.label}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="min-w-0 w-full flex-1 space-y-8 sm:space-y-12">
-        {/* Header Section */}
-        <header className="overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 sm:rounded-3xl">
-          <div className="flex min-w-0 flex-col gap-5 p-4 sm:gap-6 sm:p-6 md:flex-row md:items-center md:justify-between md:p-8">
-            <div className="flex min-w-0 items-center gap-4 sm:gap-5">
-              <div className="relative shrink-0">
-                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-2xl font-bold text-white ring-4 ring-slate-950">
-                  {student.avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={student.avatar} className="h-full w-full object-cover" alt="" />
-                  ) : (
-                    student.name[0]?.toUpperCase()
-                  )}
-                  {uploadingAvatar && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70">
-                      <Loader2 className="h-6 w-6 animate-spin text-indigo-300" />
-                    </div>
-                  )}
-                </div>
-                {canEditAvatar && (
-                  <>
-                    <input
-                      ref={avatarInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/jpg,image/webp"
-                      className="hidden"
-                      onChange={(e) => void handleAvatarChange(e)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => avatarInputRef.current?.click()}
-                      disabled={uploadingAvatar}
-                      className="absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-slate-950 bg-indigo-500 text-white shadow transition hover:bg-indigo-400 disabled:opacity-60"
-                      aria-label="Upload profile photo"
-                      title="Upload profile photo"
-                    >
-                      <Camera size={13} />
-                    </button>
-                  </>
+      {/* Profile header — first on mobile so sticky nav cannot cover the name */}
+      <header className="order-1 min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 sm:rounded-3xl lg:col-start-2 lg:row-start-1">
+        <div className="flex min-w-0 flex-col gap-4 p-4 sm:gap-6 sm:p-6 md:flex-row md:items-center md:justify-between md:p-8">
+          <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-5">
+            <div className="relative shrink-0">
+              <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl border border-slate-700 bg-slate-900 text-xl font-bold text-white ring-4 ring-slate-950 sm:h-20 sm:w-20 sm:rounded-2xl sm:text-2xl">
+                {student.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={student.avatar} className="h-full w-full object-cover" alt="" />
+                ) : (
+                  student.name[0]?.toUpperCase()
+                )}
+                {uploadingAvatar && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70">
+                    <Loader2 className="h-6 w-6 animate-spin text-indigo-300" />
+                  </div>
                 )}
               </div>
-              <div className="min-w-0">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-2xl font-bold tracking-tight text-white md:text-3xl">
-                    {student.name}
-                  </h1>
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                      student.profile?.status === "Preparing"
-                        ? "border-indigo-500/25 bg-indigo-500/10 text-indigo-300"
-                        : student.profile?.status === "Applying"
-                          ? "border-amber-500/25 bg-amber-500/10 text-amber-300"
-                          : "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                    }`}
+              {canEditAvatar && (
+                <>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={(e) => void handleAvatarChange(e)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-slate-950 bg-indigo-500 text-white shadow transition hover:bg-indigo-400 disabled:opacity-60"
+                    aria-label="Upload profile photo"
+                    title="Upload profile photo"
                   >
-                    {student.profile?.status || "Preparing"}
-                  </span>
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                      readinessStatusFromPercent(readinessProgress) === "GREEN"
-                        ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                        : readinessStatusFromPercent(readinessProgress) === "RED"
-                          ? "border-rose-500/25 bg-rose-500/10 text-rose-300"
-                          : "border-amber-500/25 bg-amber-500/10 text-amber-300"
-                    }`}
-                  >
-                    {readinessStatusFromPercent(readinessProgress).toLowerCase()} readiness
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Calendar size={14} /> Cycle {student.profile?.application_cycle || "—"}
-                  </span>
-                  <span className="hidden h-1 w-1 rounded-full bg-slate-700 sm:inline" />
-                  <span className="inline-flex items-center gap-1.5">
-                    <MapPin size={14} />
+                    <Camera size={13} />
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="break-words text-xl font-bold tracking-tight text-white sm:truncate sm:text-2xl md:text-3xl">
+                {student.name}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                    student.profile?.status === "Preparing"
+                      ? "border-indigo-500/25 bg-indigo-500/10 text-indigo-300"
+                      : student.profile?.status === "Applying"
+                        ? "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                        : "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                  }`}
+                >
+                  {student.profile?.status || "Preparing"}
+                </span>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                    readinessStatusFromPercent(readinessProgress) === "GREEN"
+                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                      : readinessStatusFromPercent(readinessProgress) === "RED"
+                        ? "border-rose-500/25 bg-rose-500/10 text-rose-300"
+                        : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                  }`}
+                >
+                  {readinessStatusFromPercent(readinessProgress).toLowerCase()} readiness
+                </span>
+              </div>
+              <div className="mt-2 flex flex-col gap-1 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <Calendar size={14} className="shrink-0" /> Cycle{" "}
+                  {student.profile?.application_cycle || "—"}
+                </span>
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <MapPin size={14} className="shrink-0" />
+                  <span className="break-words">
                     {[student.profile?.state || student.state, student.profile?.country || student.country]
                       .filter(Boolean)
                       .join(", ") || "—"}
                   </span>
-                </div>
+                </span>
               </div>
             </div>
+          </div>
 
-            <div className="flex w-full min-w-0 flex-wrap items-center gap-3 sm:gap-4 md:w-auto md:justify-end">
-              <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
-                <svg viewBox="0 0 36 36" className="h-16 w-16 -rotate-90">
+          <div className="flex w-full min-w-0 items-center justify-between gap-3 border-t border-slate-800/80 pt-3 sm:gap-4 md:w-auto md:justify-end md:border-0 md:pt-0">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center sm:h-16 sm:w-16">
+                <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
                   <circle cx="18" cy="18" r="15.5" fill="none" stroke="#1e293b" strokeWidth="3" />
                   <circle
                     cx="18"
@@ -1100,40 +1078,71 @@ export function StudentProfileDocumentsView({
                   </span>
                 </div>
               </div>
-              <div className="hidden sm:block">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Strength</p>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Strength
+                </p>
                 <p className="text-xs text-slate-400">Competitive score</p>
               </div>
-              <div className="ml-0 flex shrink-0 gap-2 sm:ml-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => void handleDownloadProfile()}
-                  disabled={downloadingPdf}
-                  aria-label="Download profile PDF"
-                  title={downloadingPdf ? "Generating PDF…" : "Download profile PDF"}
-                >
-                  {downloadingPdf ? (
-                    <Loader2 size={18} className="animate-spin" />
-                  ) : (
-                    <Download size={18} />
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  leftIcon={<Share2 size={16} />}
-                  onClick={handleShareProfile}
-                >
-                  Share
-                </Button>
-              </div>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => void handleDownloadProfile()}
+                disabled={downloadingPdf}
+                aria-label="Download profile PDF"
+                title={downloadingPdf ? "Generating PDF…" : "Download profile PDF"}
+              >
+                {downloadingPdf ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Download size={18} />
+                )}
+              </Button>
+              <Button
+                type="button"
+                leftIcon={<Share2 size={16} />}
+                onClick={handleShareProfile}
+              >
+                Share
+              </Button>
             </div>
           </div>
-        </header>
+        </div>
+      </header>
 
+      {/* Section nav — below header on mobile; left rail on desktop */}
+      <aside
+        aria-label="Records sections"
+        className="sticky top-2 z-20 order-2 min-w-0 self-start lg:col-start-1 lg:row-span-2 lg:top-24 lg:self-start"
+      >
+        <nav className="overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md no-scrollbar sm:p-2 lg:overflow-visible lg:bg-slate-950 lg:shadow-none lg:backdrop-blur-none">
+          <div className="flex gap-1 lg:flex-col lg:space-y-1 lg:gap-0">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => scrollToSection(section.id)}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-medium transition-colors sm:px-3 sm:py-2.5 sm:text-sm lg:w-full lg:gap-3 lg:px-3.5 ${
+                  activeSection === section.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-slate-500 hover:bg-slate-900/60 hover:text-slate-200"
+                }`}
+              >
+                <section.icon size={16} className="shrink-0" />
+                <span className="whitespace-nowrap lg:truncate">{section.label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+      </aside>
+
+      {/* Main sections */}
+      <div className="order-3 min-w-0 space-y-8 sm:space-y-12 lg:col-start-2 lg:row-start-2">
         {/* Student Snapshot Section — identity / progress only (academics live below) */}
-        <section id="snapshot" className="min-w-0 space-y-5 scroll-mt-28">
+        <section id="snapshot" className="min-w-0 space-y-5 scroll-mt-24 lg:scroll-mt-28">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-white">Student Snapshot</h2>
@@ -1157,7 +1166,7 @@ export function StudentProfileDocumentsView({
               </Button>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3 lg:grid-cols-4">
             {renderStatBlock("Full Name", student.name, User)}
             {renderStatBlock(
               "Location",
@@ -1200,13 +1209,13 @@ export function StudentProfileDocumentsView({
         </section>
 
         {showReadinessSection ? (
-          <section id="readiness" className="space-y-4 scroll-mt-28">
+          <section id="readiness" className="space-y-4 scroll-mt-24 lg:scroll-mt-28">
             <ApplicationReadinessPanel student={student} />
           </section>
         ) : null}
 
         {/* Academic Background Section */}
-        <section id="academic" className="min-w-0 space-y-6 scroll-mt-28">
+        <section id="academic" className="min-w-0 space-y-6 scroll-mt-24 lg:scroll-mt-28">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <h2 className="flex min-w-0 items-center gap-2 text-xl font-bold text-white">
               <GraduationCap className="shrink-0 text-indigo-400" size={20} /> Academic Background
@@ -1433,7 +1442,7 @@ export function StudentProfileDocumentsView({
         </section>
 
         {/* Letters of Recommendation Tracker — synced with Letter Vault */}
-        <section id="lor" className="space-y-6 scroll-mt-28">
+        <section id="lor" className="space-y-6 scroll-mt-24 lg:scroll-mt-28">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <FileText className="text-indigo-400" size={20} /> Letters of Recommendation
@@ -1674,7 +1683,7 @@ export function StudentProfileDocumentsView({
                           href="/student/letters/vault"
                           className="mt-3 inline-flex text-xs font-semibold text-indigo-400 hover:text-indigo-300"
                         >
-                          Request a letter in Letter Vault →
+                          Request a letter in Letter Vault â†’
                         </Link>
                       )}
                     </div>
@@ -1686,7 +1695,7 @@ export function StudentProfileDocumentsView({
         </section>
 
         {/* Manual Dexterity Development Section */}
-        <section id="dexterity" className="space-y-6 scroll-mt-28">
+        <section id="dexterity" className="space-y-6 scroll-mt-24 lg:scroll-mt-28">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Fingerprint className="text-indigo-400" size={20} /> Manual Dexterity Development
@@ -1737,7 +1746,7 @@ export function StudentProfileDocumentsView({
         </section>
 
         {/* Licenses & Achievements */}
-        <section id="credentials" className="space-y-6 scroll-mt-28">
+        <section id="credentials" className="space-y-6 scroll-mt-24 lg:scroll-mt-28">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Trophy className="text-indigo-400" size={20} /> Licenses & Achievements
@@ -1861,7 +1870,7 @@ export function StudentProfileDocumentsView({
         </section>
 
         {/* Experience Summary Section */}
-        <section id="experience" className="space-y-6 scroll-mt-28">
+        <section id="experience" className="space-y-6 scroll-mt-24 lg:scroll-mt-28">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Briefcase className="text-indigo-400" size={20} /> Experience Summary
@@ -1994,7 +2003,7 @@ export function StudentProfileDocumentsView({
         </section>
 
         {/* Additional Information */}
-        <section id="notes" className="space-y-6 scroll-mt-28">
+        <section id="notes" className="space-y-6 scroll-mt-24 lg:scroll-mt-28">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -2082,7 +2091,7 @@ export function StudentProfileDocumentsView({
                   title="No additional information yet."
                   description={
                     canWriteNotes
-                      ? "Add anything that doesn’t fit elsewhere on your profile."
+                      ? "Add anything that doesn't fit elsewhere on your profile."
                       : undefined
                   }
                 />
@@ -2092,7 +2101,7 @@ export function StudentProfileDocumentsView({
         </section>
 
         {/* Documents & File Management Center */}
-        <section id="documents" className="space-y-6 scroll-mt-28">
+        <section id="documents" className="space-y-6 scroll-mt-24 lg:scroll-mt-28">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -2306,7 +2315,7 @@ export function StudentProfileDocumentsView({
               placeholder={
                 credentialKind === "LICENSE"
                   ? "e.g. Dental Radiography License"
-                  : "e.g. Dean’s List"
+                  : "e.g. Dean's List"
               }
             />
           </FormField>

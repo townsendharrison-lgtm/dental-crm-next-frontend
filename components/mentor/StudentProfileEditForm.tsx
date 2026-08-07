@@ -158,8 +158,8 @@ export function StudentProfileEditForm({
         </CardHeader>
         <CardContent>
           <div className="grid min-w-0 gap-6 lg:grid-cols-2 lg:gap-8">
-            <div className="flex min-w-0 flex-col items-center gap-6 sm:flex-row">
-              <div className="relative h-36 w-36 shrink-0">
+            <div className="flex min-w-0 flex-col items-center gap-4 sm:flex-row sm:gap-6">
+              <div className="relative h-32 w-32 shrink-0 sm:h-36 sm:w-36">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -167,8 +167,8 @@ export function StudentProfileEditForm({
                       dataKey="value"
                       cx="50%"
                       cy="50%"
-                      innerRadius={48}
-                      outerRadius={64}
+                      innerRadius="55%"
+                      outerRadius="78%"
                       startAngle={90}
                       endAngle={-270}
                       stroke="none"
