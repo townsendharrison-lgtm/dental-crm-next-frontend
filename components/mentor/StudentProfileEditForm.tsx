@@ -140,10 +140,10 @@ export function StudentProfileEditForm({
   const busy = isSaving || savingSection !== null || reviewingDocId !== null;
 
   return (
-    <div className="space-y-4">
+    <div className="w-full min-w-0 space-y-4 overflow-x-hidden">
       <h2 className="text-base font-semibold text-foreground">Student details</h2>
 
-      <Card>
+      <Card className="min-w-0 overflow-hidden">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>Strength score</CardTitle>
@@ -157,8 +157,8 @@ export function StudentProfileEditForm({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
-            <div className="flex flex-col sm:flex-row items-center gap-6">
+          <div className="grid min-w-0 gap-6 lg:grid-cols-2 lg:gap-8">
+            <div className="flex min-w-0 flex-col items-center gap-6 sm:flex-row">
               <div className="relative h-36 w-36 shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -198,16 +198,17 @@ export function StudentProfileEditForm({
               </div>
             </div>
 
-            <div className="flex min-h-[10rem] flex-col rounded-xl border border-border bg-surface-muted/40 p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <AlertCircle className="h-4 w-4 text-amber-400" />
+            <div className="flex min-h-[10rem] min-w-0 flex-col rounded-xl border border-border bg-surface-muted/40 p-4">
+              <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h4 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
                   Pending student changes
                 </h4>
                 {(pendingGpa || pendingDat) && (
                   <Button
                     type="button"
                     size="sm"
+                    className="w-full sm:w-auto"
                     leftIcon={<ShieldCheck className="h-3.5 w-3.5" />}
                     disabled={busy}
                     isLoading={busy && savingSection === "verify"}
@@ -228,7 +229,7 @@ export function StudentProfileEditForm({
                 ) : (
                   <>
                     {pendingGpa ? (
-                      <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                      <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-medium text-foreground">GPA update</p>
@@ -245,6 +246,7 @@ export function StudentProfileEditForm({
                           type="button"
                           size="sm"
                           variant="secondary"
+                          className="w-full sm:w-auto"
                           disabled={busy}
                           onClick={() => verifyPending("gpa")}
                         >
@@ -254,13 +256,13 @@ export function StudentProfileEditForm({
                     ) : null}
 
                     {pendingDat ? (
-                      <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                      <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-medium text-foreground">DAT scores</p>
                             <Badge variant="warning">Needs verify</Badge>
                           </div>
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="mt-1 break-words text-xs text-muted-foreground">
                             {datType || "DAT"} · AA {datAa || "—"} · TS {datTs || "—"} · PAT{" "}
                             {datPat || "—"}
                           </p>
@@ -269,6 +271,7 @@ export function StudentProfileEditForm({
                           type="button"
                           size="sm"
                           variant="secondary"
+                          className="w-full sm:w-auto"
                           disabled={busy}
                           onClick={() => verifyPending("dat")}
                         >
@@ -280,7 +283,7 @@ export function StudentProfileEditForm({
                     {pendingDocuments.map((doc) => (
                       <div
                         key={doc.id}
-                        className="flex items-start justify-between gap-3 rounded-lg border border-slate-700/80 bg-slate-950/40 p-3"
+                        className="flex min-w-0 flex-col gap-3 rounded-lg border border-slate-700/80 bg-slate-950/40 p-3 sm:flex-row sm:items-start sm:justify-between"
                       >
                         <div className="flex min-w-0 items-start gap-2">
                           <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
@@ -294,7 +297,7 @@ export function StudentProfileEditForm({
                             <p className="mt-1 text-xs text-muted-foreground">{doc.type}</p>
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
+                        <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0 sm:justify-end">
                           <Button
                             type="button"
                             size="sm"
@@ -332,11 +335,11 @@ export function StudentProfileEditForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="min-w-0 overflow-hidden">
         <CardHeader>
           <CardTitle>Personal details</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           <ProfileDetailsEditor
             student={student}
             mode="personal"
@@ -346,7 +349,7 @@ export function StudentProfileEditForm({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="min-w-0 overflow-hidden">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>Academics & DAT</CardTitle>
@@ -362,7 +365,7 @@ export function StudentProfileEditForm({
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           <ProfileDetailsEditor
             student={student}
             mode="academic"

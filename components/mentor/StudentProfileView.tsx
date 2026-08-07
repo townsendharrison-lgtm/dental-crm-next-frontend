@@ -562,20 +562,20 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
 
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 space-y-6 overflow-x-hidden">
       {/* Compact Hero */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-slate-800/80">
+      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+        <div className="flex flex-col gap-3 border-b border-slate-800/80 px-4 pt-4 pb-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-slate-500 hover:text-white transition-colors text-sm"
+            className="flex items-center gap-2 text-sm text-slate-500 transition-colors hover:text-white"
           >
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
           {nextMeeting && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600/10 border border-indigo-500/20 rounded-lg">
-              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider inline-flex items-center gap-1.5">
+            <div className="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-600/10 px-3 py-1.5">
+              <Calendar className="h-3.5 w-3.5 shrink-0 text-indigo-400" />
+              <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-indigo-400">
                 Next:{" "}
                 <MeetingTimeWithHint
                   dateIso={nextMeeting.date}
@@ -801,32 +801,34 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
         defaultValue={activeTab}
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as PrimaryTab)}
-        className="space-y-4"
+        className="w-full min-w-0 space-y-4"
       >
-        <TabsList>
-          <TabsTrigger value="overview">
-            <LayoutDashboard className="h-4 w-4" />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="profile">
-            <UserRound className="h-4 w-4" />
-            Profile
-          </TabsTrigger>
-          <TabsTrigger value="records">
-            <FolderOpen className="h-4 w-4" />
-            Records
-          </TabsTrigger>
-          <TabsTrigger value="plan">
-            <ClipboardList className="h-4 w-4" />
-            Plan
-          </TabsTrigger>
-          <TabsTrigger value="activity">
-            <Activity className="h-4 w-4" />
-            Activity
-          </TabsTrigger>
-        </TabsList>
+        <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden no-scrollbar">
+          <TabsList className="min-w-max">
+            <TabsTrigger value="overview">
+              <LayoutDashboard className="h-4 w-4" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="profile">
+              <UserRound className="h-4 w-4" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="records">
+              <FolderOpen className="h-4 w-4" />
+              Records
+            </TabsTrigger>
+            <TabsTrigger value="plan">
+              <ClipboardList className="h-4 w-4" />
+              Plan
+            </TabsTrigger>
+            <TabsTrigger value="activity">
+              <Activity className="h-4 w-4" />
+              Activity
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="overview" className="mt-4">
+        <TabsContent value="overview" className="mt-4 min-w-0 w-full overflow-x-hidden">
           <div className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div className="flex h-[340px] flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-5">
@@ -927,8 +929,8 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                               }`}
                             />
                           </div>
-                          <p className="text-sm font-medium text-white">{event.title}</p>
-                          <p className="text-xs text-slate-500">{event.detail}</p>
+                          <p className="break-words text-sm font-medium text-white">{event.title}</p>
+                          <p className="break-words text-xs text-slate-500">{event.detail}</p>
                           <p className="mt-1 text-[10px] text-slate-500">
                             {new Date(event.at).toLocaleDateString()}
                           </p>
@@ -940,16 +942,16 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-indigo-400" /> Strength Score Progression
+            <div className="min-w-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+              <div className="mb-4 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="flex items-center gap-2 text-base font-semibold text-white">
+                  <TrendingUp className="h-4 w-4 shrink-0 text-indigo-400" /> Strength Score Progression
                 </h3>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                     Last 12 months
                   </span>
-                  <div className="px-3 py-1 bg-indigo-500/10 rounded-full border border-indigo-500/20">
+                  <div className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1">
                     <span className="text-xs font-bold text-indigo-400">
                       Current Score: {displayStrength || "—"}
                     </span>
@@ -957,7 +959,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                 </div>
               </div>
 
-              <div className="h-[260px] w-full mt-2">
+              <div className="mt-2 h-[220px] w-full min-w-0 sm:h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={progressionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
@@ -1029,7 +1031,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           </div>
         </TabsContent>
 
-        <TabsContent value="profile" className="mt-4">
+        <TabsContent value="profile" className="mt-4 min-w-0 w-full overflow-x-hidden">
           <StudentProfileEditForm
             student={student}
             strengthScore={displayStrength}
@@ -1037,7 +1039,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           />
         </TabsContent>
 
-        <TabsContent value="records" className="mt-4">
+        <TabsContent value="records" className="mt-4 min-w-0 w-full overflow-x-hidden">
           <StudentProfileDocumentsView
             student={student}
             currentUserId={currentUserId}
@@ -1046,7 +1048,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           />
         </TabsContent>
 
-        <TabsContent value="plan" className="mt-4">
+        <TabsContent value="plan" className="mt-4 min-w-0 w-full overflow-x-hidden">
           <MentorStudentPlanTab
             student={student}
             experiences={experiences}
@@ -1079,28 +1081,30 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           />
         </TabsContent>
 
-        <TabsContent value="activity" className="mt-4">
+        <TabsContent value="activity" className="mt-4 min-w-0 w-full overflow-x-hidden">
           <Tabs
             defaultValue={activitySubTab}
             value={activitySubTab}
             onValueChange={(v) => setActivitySubTab(v as "meetings" | "tasks" | "history")}
-            className="space-y-4"
+            className="min-w-0 space-y-4"
           >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <TabsList>
-                <TabsTrigger value="meetings">
-                  <Calendar className="h-4 w-4" />
-                  Meetings
-                </TabsTrigger>
-                <TabsTrigger value="tasks">
-                  <CheckSquare className="h-4 w-4" />
-                  Tasks
-                </TabsTrigger>
-                <TabsTrigger value="history">
-                  <StickyNote className="h-4 w-4" />
-                  History
-                </TabsTrigger>
-              </TabsList>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 overflow-x-auto overflow-y-hidden no-scrollbar">
+                <TabsList className="min-w-max">
+                  <TabsTrigger value="meetings">
+                    <Calendar className="h-4 w-4" />
+                    Meetings
+                  </TabsTrigger>
+                  <TabsTrigger value="tasks">
+                    <CheckSquare className="h-4 w-4" />
+                    Tasks
+                  </TabsTrigger>
+                  <TabsTrigger value="history">
+                    <StickyNote className="h-4 w-4" />
+                    History
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               {activitySubTab === "meetings" && (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1861,20 +1865,20 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                       <ExternalLink className="w-4 h-4 text-slate-600 absolute left-4 top-1/2 -translate-y-1/2" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="min-w-0">
                       <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Due Date</label>
                       <div className="relative">
                         <input 
                           type="date" 
                           value={editingAction.dueDate}
                           onChange={e => setEditingAction({...editingAction, dueDate: e.target.value})}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all"
+                          className="w-full min-w-0 bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all"
                         />
                         <Calendar className="w-4 h-4 text-slate-600 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Priority</label>
                       <select 
                         value={editingAction.priority}
@@ -1965,25 +1969,25 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                       className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 h-24 resize-none transition-all"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="min-w-0">
                       <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Due Date</label>
                       <div className="relative">
                         <input 
                           type="date" 
                           value={(editingStaffTask.dueDate || '').split('T')[0]}
                           onChange={e => setEditingStaffTask({...editingStaffTask, dueDate: new Date(e.target.value).toISOString()})}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all"
+                          className="w-full min-w-0 bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all"
                         />
                         <Calendar className="w-4 h-4 text-slate-600 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Priority</label>
                       <select 
                         value={editingStaffTask.priority}
                         onChange={e => setEditingStaffTask({...editingStaffTask, priority: e.target.value as any})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all appearance-none"
+                        className="w-full min-w-0 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all appearance-none"
                       >
                         <option value="HIGH">High</option>
                         <option value="MEDIUM">Medium</option>
@@ -2114,18 +2118,18 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-all"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="min-w-0 space-y-2">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Target Value</label>
                     <input 
                       type="number"
                       required
                       value={newGoal.targetValue}
                       onChange={(e) => setNewGoal({...newGoal, targetValue: Number(e.target.value)})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-all"
+                      className="w-full min-w-0 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-all"
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="min-w-0 space-y-2">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Unit</label>
                     <input 
                       type="text"
@@ -2133,7 +2137,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                       value={newGoal.unit}
                       onChange={(e) => setNewGoal({...newGoal, unit: e.target.value})}
                       placeholder="Hours, Projects, etc."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-all"
+                      className="w-full min-w-0 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-all"
                     />
                   </div>
                 </div>

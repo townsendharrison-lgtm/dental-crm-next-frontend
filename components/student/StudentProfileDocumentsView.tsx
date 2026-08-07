@@ -823,11 +823,13 @@ export function StudentProfileDocumentsView({
         key: "title",
         header: "Document Name",
         render: (doc) => (
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg border border-slate-800 bg-slate-900 p-2 text-slate-400">
+          <div className="flex min-w-0 max-w-[14rem] items-center gap-3 sm:max-w-xs">
+            <div className="shrink-0 rounded-lg border border-slate-800 bg-slate-900 p-2 text-slate-400">
               <FileText size={16} />
             </div>
-            <span className="font-semibold text-white">{doc.title}</span>
+            <span className="truncate font-semibold text-white" title={doc.title}>
+              {doc.title}
+            </span>
           </div>
         ),
       },
@@ -870,14 +872,14 @@ export function StudentProfileDocumentsView({
           const busy = reviewingDocId === doc.id;
           const pending = doc.status === "Pending Review";
           return (
-            <div className="flex items-center justify-end gap-1">
+            <div className="flex flex-nowrap items-center justify-end gap-1">
               {canReviewDocuments && pending && (
                 <>
                   <Button
                     type="button"
                     size="sm"
                     variant="secondary"
-                    className="h-8 px-2 text-emerald-300 hover:text-emerald-200"
+                    className="h-8 shrink-0 px-2 text-emerald-300 hover:text-emerald-200"
                     disabled={busy}
                     isLoading={busy}
                     leftIcon={!busy ? <ShieldCheck size={14} /> : undefined}
@@ -889,7 +891,7 @@ export function StudentProfileDocumentsView({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className="h-8 px-2 text-rose-300 hover:text-rose-200"
+                    className="h-8 shrink-0 px-2 text-rose-300 hover:text-rose-200"
                     disabled={busy}
                     leftIcon={<XCircle size={14} />}
                     onClick={() => void reviewDocument(doc.id, "Cancelled")}
@@ -955,42 +957,49 @@ export function StudentProfileDocumentsView({
         )}
       </div>
       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-white">{value ?? "—"}</p>
+      <p className="mt-1 min-w-0 break-words text-lg font-semibold tabular-nums text-white">
+        {value ?? "—"}
+      </p>
     </div>
   );
 
   return (
-    <div ref={contentRef} className="flex flex-col lg:flex-row gap-8 pb-20">
+    <div
+      ref={contentRef}
+      className="flex w-full min-w-0 flex-col gap-6 overflow-x-hidden pb-20 lg:flex-row lg:gap-8"
+    >
       {/* Floating Section Navigation — aside itself is sticky (needs stretch room from flex row) */}
       <aside
         aria-label="Records sections"
-        className="sticky top-28 z-20 w-full shrink-0 self-start lg:top-24 lg:w-64"
+        className="sticky top-28 z-20 w-full min-w-0 shrink-0 self-start lg:top-24 lg:w-64"
       >
-        <nav className="space-y-1 rounded-2xl border border-slate-800 bg-slate-950 p-2">
-          {sections.map((section) => (
-            <button
-              key={section.id}
-              type="button"
-              onClick={() => scrollToSection(section.id)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium transition-colors ${
-                activeSection === section.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-slate-500 hover:bg-slate-900/60 hover:text-slate-200"
-              }`}
-            >
-              <section.icon size={16} className="shrink-0" />
-              <span className="truncate">{section.label}</span>
-            </button>
-          ))}
+        <nav className="space-y-1 overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-800 bg-slate-950 p-2 no-scrollbar lg:overflow-visible">
+          <div className="flex gap-1 lg:flex-col lg:space-y-1 lg:gap-0">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => scrollToSection(section.id)}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors lg:w-full lg:gap-3 lg:px-3.5 ${
+                  activeSection === section.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-slate-500 hover:bg-slate-900/60 hover:text-slate-200"
+                }`}
+              >
+                <section.icon size={16} className="shrink-0" />
+                <span className="truncate">{section.label}</span>
+              </button>
+            ))}
+          </div>
         </nav>
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 space-y-12">
+      <div className="min-w-0 w-full flex-1 space-y-8 sm:space-y-12">
         {/* Header Section */}
-        <header className="overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
-          <div className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between md:p-8">
-            <div className="flex items-center gap-5 min-w-0">
+        <header className="overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 sm:rounded-3xl">
+          <div className="flex min-w-0 flex-col gap-5 p-4 sm:gap-6 sm:p-6 md:flex-row md:items-center md:justify-between md:p-8">
+            <div className="flex min-w-0 items-center gap-4 sm:gap-5">
               <div className="relative shrink-0">
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-2xl font-bold text-white ring-4 ring-slate-950">
                   {student.avatar ? (
@@ -1070,8 +1079,8 @@ export function StudentProfileDocumentsView({
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="relative flex h-16 w-16 items-center justify-center">
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-3 sm:gap-4 md:w-auto md:justify-end">
+              <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
                 <svg viewBox="0 0 36 36" className="h-16 w-16 -rotate-90">
                   <circle cx="18" cy="18" r="15.5" fill="none" stroke="#1e293b" strokeWidth="3" />
                   <circle
@@ -1095,7 +1104,7 @@ export function StudentProfileDocumentsView({
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Strength</p>
                 <p className="text-xs text-slate-400">Competitive score</p>
               </div>
-              <div className="ml-2 flex gap-2">
+              <div className="ml-0 flex shrink-0 gap-2 sm:ml-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -1124,9 +1133,9 @@ export function StudentProfileDocumentsView({
         </header>
 
         {/* Student Snapshot Section — identity / progress only (academics live below) */}
-        <section id="snapshot" className="space-y-5 scroll-mt-28">
-          <div className="flex items-end justify-between gap-3">
-            <div>
+        <section id="snapshot" className="min-w-0 space-y-5 scroll-mt-28">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold text-white">Student Snapshot</h2>
               <p className="mt-0.5 text-xs text-slate-500">
                 {canEditOwnProfile
@@ -1197,10 +1206,10 @@ export function StudentProfileDocumentsView({
         ) : null}
 
         {/* Academic Background Section */}
-        <section id="academic" className="space-y-6 scroll-mt-28">
-          <div className="flex items-end justify-between gap-3">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <GraduationCap className="text-indigo-400" size={20} /> Academic Background
+        <section id="academic" className="min-w-0 space-y-6 scroll-mt-28">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 className="flex min-w-0 items-center gap-2 text-xl font-bold text-white">
+              <GraduationCap className="shrink-0 text-indigo-400" size={20} /> Academic Background
             </h2>
             {canEditOwnProfile && (
               <Button
@@ -1214,13 +1223,13 @@ export function StudentProfileDocumentsView({
               </Button>
             )}
           </div>
-          <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-8 space-y-8">
-            <div className="grid md:grid-cols-3 gap-8">
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
+          <div className="min-w-0 space-y-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:space-y-8 sm:rounded-3xl sm:p-6 md:p-8">
+            <div className="grid gap-6 md:grid-cols-3 md:gap-8">
+              <div className="min-w-0">
+                <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
                   Major
                 </label>
-                <p className="text-lg font-bold text-white">
+                <p className="break-words text-lg font-bold text-white">
                   {student.profile?.major || "Not specified"}
                 </p>
               </div>
@@ -1270,11 +1279,11 @@ export function StudentProfileDocumentsView({
                       : "No"}
                 </p>
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
+              <div className="min-w-0">
+                <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
                   Undergraduate institution
                 </label>
-                <p className="text-lg font-bold text-white">
+                <p className="break-words text-lg font-bold text-white">
                   {student.profile?.undergrad_institution || "Not specified"}
                 </p>
               </div>
@@ -1309,9 +1318,9 @@ export function StudentProfileDocumentsView({
                 )}
                 {(student.profile?.additional_schooling?.includes("OTHER") ||
                   student.profile?.additional_schooling_other) && (
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                  <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
                     <p className="text-sm font-bold text-white">Other</p>
-                    <p className="mt-2 text-sm text-slate-300">
+                    <p className="mt-2 break-words text-sm text-slate-300">
                       {student.profile?.additional_schooling_other || "—"}
                     </p>
                   </div>
@@ -1406,10 +1415,12 @@ export function StudentProfileDocumentsView({
                       {student.profile!.reapplicant_schools!.map((s) => (
                         <div
                           key={s.schoolId}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2"
+                          className="flex min-w-0 flex-col gap-1 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2"
                         >
-                          <p className="text-sm font-medium text-white">{s.schoolName}</p>
-                          <p className="text-xs text-slate-400">
+                          <p className="min-w-0 break-words text-sm font-medium text-white">
+                            {s.schoolName}
+                          </p>
+                          <p className="break-words text-xs text-slate-400">
                             {normalizeReapplicantOutcomes(s.outcomes).join(" · ") || "—"}
                           </p>
                         </div>
@@ -1463,7 +1474,7 @@ export function StudentProfileDocumentsView({
               </div>
             </div>
           </div>
-          <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-8 space-y-8">
+          <div className="space-y-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:space-y-8 sm:rounded-3xl sm:p-6 md:p-8">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div className="space-y-1">
                 <p className="text-4xl font-black text-white">
@@ -1565,7 +1576,7 @@ export function StudentProfileDocumentsView({
 
             {!lorExternalEnabled && (
               <div className="space-y-4 pt-2">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
                     Letter Vault requests
                   </h3>
@@ -1592,9 +1603,9 @@ export function StudentProfileDocumentsView({
                           key={req.id}
                           className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 p-4 sm:flex-row sm:items-center sm:justify-between"
                         >
-                          <div className="flex items-center gap-4">
+                          <div className="flex min-w-0 items-center gap-4">
                             <div
-                              className={`flex h-10 w-10 items-center justify-center rounded-xl border ${
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
                                 req.status === "REVIEWED"
                                   ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
                                   : req.status === "UPLOADED"
@@ -1610,9 +1621,9 @@ export function StudentProfileDocumentsView({
                                 <User size={16} />
                               )}
                             </div>
-                            <div>
-                              <p className="text-sm font-bold text-white">{req.writerName}</p>
-                              <p className="text-[10px] text-slate-500">{req.writerEmail}</p>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold text-white">{req.writerName}</p>
+                              <p className="truncate text-[10px] text-slate-500">{req.writerEmail}</p>
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-4 sm:justify-end">
@@ -1676,7 +1687,7 @@ export function StudentProfileDocumentsView({
 
         {/* Manual Dexterity Development Section */}
         <section id="dexterity" className="space-y-6 scroll-mt-28">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Fingerprint className="text-indigo-400" size={20} /> Manual Dexterity Development
             </h2>
@@ -1694,12 +1705,12 @@ export function StudentProfileDocumentsView({
             {manualDexterity.map((activity) => (
               <div
                 key={activity.id}
-                className="bg-slate-900/40 border border-slate-800 p-6 rounded-2xl group hover:border-indigo-500/30 transition-all flex justify-between items-start"
+                className="group flex min-w-0 items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 transition-all hover:border-indigo-500/30 sm:p-6"
               >
-                <div className="space-y-2">
-                  <h4 className="font-bold text-white text-lg">{activity.activity}</h4>
+                <div className="min-w-0 space-y-2">
+                  <h4 className="break-words text-lg font-bold text-white">{activity.activity}</h4>
                   {activity.description ? (
-                    <p className="text-sm text-slate-400 max-w-2xl leading-relaxed">
+                    <p className="max-w-2xl break-words text-sm leading-relaxed text-slate-400">
                       {activity.description}
                     </p>
                   ) : null}
@@ -1708,7 +1719,7 @@ export function StudentProfileDocumentsView({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="text-slate-600 hover:text-rose-400"
+                  className="shrink-0 text-slate-600 hover:text-rose-400"
                   onClick={() => handleDeleteDexterity(activity.id)}
                   aria-label="Delete activity"
                 >
@@ -1727,7 +1738,7 @@ export function StudentProfileDocumentsView({
 
         {/* Licenses & Achievements */}
         <section id="credentials" className="space-y-6 scroll-mt-28">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Trophy className="text-indigo-400" size={20} /> Licenses & Achievements
             </h2>
@@ -1754,17 +1765,17 @@ export function StudentProfileDocumentsView({
                 licenses.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
+                    className="flex min-w-0 items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
                   >
                     <div className="min-w-0">
-                      <p className="font-semibold text-white">{item.title}</p>
+                      <p className="break-words font-semibold text-white">{item.title}</p>
                       {(item.issuer || item.year) && (
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-1 break-words text-xs text-slate-500">
                           {[item.issuer, item.year].filter(Boolean).join(" · ")}
                         </p>
                       )}
                       {item.description ? (
-                        <p className="mt-2 text-sm text-slate-400">{item.description}</p>
+                        <p className="mt-2 break-words text-sm text-slate-400">{item.description}</p>
                       ) : null}
                     </div>
                     {(canEditOwnProfile || canReviewDocuments) && (
@@ -1805,17 +1816,17 @@ export function StudentProfileDocumentsView({
                 achievements.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
+                    className="flex min-w-0 items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
                   >
                     <div className="min-w-0">
-                      <p className="font-semibold text-white">{item.title}</p>
+                      <p className="break-words font-semibold text-white">{item.title}</p>
                       {(item.issuer || item.year) && (
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-1 break-words text-xs text-slate-500">
                           {[item.issuer, item.year].filter(Boolean).join(" · ")}
                         </p>
                       )}
                       {item.description ? (
-                        <p className="mt-2 text-sm text-slate-400">{item.description}</p>
+                        <p className="mt-2 break-words text-sm text-slate-400">{item.description}</p>
                       ) : null}
                     </div>
                     {(canEditOwnProfile || canReviewDocuments) && (
@@ -1851,7 +1862,7 @@ export function StudentProfileDocumentsView({
 
         {/* Experience Summary Section */}
         <section id="experience" className="space-y-6 scroll-mt-28">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Briefcase className="text-indigo-400" size={20} /> Experience Summary
             </h2>
@@ -1869,7 +1880,7 @@ export function StudentProfileDocumentsView({
             {experienceStats.map((stat) => (
               <div
                 key={stat.category}
-                className="bg-slate-900/40 border border-slate-800 rounded-3xl overflow-hidden group transition-all"
+                className="group min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 transition-all sm:rounded-3xl"
               >
                 <button
                   onClick={() =>
@@ -1877,21 +1888,23 @@ export function StudentProfileDocumentsView({
                       expandedCategory === stat.category ? null : stat.category
                     )
                   }
-                  className="w-full p-8 flex items-center justify-between hover:bg-slate-800/30 transition-colors cursor-pointer"
+                  className="flex w-full min-w-0 cursor-pointer items-center justify-between gap-3 p-4 transition-colors hover:bg-slate-800/30 sm:p-6 md:p-8"
                 >
-                  <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center group-hover:border-indigo-500/30 transition-all">
+                  <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+                    <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 transition-all group-hover:border-indigo-500/30 sm:h-16 sm:w-16">
                       <p className="text-xl font-black text-white">{stat.hours}</p>
-                      <p className="text-[8px] font-bold text-slate-500 uppercase">Hours</p>
+                      <p className="text-[8px] font-bold uppercase text-slate-500">Hours</p>
                     </div>
-                    <div className="text-left">
-                      <h4 className="text-lg font-bold text-white">{stat.category}</h4>
-                      <p className="text-xs text-slate-500 font-medium">
+                    <div className="min-w-0 text-left">
+                      <h4 className="truncate text-base font-bold text-white sm:text-lg">
+                        {stat.category}
+                      </h4>
+                      <p className="text-xs font-medium text-slate-500">
                         {stat.entries.length} Total Entries
                       </p>
                     </div>
                   </div>
-                  <div className="p-2 bg-slate-805 rounded-xl text-slate-500 group-hover:text-white transition-all">
+                  <div className="shrink-0 rounded-xl bg-slate-800/60 p-2 text-slate-500 transition-all group-hover:text-white">
                     {expandedCategory === stat.category ? (
                       <ChevronDown size={20} />
                     ) : (
@@ -1923,9 +1936,11 @@ export function StudentProfileDocumentsView({
                                   </Badge>
                                 )}
                               </div>
-                              <h5 className="font-bold text-white">{entry.title}</h5>
+                              <h5 className="break-words font-bold text-white">{entry.title}</h5>
                               {entry.location && entry.location !== "—" ? (
-                                <p className="mt-0.5 text-sm text-slate-400">{entry.location}</p>
+                                <p className="mt-0.5 break-words text-sm text-slate-400">
+                                  {entry.location}
+                                </p>
                               ) : null}
                             </div>
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1980,7 +1995,7 @@ export function StudentProfileDocumentsView({
 
         {/* Additional Information */}
         <section id="notes" className="space-y-6 scroll-mt-28">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <MessageSquare className="text-indigo-400" size={20} /> Additional Information
@@ -2001,29 +2016,29 @@ export function StudentProfileDocumentsView({
             ) : null}
           </div>
 
-          <div className="bg-slate-900/40 border border-slate-800 rounded-3xl overflow-hidden">
-            <div className="p-8 space-y-8">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 sm:rounded-3xl">
+            <div className="space-y-6 p-4 sm:space-y-8 sm:p-6 md:p-8">
               {notes.map((note) => (
                 <div
                   key={note.id}
-                  className="space-y-4 relative pl-8 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[2px] before:bg-indigo-500/30"
+                  className="relative space-y-4 pl-6 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[2px] before:bg-indigo-500/30 sm:pl-8"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-white border border-slate-700">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-[10px] font-bold text-white">
                         {(note.authorName || "?")
                           .split(" ")
                           .map((n) => n[0])
                           .join("")}
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-white">{note.authorName}</p>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-white">{note.authorName}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
                           {new Date(note.timestamp).toLocaleString()}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {note.tags.map((tag) => (
                         <Badge
                           key={tag}
@@ -2054,8 +2069,8 @@ export function StudentProfileDocumentsView({
                       ) : null}
                     </div>
                   </div>
-                  <div className="p-6 bg-slate-950/50 border border-slate-800 rounded-2xl">
-                    <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 sm:p-6">
+                    <p className="break-words text-sm leading-relaxed whitespace-pre-wrap text-slate-300">
                       {note.content}
                     </p>
                   </div>
@@ -2101,9 +2116,9 @@ export function StudentProfileDocumentsView({
             </div>
           </div>
 
-          <div className="bg-slate-900/40 border border-slate-800 rounded-3xl overflow-hidden">
-            <div className="p-6 border-b border-slate-800 bg-slate-900/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="relative w-full max-w-md">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 sm:rounded-3xl">
+            <div className="flex min-w-0 flex-col items-stretch justify-between gap-3 border-b border-slate-800 bg-slate-900/20 p-4 sm:flex-row sm:items-center sm:gap-4 sm:p-6">
+              <div className="relative w-full min-w-0 max-w-md">
                 <Search
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
                   size={16}
@@ -2112,10 +2127,10 @@ export function StudentProfileDocumentsView({
                   value={docSearch}
                   onChange={(e) => setDocSearch(e.target.value)}
                   placeholder="Search documents..."
-                  className="pl-10"
+                  className="w-full pl-10"
                 />
               </div>
-              <div className="w-full sm:w-56">
+              <div className="w-full min-w-0 sm:w-56">
                 <SelectMenu
                   value={docTypeFilter}
                   onChange={setDocTypeFilter}
@@ -2132,13 +2147,15 @@ export function StudentProfileDocumentsView({
               </div>
             </div>
 
-            <Table
-              columns={documentColumns}
-              data={filteredDocuments}
-              rowKey={(doc) => doc.id}
-              emptyMessage="No matching documents found."
-              className="rounded-none border-0"
-            />
+            <div className="min-w-0 max-w-full overflow-x-auto overflow-y-hidden no-scrollbar">
+              <Table
+                columns={documentColumns}
+                data={filteredDocuments}
+                rowKey={(doc) => doc.id}
+                emptyMessage="No matching documents found."
+                className="min-w-0 rounded-none border-0"
+              />
+            </div>
           </div>
         </section>
       </div>

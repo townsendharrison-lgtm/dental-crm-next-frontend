@@ -614,7 +614,7 @@ export function ProfileDetailsEditor({
   const isPersonal = mode === "personal";
 
   const formBody = isPersonal ? (
-    <div className="space-y-4 pb-1">
+    <div className="min-w-0 space-y-4 overflow-x-hidden pb-1">
       <SectionCard
         icon={<User className="h-4 w-4" />}
         title="Identity"
@@ -711,7 +711,7 @@ export function ProfileDetailsEditor({
       </SectionCard>
     </div>
   ) : (
-    <div className="space-y-4 pb-2">
+    <div className="min-w-0 space-y-4 overflow-x-hidden pb-2">
       <SectionCard
         icon={<GraduationCap className="h-4 w-4" />}
         title="Grades & major"
@@ -1150,7 +1150,7 @@ export function ProfileDetailsEditor({
 
   if (embedded) {
     return (
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4 overflow-x-hidden">
         {title ? <h3 className="text-sm font-semibold text-foreground">{title}</h3> : null}
         {formBody}
         {embeddedActions}

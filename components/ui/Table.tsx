@@ -35,8 +35,8 @@ export function Table<T>({
   className,
 }: TableProps<T>) {
   return (
-    <div className={cn("w-full overflow-x-auto rounded-xl border border-border bg-surface", className)}>
-      <table className="w-full border-collapse text-sm">
+    <div className={cn("w-full min-w-0 overflow-x-auto rounded-xl border border-border bg-surface", className)}>
+      <table className="w-full min-w-max border-collapse text-sm">
         <thead>
           <tr className="border-b border-border bg-surface-muted/60">
             {columns.map((col) => (
