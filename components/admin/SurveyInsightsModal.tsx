@@ -249,7 +249,7 @@ export default function SurveyInsightsModal({ survey, open, onClose }: SurveyIns
       fullHeight
     >
       <div className="flex h-full min-h-0 flex-col items-stretch space-y-4">
-        <div className="grid grid-cols-3 gap-3 shrink-0">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
           <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
               Responses

@@ -333,7 +333,7 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
       )}
 
       {hideHeader && (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="text-base font-bold text-white">Ad Campaigns</h3>
           <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreate}>
             Create Pop-up
@@ -380,7 +380,7 @@ const AdminPopupsView: React.FC<AdminPopupsViewProps> = ({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <h4 className="font-semibold text-white truncate">{popup.title}</h4>

@@ -244,7 +244,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
       className={cn(
         "animate-in fade-in duration-300",
         activeView === "assignments"
-          ? cn("flex min-h-0 flex-col gap-4 overflow-hidden", assignmentsShellHeight)
+          ? cn("flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden", assignmentsShellHeight)
           : "space-y-4",
       )}
     >
@@ -460,7 +460,7 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
                         </div>
                       </div>
 
-                      <div className="grid w-full grid-cols-[1.2fr_1fr_1fr_1.25fr] gap-2">
+                      <div className="grid w-full grid-cols-2 gap-2 lg:grid-cols-[1.2fr_1fr_1fr_1.25fr]">
                         <RowMetric label="No meeting" value={studentsWithoutMeeting} warn />
                         <RowMetric label="Overdue" value={overdueTasksCount} warn />
                         <RowMetric label="No tasks" value={studentsWithNoTasksSoon} warn />
@@ -721,13 +721,13 @@ function AssignmentsPanel({
         className,
       )}
     >
-      <div className="grid h-full min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]">
-        {/* Left nav */}
-        <aside className="shrink-0 overflow-y-auto border-b border-slate-800 bg-slate-950/40 p-3 lg:h-full lg:border-b-0 lg:border-r">
-          <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+      <div className="grid h-full min-h-0 min-w-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]">
+        {/* Left nav — horizontal scroll chips below lg; vertical column at lg+ */}
+        <aside className="shrink-0 border-b border-slate-800 bg-slate-950/40 p-3 max-lg:overflow-x-auto lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r">
+          <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 max-lg:hidden">
             Queues
           </p>
-          <nav className="space-y-0.5">
+          <nav className="flex max-lg:flex-row max-lg:gap-1 max-lg:overflow-x-auto lg:flex-col lg:gap-0.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               const selected = assignmentGroup === item.id;
@@ -737,7 +737,7 @@ function AssignmentsPanel({
                   type="button"
                   onClick={() => setAssignmentGroup(item.id)}
                   className={cn(
-                    "flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors",
+                    "flex shrink-0 cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors max-lg:min-w-[9.5rem] lg:w-full",
                     selected
                       ? "bg-indigo-600/15 text-white"
                       : "text-slate-400 hover:bg-slate-800/70 hover:text-white",
@@ -755,7 +755,7 @@ function AssignmentsPanel({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{item.label}</span>
-                    <span className="block truncate text-[11px] text-slate-500">
+                    <span className="hidden truncate text-[11px] text-slate-500 lg:block">
                       {item.description}
                     </span>
                   </span>
@@ -774,45 +774,47 @@ function AssignmentsPanel({
                 </button>
               );
             })}
+
+            <div className="my-3 border-t border-slate-800 max-lg:my-0 max-lg:mx-0.5 max-lg:self-stretch max-lg:border-t-0 max-lg:border-l" />
+
+            <button
+              type="button"
+              onClick={() => setAssignmentGroup("workloads")}
+              className={cn(
+                "flex shrink-0 cursor-pointer items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors max-lg:min-w-[9.5rem] lg:w-full",
+                assignmentGroup === "workloads"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                  : "border-transparent text-slate-400 hover:border-slate-800 hover:bg-slate-800/70 hover:text-white",
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
+                  assignmentGroup === "workloads"
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                    : "border-slate-800 bg-slate-900 text-slate-500",
+                )}
+              >
+                <Activity className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">Workloads</span>
+                <span className="hidden truncate text-[11px] text-slate-500 lg:block">
+                  Capacity view
+                </span>
+              </span>
+              <span
+                className={cn(
+                  "rounded-md px-1.5 py-0.5 text-[11px] font-bold tabular-nums",
+                  assignmentGroup === "workloads"
+                    ? "bg-emerald-500/20 text-emerald-200"
+                    : "bg-slate-800 text-slate-500",
+                )}
+              >
+                {filteredMentors.length}
+              </span>
+            </button>
           </nav>
-
-          <div className="my-3 border-t border-slate-800" />
-
-          <button
-            type="button"
-            onClick={() => setAssignmentGroup("workloads")}
-            className={cn(
-              "flex w-full cursor-pointer items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors",
-              assignmentGroup === "workloads"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                : "border-transparent text-slate-400 hover:border-slate-800 hover:bg-slate-800/70 hover:text-white",
-            )}
-          >
-            <span
-              className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
-                assignmentGroup === "workloads"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                  : "border-slate-800 bg-slate-900 text-slate-500",
-              )}
-            >
-              <Activity className="h-3.5 w-3.5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold">Workloads</span>
-              <span className="block truncate text-[11px] text-slate-500">Capacity view</span>
-            </span>
-            <span
-              className={cn(
-                "rounded-md px-1.5 py-0.5 text-[11px] font-bold tabular-nums",
-                assignmentGroup === "workloads"
-                  ? "bg-emerald-500/20 text-emerald-200"
-                  : "bg-slate-800 text-slate-500",
-              )}
-            >
-              {filteredMentors.length}
-            </span>
-          </button>
         </aside>
 
         {/* Main pane */}

@@ -260,6 +260,11 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
     if (!el || typeof ResizeObserver === "undefined") return;
 
     const update = () => {
+      // Only lock sidebar height at lg+ (side-by-side layout)
+      if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+        setSidebarHeight(null);
+        return;
+      }
       const next = Math.round(el.getBoundingClientRect().height);
       setSidebarHeight(next > 0 ? next : null);
     };
@@ -636,7 +641,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                   <ChevronLeft className="w-4 h-4" />
                 </button>
               </div>
-              <h3 className="text-base font-bold text-white min-w-[8.5rem] text-center">
+              <h3 className="text-base font-bold text-white min-w-[8.5rem] max-sm:min-w-0 max-sm:text-sm text-center">
                 {monthName} {year}
               </h3>
               <div className="flex gap-0.5">
@@ -714,7 +719,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
               <div
                 key={day}
-                className="py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest border-r border-slate-800 last:border-0"
+                className="py-3 max-sm:py-1.5 text-center text-[10px] max-sm:text-[8px] font-bold text-slate-500 uppercase tracking-widest border-r border-slate-800 last:border-0"
               >
                 {day}
               </div>
@@ -732,16 +737,16 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                 <div
                   key={idx}
                   onClick={() => day && setSelectedDate(day)}
-                  className={`min-h-[100px] p-3 border-r border-b border-slate-800 last:border-r-0 transition-all cursor-pointer ${
+                  className={`min-h-[100px] max-sm:min-h-[64px] p-3 max-sm:p-1 border-r border-b border-slate-800 last:border-r-0 transition-all cursor-pointer ${
                     !day ? "bg-slate-950/20" : "hover:bg-slate-800/30"
                   } ${isSelected ? "bg-indigo-600/5" : ""}`}
                 >
                   {day && (
                     <>
                       <span
-                        className={`text-sm font-bold ${
+                        className={`text-sm max-sm:text-xs font-bold ${
                           isToday
-                            ? "w-7 h-7 bg-indigo-600 text-white rounded-lg inline-flex items-center justify-center"
+                            ? "w-7 h-7 max-sm:w-5 max-sm:h-5 bg-indigo-600 text-white rounded-lg inline-flex items-center justify-center"
                             : isSelected
                               ? "text-indigo-400"
                               : "text-slate-500"
@@ -750,11 +755,11 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                         {day.getDate()}
                       </span>
 
-                      <div className="mt-2 space-y-1">
+                      <div className="mt-2 max-sm:mt-0.5 space-y-1 max-sm:space-y-0.5">
                         {events.slice(0, 3).map((event, eIdx) => (
                           <div
                             key={eIdx}
-                            className={`text-[9px] px-1.5 py-0.5 rounded-md truncate font-bold border ${
+                            className={`text-[9px] max-sm:text-[7px] px-1.5 max-sm:px-0.5 py-0.5 max-sm:py-0 rounded-md truncate font-bold border ${
                               event.isMine ? "ring-1 ring-white/40" : ""
                             } ${
                               event.audience
@@ -769,7 +774,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                           </div>
                         ))}
                         {events.length > 3 && (
-                          <div className="text-[9px] text-slate-600 font-bold pl-1">
+                          <div className="text-[9px] max-sm:text-[7px] text-slate-600 font-bold pl-1 max-sm:pl-0">
                             + {events.length - 3} more
                           </div>
                         )}
@@ -782,13 +787,13 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
           </div>
         </div>
 
-        {/* Sidebar — height matched to calendar */}
+        {/* Sidebar — height matched to calendar (lg+ only) */}
         <div
-          className="flex flex-col gap-4 min-h-0"
+          className="flex flex-col gap-4 min-h-0 max-lg:h-auto max-lg:max-h-none"
           style={
             sidebarHeight
               ? { height: sidebarHeight, maxHeight: sidebarHeight }
-              : { maxHeight: "100%" }
+              : undefined
           }
         >
           <div className="flex-1 min-h-0 flex flex-col bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -919,7 +924,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
             </div>
           </div>
 
-          <div className="shrink-0 max-h-[38%] min-h-[9rem] flex flex-col bg-indigo-600 rounded-xl text-white relative overflow-hidden">
+          <div className="shrink-0 max-h-[38%] min-h-[9rem] max-lg:min-h-0 max-lg:max-h-48 flex flex-col bg-indigo-600 rounded-xl text-white relative overflow-hidden">
             <div className="px-4 pt-4 pb-2 shrink-0 relative z-10">
               <h3 className="text-sm font-bold">Upcoming Global Events</h3>
             </div>
@@ -987,7 +992,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
         }
         size="lg"
         footer={
-          <div className="flex gap-3 w-full">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 w-full">
             <Button variant="outline" className="flex-1" onClick={closeEventModal}>
               Cancel
             </Button>
@@ -1281,7 +1286,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
         description="This permanently removes the event from the schedule."
         size="sm"
         footer={
-          <div className="flex gap-3 w-full">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 w-full">
             <Button
               variant="outline"
               className="flex-1"

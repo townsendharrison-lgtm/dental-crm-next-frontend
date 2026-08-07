@@ -595,6 +595,7 @@ export default function AdminCoursesView({ courses, submissions }: AdminCoursesV
                       <>
                         <Button
                           size="sm"
+                          className="max-sm:w-full"
                           leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
                           onClick={() => review(sub.id, "APPROVED")}
                         >
@@ -633,7 +634,7 @@ export default function AdminCoursesView({ courses, submissions }: AdminCoursesV
         description="Curriculum courses for shadowing, DAT, and prep tracks."
         size="lg"
         footer={
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => setCourseModalOpen(false)}>
               Cancel
             </Button>
@@ -690,7 +691,7 @@ export default function AdminCoursesView({ courses, submissions }: AdminCoursesV
         description={selectedCourse ? `Course: ${selectedCourse.title}` : undefined}
         size="lg"
         footer={
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => setModuleModalOpen(false)}>
               Cancel
             </Button>

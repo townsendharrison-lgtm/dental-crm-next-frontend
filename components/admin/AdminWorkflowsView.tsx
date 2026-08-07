@@ -115,7 +115,7 @@ const AdminWorkflowsView: React.FC<AdminWorkflowsViewProps> = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-base font-bold text-white">Automation Workflows</h3>
         {!editingWorkflow && (
           <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreate}>
@@ -205,7 +205,7 @@ const AdminWorkflowsView: React.FC<AdminWorkflowsViewProps> = ({
             </section>
 
             <section className="space-y-3">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                   <MessageSquare className="w-3.5 h-3.5 text-indigo-400" /> 2. Sequence Steps
                 </h4>
@@ -316,7 +316,7 @@ const AdminWorkflowsView: React.FC<AdminWorkflowsViewProps> = ({
             return (
               <div
                 key={workflow.id}
-                className={`p-4 bg-slate-900 border rounded-xl flex items-center justify-between gap-3 transition-all ${
+                className={`p-4 bg-slate-900 border rounded-xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between transition-all ${
                   active
                     ? "border-slate-800 hover:border-indigo-500/30"
                     : "border-slate-900 opacity-60"

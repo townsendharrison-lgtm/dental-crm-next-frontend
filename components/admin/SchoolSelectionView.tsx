@@ -206,18 +206,18 @@ function SectionCard({
 }) {
   return (
     <section className="space-y-5 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", iconClass)}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", iconClass)}>
             <Icon className="h-5 w-5" />
-        </div>
-          <div>
+          </div>
+          <div className="min-w-0">
             <h3 className="text-sm font-semibold text-white">{title}</h3>
             {subtitle ? <p className="text-xs text-slate-500">{subtitle}</p> : null}
           </div>
-          </div>
-        {actions}
         </div>
+        {actions}
+      </div>
       {children}
     </section>
   );
@@ -1069,7 +1069,7 @@ export default function SchoolSelectionView() {
                       type="button"
                       size="icon"
                       variant="ghost"
-                      className="absolute right-2 top-2 h-8 w-8 text-rose-400 opacity-0 transition-opacity hover:text-rose-300 group-hover:opacity-100"
+                      className="absolute right-2 top-2 h-8 w-8 text-rose-400 opacity-100 transition-opacity hover:text-rose-300 sm:opacity-0 sm:group-hover:opacity-100"
                       title="Delete report"
                       onClick={() => {
                         if (!window.confirm(`Delete report for ${name}?`)) return;
@@ -1438,7 +1438,7 @@ export default function SchoolSelectionView() {
                     key={idx}
                     className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4"
                   >
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <Input
                         value={action.title}
                         onChange={(e) => {
@@ -1457,12 +1457,13 @@ export default function SchoolSelectionView() {
                           patch("leverageActions", next);
                         }}
                         options={IMPACT_OPTIONS}
-                        className="w-36"
+                        className="w-full sm:w-36"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
+                        className="shrink-0"
                         onClick={() =>
                           patch(
                             "leverageActions",
@@ -1472,7 +1473,7 @@ export default function SchoolSelectionView() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      </div>
+                    </div>
                     <Textarea
                       value={action.description}
                       onChange={(e) => {
@@ -1513,7 +1514,7 @@ export default function SchoolSelectionView() {
                     key={idx}
                     className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4"
                   >
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <Input
                         value={risk.factor}
                         onChange={(e) => {
@@ -1532,12 +1533,13 @@ export default function SchoolSelectionView() {
                           patch("riskFactors", next);
                         }}
                         options={SEVERITY_OPTIONS}
-                        className="w-32"
+                        className="w-full sm:w-32"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
+                        className="shrink-0"
                         onClick={() =>
                           patch(
                             "riskFactors",
@@ -1586,7 +1588,7 @@ export default function SchoolSelectionView() {
         size="2xl"
         fullHeight
         footer={
-          <div className="flex w-full flex-wrap items-center justify-end gap-2">
+          <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <Button type="button" variant="outline" onClick={() => setPreviewOpen(false)}>
               Close
             </Button>
@@ -1604,7 +1606,7 @@ export default function SchoolSelectionView() {
             >
               Download PDF
             </Button>
-                </div>
+          </div>
         }
       >
         {canEditPlan && (

@@ -148,7 +148,10 @@ export function Sidebar() {
           <div className="flex items-center gap-2">
             {isAdmin && actualRole === "ADMIN" && previewCollapsed && (
               <button
-                onClick={() => setPreviewCollapsed(false)}
+                onClick={() => {
+                  setPreviewCollapsed(false);
+                  closeMobile();
+                }}
                 className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-800/50 text-slate-400 transition-all hover:bg-slate-800 hover:text-amber-400"
                 title="Expand Preview Switcher"
               >

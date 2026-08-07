@@ -164,7 +164,7 @@ const AdminBadgesView: React.FC<AdminBadgesViewProps> = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-base font-bold text-white">Achievement Badges</h3>
         <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreate}>
           Create Badge
@@ -280,7 +280,7 @@ const AdminBadgesView: React.FC<AdminBadgesViewProps> = ({
               </div>
 
               <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/60 p-2 custom-scrollbar">
-                <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
                   {filteredIcons.map((name) => {
                     const selected = form.icon === name;
                     return (

@@ -369,7 +369,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
 
       {activeTab === "SURVEYS" ? (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="text-base font-bold text-white">Active Surveys</h3>
             <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreateSurvey}>
               Create Survey
@@ -388,7 +388,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                   key={survey.id}
                   className="p-4 bg-slate-900 border border-slate-800 rounded-xl hover:border-indigo-500/30 transition-all"
                 >
-                  <div className="flex justify-between items-start gap-3 mb-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start mb-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h4 className="font-semibold text-white">{survey.title}</h4>
@@ -478,7 +478,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="text-base font-bold text-white">System Notifications</h3>
             <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreateNotif}>
               Broadcast Alert
@@ -510,7 +510,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start gap-2 mb-1">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start mb-1">
                     <div className="flex items-center gap-2 min-w-0 flex-wrap">
                       <h4 className="font-semibold text-white">{notif.title}</h4>
                       {expired && (
@@ -653,7 +653,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
           </FormField>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Questions</p>
               <button
                 type="button"
@@ -666,7 +666,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
             <div className="space-y-2">
               {newSurvey.questions?.map((q, idx) => (
                 <div key={q.id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Input
                       required
                       value={q.question || ""}
@@ -674,31 +674,33 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
                       placeholder={`Question ${idx + 1}`}
                       className="flex-1"
                     />
-                    <div className="w-44">
-                      <SelectMenu
-                        value={q.type}
-                        onChange={(v) =>
-                          handleUpdateQuestion(q.id, { type: v as SurveyQuestion["type"] })
-                        }
-                        options={[
-                          { value: "TEXT", label: "Text" },
-                          { value: "RATING", label: "Rating (1-5)" },
-                          { value: "MULTIPLE_CHOICE", label: "Multiple Choice" },
-                        ]}
-                      />
+                    <div className="flex gap-2 items-center">
+                      <div className="w-full sm:w-44">
+                        <SelectMenu
+                          value={q.type}
+                          onChange={(v) =>
+                            handleUpdateQuestion(q.id, { type: v as SurveyQuestion["type"] })
+                          }
+                          options={[
+                            { value: "TEXT", label: "Text" },
+                            { value: "RATING", label: "Rating (1-5)" },
+                            { value: "MULTIPLE_CHOICE", label: "Multiple Choice" },
+                          ]}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveQuestion(q.id)}
+                        className="p-2 text-slate-600 hover:text-rose-400 transition-colors cursor-pointer shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveQuestion(q.id)}
-                      className="p-2 text-slate-600 hover:text-rose-400 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
 
                   {q.type === "MULTIPLE_CHOICE" && (
                     <div className="pl-1 space-y-2 border-t border-slate-800/80 pt-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                           Answer options
                         </p>
@@ -802,7 +804,7 @@ const SurveyManagementView: React.FC<SurveyManagementViewProps> = ({
               className="min-h-[100px]"
             />
           </FormField>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Target Role">
               <SelectMenu
                 value={newNotif.targetRole || "BOTH"}

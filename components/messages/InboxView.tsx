@@ -848,9 +848,13 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   return (
     <div className="max-w-7xl mx-auto overflow-hidden h-[calc(100vh-7.5rem)]">
       <div className="h-full flex bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative">
-        {/* Left: thread list */}
-        <div className="w-[300px] border-r border-slate-800/80 flex flex-col min-h-0 bg-slate-950 z-20 shrink-0">
-          <div className="px-4 pt-4 pb-3 border-b border-slate-800/80 space-y-3">
+        {/* Left: thread list — full width below lg; side-by-side only on lg+ */}
+        <div
+          className={`${
+            selectedConversationId ? "hidden lg:flex" : "flex"
+          } w-full lg:w-[300px] border-r border-slate-800/80 flex-col min-h-0 bg-slate-950 z-20 shrink-0`}
+        >
+          <div className="px-4 max-sm:px-3 pt-4 pb-3 border-b border-slate-800/80 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-semibold text-white tracking-tight">Inbox</h2>
               {canStartConversation && (
@@ -1015,12 +1019,28 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
           </div>
         </div>
 
-        {/* Center: messages */}
-        <div className="flex-1 flex flex-col min-h-0 bg-slate-950/40 relative z-10 min-w-0">
+        {/* Center: messages — list-only below lg until a thread is selected */}
+        <div
+          className={`${
+            selectedConversationId ? "flex" : "hidden lg:flex"
+          } flex-1 flex-col min-h-0 bg-slate-950/40 relative z-10 min-w-0`}
+        >
           {selectedConversationId && activeConversation ? (
             <>
-              <div className="h-14 px-5 border-b border-slate-800 flex items-center justify-between bg-slate-950 gap-3 shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
+              <div className="h-14 px-5 max-sm:px-3 border-b border-slate-800 flex items-center justify-between bg-slate-950 gap-3 shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDetailsOpen(false);
+                      setDetailsStudentId(null);
+                      clearConversation();
+                    }}
+                    className="lg:hidden h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors cursor-pointer shrink-0"
+                    aria-label="Back to conversations"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
                   <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-sm font-semibold text-slate-200 shrink-0 overflow-hidden">
                     {!activeConversation.is_group && displayParticipants[0]?.avatar ? (
                       <img
@@ -1070,7 +1090,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
               <div
                 ref={messagesContainerRef}
                 onScroll={handleMessagesScroll}
-                className="flex-1 px-5 py-5 overflow-y-auto custom-scrollbar flex flex-col gap-2.5"
+                className="flex-1 px-5 max-sm:px-3 py-5 overflow-y-auto custom-scrollbar flex flex-col gap-2.5"
               >
                 {loadingMsgs ? (
                   <div className="flex-1 flex items-center justify-center">
@@ -1160,7 +1180,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                 )}
               </div>
 
-              <div className="px-4 py-3 border-t border-slate-800/80 bg-slate-950/80 shrink-0">
+              <div className="px-4 max-sm:px-3 py-3 border-t border-slate-800/80 bg-slate-950/80 shrink-0">
                 {pendingImagePreview && (
                   <div className="mb-2 flex items-center gap-2">
                     <div className="relative h-16 w-16 rounded-lg overflow-hidden border border-slate-700">
@@ -1235,9 +1255,26 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
               </div>
             </>
           ) : selectedConversationId ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-              <p className="text-slate-500 text-sm">Opening conversation…</p>
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="h-14 px-5 max-sm:px-3 border-b border-slate-800 flex items-center gap-2 bg-slate-950 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDetailsOpen(false);
+                    setDetailsStudentId(null);
+                    clearConversation();
+                  }}
+                  className="lg:hidden h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors cursor-pointer shrink-0"
+                  aria-label="Back to conversations"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <p className="text-sm text-slate-500">Opening conversation…</p>
+              </div>
+              <div className="flex-1 flex flex-col items-center justify-center p-10 text-center gap-2">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                <p className="text-slate-500 text-sm">Opening conversation…</p>
+              </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-10 text-center">
@@ -1252,15 +1289,31 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
           )}
         </div>
 
-        {/* Details sidebar — shrinks conversation */}
+        {/* Details: overlay below lg; spring width shrinks chat on lg+ */}
         <AnimatePresence initial={false}>
           {isDetailsOpen && activeConversation && (
+            <motion.button
+              key="inbox-details-backdrop"
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              aria-label="Close details"
+              onClick={() => {
+                setIsDetailsOpen(false);
+                setDetailsStudentId(null);
+              }}
+              className="absolute inset-0 z-[25] bg-black/50 lg:hidden cursor-pointer"
+            />
+          )}
+          {isDetailsOpen && activeConversation && (
             <motion.aside
+              key="inbox-details-panel"
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: 300, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ type: "spring", stiffness: 380, damping: 36 }}
-              className="border-l border-slate-800 bg-slate-950 shrink-0 overflow-hidden h-full"
+              className="absolute inset-y-0 right-0 z-30 border-l border-slate-800 bg-slate-950 overflow-hidden h-full shadow-2xl lg:static lg:z-auto lg:shadow-none lg:shrink-0 max-w-full"
             >
               <div className="w-[300px] h-full flex flex-col">
                 <div className="h-14 px-4 border-b border-slate-800 flex items-center justify-between bg-slate-950 shrink-0">
