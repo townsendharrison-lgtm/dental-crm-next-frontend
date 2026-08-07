@@ -147,6 +147,8 @@ export function StudentProfileDocumentsView({
   const [activeSection, setActiveSection] = useState("snapshot");
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const chipsNavRef = useRef<HTMLElement | null>(null);
+  const chipBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const clickingSection = useRef<string | null>(null);
 
   const { data: experiences = [], refetch: refetchExperiences } = useExperiences(student.id);
@@ -429,20 +431,53 @@ export function StudentProfileDocumentsView({
   const sectionIds = useMemo(() => sections.map((s) => s.id), [sections]);
 
   const getScrollRoot = useCallback((): HTMLElement | null => {
+    // Prefer the app shell main scroller so mentor/admin + student profiles behave the same.
+    const main = document.querySelector("main") as HTMLElement | null;
+    if (main) {
+      const { overflowY } = getComputedStyle(main);
+      if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+        return main;
+      }
+    }
     const start = contentRef.current;
-    if (!start) return (document.querySelector("main") as HTMLElement) || null;
-    let node: HTMLElement | null = start;
-    while (node) {
+    if (!start) return main;
+    let node: HTMLElement | null = start.parentElement;
+    while (node && node !== document.body) {
       const { overflowY } = getComputedStyle(node);
       if (
         (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
-        node.scrollHeight > node.clientHeight
+        node.scrollHeight > node.clientHeight + 1
       ) {
         return node;
       }
       node = node.parentElement;
     }
-    return (document.querySelector("main") as HTMLElement) || null;
+    return main;
+  }, []);
+
+  const getStickyNavOffset = useCallback(() => {
+    if (window.matchMedia("(min-width: 1024px)").matches) return 112;
+    const nav = chipsNavRef.current;
+    if (!nav) return 96;
+    // Sticky chip bar height + small gap so section titles clear the pinned chips.
+    return Math.round(nav.getBoundingClientRect().height) + 12;
+  }, []);
+
+  const scrollActiveChipIntoView = useCallback((id: string, smooth = true) => {
+    const nav = chipsNavRef.current;
+    const btn = chipBtnRefs.current[id];
+    if (!nav || !btn) return;
+    // Desktop sidebar is vertical — no horizontal sync needed.
+    if (window.matchMedia("(min-width: 1024px)").matches) return;
+
+    const navRect = nav.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    const left =
+      nav.scrollLeft + (btnRect.left - navRect.left) - navRect.width / 2 + btnRect.width / 2;
+    nav.scrollTo({
+      left: Math.max(0, left),
+      behavior: smooth ? "smooth" : "auto",
+    });
   }, []);
 
   const scrollToSection = useCallback(
@@ -453,9 +488,9 @@ export function StudentProfileDocumentsView({
 
       clickingSection.current = id;
       setActiveSection(id);
+      scrollActiveChipIntoView(id);
 
-      // Mobile sticky section chips + app chrome; desktop sidebar nav is taller offset.
-      const headerOffset = window.matchMedia("(min-width: 1024px)").matches ? 112 : 96;
+      const headerOffset = getStickyNavOffset();
       if (root) {
         const rootRect = root.getBoundingClientRect();
         const elRect = el.getBoundingClientRect();
@@ -467,27 +502,31 @@ export function StudentProfileDocumentsView({
 
       window.setTimeout(() => {
         if (clickingSection.current === id) clickingSection.current = null;
-      }, 700);
+      }, 800);
     },
-    [getScrollRoot],
+    [getScrollRoot, getStickyNavOffset, scrollActiveChipIntoView],
   );
+
+  // Keep the active chip visible in the horizontal strip (mobile / tablet).
+  useEffect(() => {
+    scrollActiveChipIntoView(activeSection);
+  }, [activeSection, scrollActiveChipIntoView]);
 
   // Viewport scroll-spy: highlight the section currently near the top of the scroll container
   useEffect(() => {
     const root = getScrollRoot();
     if (!root) return;
 
-      const HEADER_OFFSET = 112;
-
     const updateActiveFromScroll = () => {
       if (clickingSection.current) return;
 
+      const headerOffset = getStickyNavOffset();
       let current: string = sectionIds[0];
       for (const id of sectionIds) {
         const el = document.getElementById(id);
         if (!el) continue;
         const top = el.getBoundingClientRect().top - root.getBoundingClientRect().top;
-        if (top <= HEADER_OFFSET) current = id;
+        if (top <= headerOffset) current = id;
       }
       setActiveSection((prev) => (prev === current ? prev : current));
     };
@@ -499,7 +538,7 @@ export function StudentProfileDocumentsView({
       root.removeEventListener("scroll", updateActiveFromScroll);
       window.removeEventListener("resize", updateActiveFromScroll);
     };
-  }, [getScrollRoot, sectionIds, student.id]);
+  }, [getScrollRoot, getStickyNavOffset, sectionIds, student.id]);
 
   const experienceStats = useMemo(() => {
     const categories = [
@@ -1116,14 +1155,20 @@ export function StudentProfileDocumentsView({
       {/* Section nav — sticks under app chrome on mobile once header scrolls away */}
       <aside
         aria-label="Records sections"
-        className="sticky top-0 z-30 -mx-4 min-w-0 self-start bg-slate-950/95 px-4 py-2 backdrop-blur-md lg:col-start-1 lg:row-span-2 lg:top-24 lg:mx-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none"
+        className="sticky top-0 z-30 -mx-4 w-[calc(100%+2rem)] max-w-none self-start bg-slate-950/95 px-4 py-2 backdrop-blur-md lg:col-start-1 lg:row-span-2 lg:top-24 lg:mx-0 lg:w-full lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none"
       >
-        <nav className="overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-800 bg-slate-950 p-1.5 shadow-lg shadow-black/30 no-scrollbar sm:p-2 lg:overflow-visible lg:shadow-none">
-          <div className="flex gap-1 lg:flex-col lg:space-y-1 lg:gap-0">
+        <nav
+          ref={chipsNavRef}
+          className="min-w-0 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-2xl border border-slate-800 bg-slate-950 p-1.5 shadow-lg shadow-black/30 no-scrollbar sm:p-2 lg:overflow-visible lg:overscroll-auto lg:shadow-none lg:touch-auto"
+        >
+          <div className="flex w-max min-w-full gap-1 lg:w-full lg:min-w-0 lg:flex-col lg:space-y-1 lg:gap-0">
             {sections.map((section) => (
               <button
                 key={section.id}
                 type="button"
+                ref={(el) => {
+                  chipBtnRefs.current[section.id] = el;
+                }}
                 onClick={() => scrollToSection(section.id)}
                 className={`flex shrink-0 items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-medium transition-colors sm:px-3 sm:py-2.5 sm:text-sm lg:w-full lg:gap-3 lg:px-3.5 ${
                   activeSection === section.id

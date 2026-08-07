@@ -38,7 +38,11 @@ type PlanDraft = {
   }[];
 };
 
-const PDF_WIDTH = 720;
+/**
+ * Width matches the preview modal (max-w-5xl ≈ 1024px minus modal padding).
+ * Wider canvas → html2canvas resolves layouts identically to the live preview.
+ */
+const PDF_WIDTH = 960;
 
 function schoolCategoryKey(school: HubSchool): string {
   return school.type || "Target";
@@ -62,7 +66,7 @@ const wrapText: React.CSSProperties = {
 
 /**
  * Print-tuned PDF markup (hex colors only — html2canvas-safe).
- * Single-column-friendly layout so content fits A4 without clipping.
+ * Structure and spacing mirror `PlanPreviewBody` exactly so preview ≡ PDF.
  */
 export function PlanPdfDocument({
   studentName,
@@ -119,25 +123,35 @@ export function PlanPdfDocument({
     Math.min(100, Number(draft.improvementLeverageScore) || 0),
   );
   const donutTone = score >= 80 ? "#34d399" : score >= 60 ? "#818cf8" : "#f59e0b";
+  const initial = (studentName.trim()[0] || "S").toUpperCase();
+
+  /* ── Donut dimensions (match StrengthDonut: h-24 w-24 = 96px) ── */
+  const donutSize = 96;
+  const donutR = 42;
+  const donutViewBox = 112;
+  const donutStroke = 8;
+  const donutCircumference = 2 * Math.PI * donutR;
+  const donutOffset = donutCircumference - (donutCircumference * score) / 100;
 
   const kpiMeta = (value: KpiLevel) => {
     switch (value) {
       case "Strong":
-        return { text: "#34d399", bar: "#10b981", width: "100%" };
+        return { text: "#34d399", bar: "#10b981", pct: 100 };
       case "Moderate":
-        return { text: "#a5b4fc", bar: "#6366f1", width: "75%" };
+        return { text: "#a5b4fc", bar: "#6366f1", pct: 75 };
       case "Developing":
-        return { text: "#fcd34d", bar: "#f59e0b", width: "50%" };
+        return { text: "#fcd34d", bar: "#f59e0b", pct: 50 };
       default:
-        return { text: "#fb7185", bar: "#f43f5e", width: "25%" };
+        return { text: "#fb7185", bar: "#f43f5e", pct: 25 };
     }
   };
 
+  /* ── Shared style tokens (mapped from Tailwind computed values) ── */
   const sectionLabel: React.CSSProperties = {
-    margin: "0 0 10px",
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: "0.12em",
+    margin: "0 0 12px",
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: "0.14em",
     textTransform: "uppercase",
     color: "#64748b",
   };
@@ -145,8 +159,8 @@ export function PlanPdfDocument({
   const card: React.CSSProperties = {
     border: "1px solid #1e293b",
     background: "#0f172a",
-    borderRadius: 10,
-    padding: "16px 16px 14px",
+    borderRadius: 12,
+    padding: "14px 14px 12px",
     boxSizing: "border-box",
     overflow: "visible",
   };
@@ -156,13 +170,13 @@ export function PlanPdfDocument({
     display: "table",
     background: bg,
     color,
-    borderRadius: 4,
-    padding: "0 10px",
-    fontSize: 9,
+    borderRadius: 6,
+    padding: "0 8px",
+    fontSize: 10,
     fontWeight: 700,
-    letterSpacing: "0.06em",
+    letterSpacing: "0.05em",
     textTransform: "uppercase",
-    height: 22,
+    height: 20,
     boxSizing: "border-box",
   });
 
@@ -171,19 +185,19 @@ export function PlanPdfDocument({
     verticalAlign: "middle",
     textAlign: "center",
     lineHeight: 1,
-    height: 22,
+    height: 20,
   };
 
   const pdfCountBadge: React.CSSProperties = {
     display: "table",
     background: "#1e293b",
     color: "#94a3b8",
-    borderRadius: 4,
-    padding: "0 10px",
+    borderRadius: 9999,
+    padding: "0 8px",
     fontSize: 10,
     fontWeight: 700,
-    height: 22,
-    minWidth: 28,
+    height: 20,
+    minWidth: 20,
     boxSizing: "border-box",
   };
 
@@ -191,7 +205,7 @@ export function PlanPdfDocument({
     display: "table",
     width: 20,
     height: 20,
-    borderRadius: 4,
+    borderRadius: 6,
     background: "#312e81",
     color: "#a5b4fc",
     fontSize: 10,
@@ -208,6 +222,14 @@ export function PlanPdfDocument({
     height: 20,
   };
 
+  /* ── Grid helpers for school groups (match preview responsive) ── */
+  const schoolGridCols =
+    schoolGroups.length === 1
+      ? "1fr"
+      : schoolGroups.length === 2
+        ? "1fr 1fr"
+        : "1fr 1fr";
+
   return (
     <div
       id="school-selection-pdf-export"
@@ -215,17 +237,18 @@ export function PlanPdfDocument({
         width: PDF_WIDTH,
         boxSizing: "border-box",
         fontFamily:
-          "Arial, Helvetica, ui-sans-serif, system-ui, -apple-system, sans-serif",
+          "Inter, Arial, Helvetica, ui-sans-serif, system-ui, -apple-system, sans-serif",
         background: "#020617",
         color: "#e2e8f0",
         overflow: "visible",
       }}
     >
+      {/* ═══════ HEADER (matches PlanPreviewBody header) ═══════ */}
       <header
         style={{
           borderBottom: "1px solid #1e293b",
           background: "#0f172a",
-          padding: "22px 22px 24px",
+          padding: "24px 24px 24px",
           overflow: "visible",
         }}
       >
@@ -233,90 +256,121 @@ export function PlanPdfDocument({
           style={{
             display: "flex",
             flexWrap: "wrap",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "space-between",
-            gap: 16,
+            gap: 20,
           }}
         >
-          <div style={{ minWidth: 0, flex: "1 1 280px", ...wrapText }}>
-            <p
+          {/* Left: avatar + name block */}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 16, minWidth: 0, flex: "1 1 auto" }}>
+            {/* Avatar initial (matches h-12 w-12 rounded-xl bg-indigo-600) */}
+            <div
               style={{
-                margin: 0,
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "#818cf8",
+                display: "table",
+                width: 48,
+                height: 48,
+                flexShrink: 0,
+                borderRadius: 12,
+                background: "#4f46e5",
+                boxSizing: "border-box",
               }}
             >
-              Strategic Selection Plan
-            </p>
-            <h3
-              style={{
-                margin: "4px 0 0",
-                fontSize: 22,
-                fontWeight: 700,
-                color: "#fff",
-                lineHeight: 1.25,
-                ...wrapText,
-              }}
-            >
-              {studentName}
-            </h3>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-              Prepared by Dental School Guide · {dateLabel}
-            </p>
+              <div
+                style={{
+                  display: "table-cell",
+                  verticalAlign: "middle",
+                  textAlign: "center",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: "#fff",
+                  lineHeight: 1,
+                }}
+              >
+                {initial}
+              </div>
+            </div>
+            <div style={{ minWidth: 0, ...wrapText }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: "#818cf8",
+                }}
+              >
+                Strategic Selection Plan
+              </p>
+              <h3
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 24,
+                  fontWeight: 700,
+                  color: "#fff",
+                  lineHeight: 1.25,
+                  letterSpacing: "-0.025em",
+                  ...wrapText,
+                }}
+              >
+                {studentName}
+              </h3>
+              <p style={{ margin: "4px 0 0", fontSize: 14, color: "#64748b" }}>
+                Prepared by Dental School Guide · {dateLabel}
+              </p>
+            </div>
           </div>
 
+          {/* Right: strength donut card */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 14,
+              gap: 16,
               border: "1px solid #1e293b",
               background: "#020617",
-              borderRadius: 10,
+              borderRadius: 12,
               padding: "12px 16px",
               flex: "0 0 auto",
               overflow: "visible",
               boxSizing: "border-box",
             }}
           >
-            {/* Fixed box + inset SVG so stroke isn't clipped by html2canvas */}
+            {/* Donut (matches StrengthDonut h-24 w-24) */}
             <div
               style={{
                 position: "relative",
-                width: 84,
-                height: 84,
+                width: donutSize,
+                height: donutSize,
                 flexShrink: 0,
                 overflow: "visible",
               }}
             >
               <svg
-                viewBox="0 0 100 100"
-                width="84"
-                height="84"
+                viewBox={`0 0 ${donutViewBox} ${donutViewBox}`}
+                width={donutSize}
+                height={donutSize}
                 style={{ display: "block", overflow: "visible" }}
               >
-                <g transform="rotate(-90 50 50)">
+                <g transform={`rotate(-90 ${donutViewBox / 2} ${donutViewBox / 2})`}>
                   <circle
-                    cx="50"
-                    cy="50"
-                    r={38}
+                    cx={donutViewBox / 2}
+                    cy={donutViewBox / 2}
+                    r={donutR}
                     fill="none"
                     stroke="#1e293b"
-                    strokeWidth="7"
+                    strokeWidth={donutStroke}
                   />
                   <circle
-                    cx="50"
-                    cy="50"
-                    r={38}
+                    cx={donutViewBox / 2}
+                    cy={donutViewBox / 2}
+                    r={donutR}
                     fill="none"
                     stroke={donutTone}
-                    strokeWidth="7"
-                    strokeLinecap="butt"
-                    strokeDasharray={2 * Math.PI * 38}
-                    strokeDashoffset={2 * Math.PI * 38 * (1 - score / 100)}
+                    strokeWidth={donutStroke}
+                    strokeLinecap="round"
+                    strokeDasharray={donutCircumference}
+                    strokeDashoffset={donutOffset}
                   />
                 </g>
               </svg>
@@ -325,8 +379,8 @@ export function PlanPdfDocument({
                   position: "absolute",
                   left: 0,
                   top: 0,
-                  width: 84,
-                  height: 84,
+                  width: donutSize,
+                  height: donutSize,
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
@@ -335,7 +389,7 @@ export function PlanPdfDocument({
               >
                 <span
                   style={{
-                    fontSize: 18,
+                    fontSize: 24,
                     fontWeight: 700,
                     color: "#fff",
                     lineHeight: 1,
@@ -344,23 +398,23 @@ export function PlanPdfDocument({
                 >
                   {score}
                 </span>
-                <span style={{ fontSize: 9, color: "#64748b", marginTop: 2 }}>/ 100</span>
+                <span style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>/ 100</span>
               </div>
             </div>
             <div style={{ paddingRight: 4 }}>
               <p
                 style={{
                   margin: 0,
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
                   textTransform: "uppercase",
                   color: "#64748b",
                 }}
               >
                 Overall strength
               </p>
-              <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8" }}>
+              <p style={{ margin: "4px 0 0", fontSize: 14, color: "#94a3b8" }}>
                 Leverage{" "}
                 <span style={{ fontWeight: 700, color: "#a5b4fc" }}>{leverageScore}%</span>
               </p>
@@ -369,21 +423,25 @@ export function PlanPdfDocument({
         </div>
       </header>
 
-      <div style={{ padding: "20px 22px 28px", display: "flex", flexDirection: "column", gap: 22 }}>
+      {/* ═══════ BODY (space-y-8 = 32px gap, px-6 py-7) ═══════ */}
+      <div style={{ padding: "28px 24px 32px", display: "flex", flexDirection: "column", gap: 32 }}>
+
+        {/* ── Strategic snapshot ── */}
         <section>
           <h4 style={sectionLabel}>Strategic snapshot</h4>
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "#cbd5e1", ...wrapText }}>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.625, color: "#cbd5e1", ...wrapText }}>
             {draft.snapshot.trim() || "No strategic snapshot has been written yet."}
           </p>
         </section>
 
+        {/* ── Profile KPIs (4-column grid, matches lg:grid-cols-4) ── */}
         <section>
           <h4 style={sectionLabel}>Profile KPIs</h4>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 10,
+              gridTemplateColumns: "1fr 1fr 1fr 1fr",
+              gap: 12,
             }}
           >
             {kpiEntries.map(([key, value]) => {
@@ -393,23 +451,23 @@ export function PlanPdfDocument({
                   <p
                     style={{
                       margin: 0,
-                      fontSize: 9,
-                      fontWeight: 700,
-                      letterSpacing: "0.08em",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: "0.05em",
                       textTransform: "uppercase",
                       color: "#64748b",
                     }}
                   >
                     {kpiLabel(key)}
                   </p>
-                  <p style={{ margin: "6px 0 0", fontSize: 13, fontWeight: 700, color: meta.text }}>
+                  <p style={{ margin: "6px 0 0", fontSize: 14, fontWeight: 700, color: meta.text }}>
                     {value}
                   </p>
                   <div
                     style={{
-                      marginTop: 8,
-                      height: 5,
-                      borderRadius: 999,
+                      marginTop: 10,
+                      height: 6,
+                      borderRadius: 9999,
                       background: "#1e293b",
                       overflow: "hidden",
                     }}
@@ -417,8 +475,8 @@ export function PlanPdfDocument({
                     <div
                       style={{
                         height: "100%",
-                        width: meta.width,
-                        borderRadius: 999,
+                        width: `${meta.pct}%`,
+                        borderRadius: 9999,
                         background: meta.bar,
                       }}
                     />
@@ -429,31 +487,40 @@ export function PlanPdfDocument({
           </div>
         </section>
 
-        <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* ── Strengths & Gaps (side-by-side 2-col grid, matches md:grid-cols-2) ── */}
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 16,
+          }}
+        >
+          {/* Strengths */}
           <div
             style={{
               ...card,
               border: "1px solid #065f46",
               background: "#022c22",
+              padding: 16,
             }}
           >
-            <h4 style={{ ...sectionLabel, color: "#34d399", marginBottom: 8 }}>
+            <h4 style={{ ...sectionLabel, color: "#34d399", marginBottom: 12 }}>
               Strengths to leverage
             </h4>
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {strengths.length === 0 ? (
-                <li style={{ fontSize: 12, fontStyle: "italic", color: "#475569" }}>None listed</li>
+                <li style={{ fontSize: 14, fontStyle: "italic", color: "#475569" }}>None listed</li>
               ) : (
                 strengths.map((s, i) => (
                   <li
                     key={i}
                     style={{
                       display: "flex",
-                      gap: 8,
-                      fontSize: 12,
-                      lineHeight: 1.5,
+                      gap: 10,
+                      fontSize: 14,
+                      lineHeight: 1.625,
                       color: "#cbd5e1",
-                      marginBottom: 6,
+                      marginBottom: 8,
                     }}
                   >
                     <span style={{ color: "#34d399", fontWeight: 700, flexShrink: 0 }}>✓</span>
@@ -463,28 +530,31 @@ export function PlanPdfDocument({
               )}
             </ul>
           </div>
+
+          {/* Gaps */}
           <div
             style={{
               ...card,
               border: "1px solid #9f1239",
               background: "#4c0519",
+              padding: 16,
             }}
           >
-            <h4 style={{ ...sectionLabel, color: "#fb7185", marginBottom: 8 }}>Critical gaps</h4>
+            <h4 style={{ ...sectionLabel, color: "#fb7185", marginBottom: 12 }}>Critical gaps</h4>
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {gaps.length === 0 ? (
-                <li style={{ fontSize: 12, fontStyle: "italic", color: "#475569" }}>None listed</li>
+                <li style={{ fontSize: 14, fontStyle: "italic", color: "#475569" }}>None listed</li>
               ) : (
                 gaps.map((g, i) => (
                   <li
                     key={i}
                     style={{
                       display: "flex",
-                      gap: 8,
-                      fontSize: 12,
-                      lineHeight: 1.5,
+                      gap: 10,
+                      fontSize: 14,
+                      lineHeight: 1.625,
                       color: "#cbd5e1",
-                      marginBottom: 6,
+                      marginBottom: 8,
                     }}
                   >
                     <span style={{ color: "#fb7185", fontWeight: 700, flexShrink: 0 }}>!</span>
@@ -496,41 +566,50 @@ export function PlanPdfDocument({
           </div>
         </section>
 
+        {/* ── School selection ── */}
         <section>
-          <h4 style={sectionLabel}>School selection</h4>
-          <p style={{ margin: "-2px 0 10px", fontSize: 12, color: "#64748b" }}>
-            {schools.length > 0
-              ? `${schools.length} school${schools.length === 1 ? "" : "s"} across ${schoolGroups.length} categor${schoolGroups.length === 1 ? "y" : "ies"}`
-              : "No schools linked yet"}
-          </p>
+          <div style={{ marginBottom: 16 }}>
+            <h4 style={{ ...sectionLabel, marginBottom: 4 }}>School selection</h4>
+            <p style={{ margin: 0, fontSize: 14, color: "#64748b" }}>
+              {schools.length > 0
+                ? `${schools.length} school${schools.length === 1 ? "" : "s"} across ${schoolGroups.length} categor${schoolGroups.length === 1 ? "y" : "ies"}`
+                : "No schools linked yet"}
+            </p>
+          </div>
           {schoolGroups.length === 0 ? (
             <p
               style={{
                 margin: 0,
                 border: "1px dashed #1e293b",
-                borderRadius: 10,
-                padding: "24px 14px",
+                borderRadius: 12,
+                padding: "40px 14px",
                 textAlign: "center",
-                fontSize: 12,
+                fontSize: 14,
                 color: "#475569",
               }}
             >
               No schools on this list yet.
             </p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: schoolGridCols,
+                gap: 12,
+              }}
+            >
               {schoolGroups.map(({ cat, schools: inCat }) => (
                 <div
                   key={cat.id}
                   style={{
                     border: "1px solid #1e293b",
                     background: "#0f172a",
-                    borderRadius: 10,
-                    overflow: "visible",
+                    borderRadius: 12,
+                    overflow: "hidden",
                     boxSizing: "border-box",
                   }}
                 >
-                  {/* table layout is more reliable than flex in html2canvas */}
+                  {/* Category header — table layout (html2canvas reliable) */}
                   <table
                     style={{
                       width: "100%",
@@ -543,10 +622,10 @@ export function PlanPdfDocument({
                       <tr>
                         <td
                           style={{
-                            padding: "12px 14px",
-                            fontSize: 10,
+                            padding: "10px 14px",
+                            fontSize: 12,
                             fontWeight: 700,
-                            letterSpacing: "0.08em",
+                            letterSpacing: "0.05em",
                             textTransform: "uppercase",
                             color: cat.color || "#818cf8",
                             verticalAlign: "middle",
@@ -557,9 +636,9 @@ export function PlanPdfDocument({
                         </td>
                         <td
                           style={{
-                            padding: "12px 14px",
+                            padding: "10px 14px",
                             textAlign: "right",
-                            width: 56,
+                            width: 48,
                             verticalAlign: "middle",
                           }}
                         >
@@ -575,7 +654,7 @@ export function PlanPdfDocument({
                       <li
                         key={s.selectionId || s.id}
                         style={{
-                          padding: "10px 14px",
+                          padding: "12px 14px",
                           borderTop: "1px solid #1e293b",
                           boxSizing: "border-box",
                         }}
@@ -583,7 +662,7 @@ export function PlanPdfDocument({
                         <p
                           style={{
                             margin: 0,
-                            fontSize: 12,
+                            fontSize: 14,
                             fontWeight: 600,
                             color: "#fff",
                             ...wrapText,
@@ -595,8 +674,8 @@ export function PlanPdfDocument({
                           <p
                             style={{
                               margin: "4px 0 0",
-                              fontSize: 11,
-                              lineHeight: 1.45,
+                              fontSize: 12,
+                              lineHeight: 1.625,
                               color: "#64748b",
                               ...wrapText,
                             }}
@@ -613,22 +692,23 @@ export function PlanPdfDocument({
           )}
         </section>
 
+        {/* ── Strategic roadmap ── */}
         {roadmapPhases.length > 0 && (
           <section>
-            <h4 style={sectionLabel}>Strategic roadmap</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h4 style={{ ...sectionLabel, marginBottom: 16 }}>Strategic roadmap</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {roadmapPhases.map(({ phase, idx, tasks }) => (
-                <div key={phase} style={{ ...card, padding: "18px 16px 14px" }}>
+                <div key={phase} style={{ ...card, padding: 16 }}>
                   <p
                     style={{
-                      margin: "0 0 12px",
+                      margin: "0 0 10px",
                       padding: 0,
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: 700,
-                      letterSpacing: "0.08em",
+                      letterSpacing: "0.05em",
                       textTransform: "uppercase",
                       color: "#818cf8",
-                      lineHeight: "14px",
+                      lineHeight: "16px",
                     }}
                   >
                     Phase {idx + 1}
@@ -640,7 +720,7 @@ export function PlanPdfDocument({
                           <td
                             style={{
                               width: 28,
-                              padding: "0 10px 10px 0",
+                              padding: "0 12px 8px 0",
                               verticalAlign: "top",
                             }}
                           >
@@ -650,9 +730,9 @@ export function PlanPdfDocument({
                           </td>
                           <td
                             style={{
-                              padding: "0 0 10px",
-                              fontSize: 12,
-                              lineHeight: 1.5,
+                              padding: "0 0 8px",
+                              fontSize: 14,
+                              lineHeight: 1.625,
                               color: "#cbd5e1",
                               verticalAlign: "top",
                               ...wrapText,
@@ -670,14 +750,15 @@ export function PlanPdfDocument({
           </section>
         )}
 
+        {/* ── Leverage actions (2-col grid, matches sm:grid-cols-2) ── */}
         {leverage.length > 0 && (
           <section>
-            <h4 style={sectionLabel}>Leverage actions</h4>
+            <h4 style={{ ...sectionLabel, marginBottom: 16 }}>Leverage actions</h4>
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: leverage.length === 1 ? "1fr" : "1fr 1fr",
-                gap: 10,
+                gap: 12,
               }}
             >
               {leverage.map((action, idx) => {
@@ -692,12 +773,12 @@ export function PlanPdfDocument({
                     key={idx}
                     style={{
                       ...card,
-                      padding: "18px 16px 14px",
+                      padding: 16,
                       boxSizing: "border-box",
                       width: "100%",
                     }}
                   >
-                    <div style={{ marginBottom: 10, lineHeight: "22px" }}>
+                    <div style={{ marginBottom: 8, lineHeight: "20px" }}>
                       <span style={pdfBadge(badge.bg, badge.color)}>
                         <span style={pdfBadgeCell}>{action.impact} impact</span>
                       </span>
@@ -705,7 +786,7 @@ export function PlanPdfDocument({
                     <h5
                       style={{
                         margin: 0,
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: 700,
                         color: "#fff",
                         lineHeight: 1.35,
@@ -718,8 +799,8 @@ export function PlanPdfDocument({
                       <p
                         style={{
                           margin: "6px 0 0",
-                          fontSize: 12,
-                          lineHeight: 1.5,
+                          fontSize: 14,
+                          lineHeight: 1.625,
                           color: "#94a3b8",
                           ...wrapText,
                         }}
@@ -734,10 +815,11 @@ export function PlanPdfDocument({
           </section>
         )}
 
+        {/* ── Risk factors ── */}
         {risks.length > 0 && (
           <section>
-            <h4 style={sectionLabel}>Risk factors</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h4 style={{ ...sectionLabel, marginBottom: 16 }}>Risk factors</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {risks.map((risk, idx) => {
                 const badge =
                   risk.severity === "High"
@@ -751,15 +833,15 @@ export function PlanPdfDocument({
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        gap: 10,
-                        marginBottom: 4,
+                        gap: 12,
+                        marginBottom: 6,
                         alignItems: "flex-start",
                       }}
                     >
                       <h5
                         style={{
                           margin: 0,
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: 700,
                           color: "#fff",
                           ...wrapText,
@@ -775,8 +857,8 @@ export function PlanPdfDocument({
                       <p
                         style={{
                           margin: 0,
-                          fontSize: 12,
-                          lineHeight: 1.5,
+                          fontSize: 14,
+                          lineHeight: 1.625,
                           color: "#94a3b8",
                           ...wrapText,
                         }}
@@ -790,7 +872,7 @@ export function PlanPdfDocument({
                           margin: "8px 0 0",
                           paddingTop: 8,
                           borderTop: "1px solid #1e293b",
-                          fontSize: 12,
+                          fontSize: 14,
                           color: "#94a3b8",
                           ...wrapText,
                         }}
@@ -840,7 +922,7 @@ export async function exportPlanPdf(opts: {
         categories={opts.categories}
       />,
     );
-    await new Promise((r) => setTimeout(r, 180));
+    await new Promise((r) => setTimeout(r, 250));
 
     const target = host.querySelector("#school-selection-pdf-export") as HTMLElement | null;
     if (!target) throw new Error("PDF export root missing");
@@ -859,8 +941,8 @@ export async function exportPlanPdf(opts: {
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const marginX = 10;
-    const marginY = 10;
+    const marginX = 8;
+    const marginY = 8;
     const usableWidth = pageWidth - marginX * 2;
     const usableHeight = pageHeight - marginY * 2;
 

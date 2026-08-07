@@ -562,7 +562,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
 
 
   return (
-    <div className="w-full min-w-0 space-y-6 overflow-x-hidden">
+    <div className="w-full min-w-0 space-y-6">
       {/* Compact Hero */}
       <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
         <div className="flex flex-col gap-3 border-b border-slate-800/80 px-4 pt-4 pb-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
