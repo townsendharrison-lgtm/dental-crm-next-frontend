@@ -233,7 +233,19 @@ const MentorManagerDashboard: React.FC<MentorManagerDashboardProps> = ({
     );
   };
 
-  const urgentNotifs = notifications.filter((n) => n.type === "URGENT" && !n.is_read);
+  // Mentor Ops only surfaces assignment-related alerts (not setter leads / broadcast noise)
+  const urgentNotifs = notifications.filter((n) => {
+    if (n.type !== "URGENT" || n.is_read) return false;
+    const category = String(n.category || "").toUpperCase();
+    const blob = `${n.title || ""} ${n.message || ""}`.toLowerCase();
+    if (category === "NEW_LEAD" || blob.includes("lead")) return false;
+    return (
+      category === "ASSIGNMENT" ||
+      blob.includes("assign") ||
+      blob.includes("unassigned") ||
+      blob.includes("mentor")
+    );
+  });
 
   // Fill the viewport under the sticky GlobalHeader (mobile top bar). Role switcher floats overlay.
   const assignmentsShellHeight =

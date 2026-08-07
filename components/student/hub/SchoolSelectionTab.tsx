@@ -767,7 +767,7 @@ export default function SchoolSelectionTab({
         >
           <div
             ref={categoryBoardRef}
-            className="flex w-full items-start gap-4 overflow-x-auto overflow-y-hidden pb-2 custom-scrollbar"
+            className="flex w-full items-start gap-4 overflow-x-auto overflow-y-hidden pb-2 no-scrollbar"
           >
             {schoolCategories.map(category => (
               <div

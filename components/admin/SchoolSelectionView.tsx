@@ -973,8 +973,8 @@ export default function SchoolSelectionView() {
   );
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-300">
-      <div className="overflow-x-auto no-scrollbar">
+    <div className="space-y-4 overflow-x-hidden animate-in fade-in duration-300">
+      <div className="overflow-x-auto overflow-y-hidden no-scrollbar">
         <div className="inline-flex min-w-max items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1 sm:min-w-0">
           {MAIN_TABS.map((item) => {
             const Icon = item.icon;

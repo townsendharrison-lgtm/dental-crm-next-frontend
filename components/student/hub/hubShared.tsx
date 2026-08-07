@@ -681,7 +681,7 @@ export const DroppableCategory = ({
 
       <div
         ref={setNodeRef}
-        className="h-[min(112rem,144vh)] min-w-0 space-y-3 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-800 bg-slate-950/40 p-3 custom-scrollbar"
+        className="min-h-[12rem] max-h-[min(36rem,70vh)] min-w-0 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-slate-800 bg-slate-950/40 p-3 custom-scrollbar"
       >
         {children}
       </div>
