@@ -41,6 +41,10 @@ interface UIState {
   previewCollapsed: boolean;
   setPreviewCollapsed: (collapsed: boolean) => void;
 
+  /** Brief overlay while switching preview role (not persisted). */
+  previewTransitioning: boolean;
+  setPreviewTransitioning: (transitioning: boolean) => void;
+
   /**
    * Optional header CTA for the current page.
    * Set via `usePageHeaderAction`. Cleared automatically on unmount.
@@ -74,6 +78,9 @@ export const useUIStore = create<UIState>()(
 
       previewCollapsed: false,
       setPreviewCollapsed: (previewCollapsed) => set({ previewCollapsed }),
+
+      previewTransitioning: false,
+      setPreviewTransitioning: (previewTransitioning) => set({ previewTransitioning }),
 
       pageHeaderAction: null,
       setPageHeaderAction: (pageHeaderAction) => set({ pageHeaderAction }),

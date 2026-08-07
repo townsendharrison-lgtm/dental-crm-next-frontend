@@ -829,6 +829,9 @@ export function MobileHeader() {
             }}
           />
         </div>
+        <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-lg font-black leading-tight tracking-tighter text-transparent">
+          DSG
+        </span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <HeaderActionButton compact />
