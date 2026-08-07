@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils/cn";
 import { Sidebar } from "./Sidebar";
 import { MobileHeader, GlobalHeader } from "./Header";
 import { RoleSwitcher } from "./RoleSwitcher";
-import { RolePreviewBanner } from "./RolePreviewBanner";
 import { PopupOverlay } from "./PopupOverlay";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -24,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { status } = useAuth();
-  const { isAdmin, role, actualRole, isPreviewing } = useRole();
+  const { isAdmin, role, actualRole } = useRole();
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -105,8 +104,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const showMobilePreview = isAdmin && isPreviewing;
-
   return (
     <div className="flex h-screen max-w-[100vw] overflow-x-hidden bg-slate-950 text-slate-200">
       <PopupOverlay />
@@ -114,19 +111,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <RoleSwitcher />
 
-      {/* Mobile: pin preview strip directly under the fixed header (never mid-page) */}
-      {showMobilePreview && (
-        <div className="fixed left-0 right-0 top-[calc(max(env(safe-area-inset-top),0.75rem)+3.25rem)] z-[45] border-b border-amber-500/20 bg-slate-950/95 px-3 py-1.5 backdrop-blur-md lg:hidden">
-          <RolePreviewBanner />
-        </div>
-      )}
-
       <main
         className={cn(
-          "relative min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 lg:ml-72 lg:px-6 lg:pt-0",
-          showMobilePreview
-            ? "pt-[calc(max(env(safe-area-inset-top),0.75rem)+3.25rem+2.75rem)]"
-            : "pt-[calc(max(env(safe-area-inset-top),0.75rem)+4rem)]",
+          "relative min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 pt-[calc(max(env(safe-area-inset-top),0.75rem)+4rem)] lg:ml-72 lg:px-6 lg:pt-0",
           isAdmin ? "pb-24" : "pb-6",
         )}
       >

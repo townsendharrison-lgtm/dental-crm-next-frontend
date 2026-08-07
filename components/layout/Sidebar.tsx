@@ -12,11 +12,7 @@ import { useUIStore } from "@/lib/stores/uiStore";
 import { useUnreadMessageCount } from "@/lib/hooks/useUnreadMessageCount";
 import { Avatar } from "@/components/ui";
 import { UserAccountModal } from "@/components/layout/UserAccountModal";
-import {
-  PREVIEW_ROLES,
-  previewRoleLabel,
-  usePreviewRoleSelect,
-} from "@/components/layout/RoleSwitcher";
+import { RolePreviewBanner } from "@/components/layout/RolePreviewBanner";
 
 const LOGO_URL =
   "https://images.squarespace-cdn.com/content/64d0277a0640507c114633ad/b8543df7-ec9e-4d64-912e-e80bb44c8757/Untitled+design-3.png?content-type=image%2Fpng";
@@ -43,8 +39,6 @@ export function Sidebar() {
   const mobileOpen = useUIStore((s) => s.mobileSidebarOpen);
   const closeMobile = useUIStore((s) => s.closeMobileSidebar);
   const { previewCollapsed, setPreviewCollapsed } = useUIStore();
-  const { canPreview, active: previewActive, select: selectPreviewRole, transitioning } =
-    usePreviewRoleSelect();
   const [accountOpen, setAccountOpen] = useState(false);
 
   const navItems = getNavItems(role);
@@ -139,40 +133,17 @@ export function Sidebar() {
       </div>
 
       <div className="space-y-3 border-t border-slate-800 p-6">
-        {/* Mobile: preview role switcher above admin identity */}
-        {canPreview && (
-          <div className="space-y-2 lg:hidden">
-            <p className="px-0.5 text-[10px] font-black uppercase tracking-wider text-amber-400">
-              Preview
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {PREVIEW_ROLES.map((previewRole) => (
-                <button
-                  key={previewRole}
-                  type="button"
-                  onClick={() => {
-                    selectPreviewRole(previewRole);
-                    closeMobile();
-                  }}
-                  disabled={transitioning}
-                  className={cn(
-                    "rounded-full px-2.5 py-1.5 text-[11px] font-bold transition-all",
-                    previewActive === previewRole
-                      ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
-                      : "bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-white",
-                    transitioning && "pointer-events-none opacity-50",
-                  )}
-                >
-                  {previewRoleLabel(previewRole, true)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Mobile: "previewing as…" banner lives here instead of under the header */}
+        <div className="lg:hidden">
+          <RolePreviewBanner />
+        </div>
 
         <button
           type="button"
-          onClick={() => setAccountOpen(true)}
+          onClick={() => {
+            closeMobile();
+            setAccountOpen(true);
+          }}
           className="flex w-full cursor-pointer items-center gap-3 rounded-xl p-1.5 text-left transition-colors hover:bg-slate-800/60"
           title="Edit profile"
         >
@@ -190,7 +161,7 @@ export function Sidebar() {
                   setPreviewCollapsed(false);
                   closeMobile();
                 }}
-                className="hidden h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-800/50 text-slate-400 transition-all hover:bg-slate-800 hover:text-amber-400 lg:flex"
+                className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-800/50 text-slate-400 transition-all hover:bg-slate-800 hover:text-amber-400"
                 title="Expand Preview Switcher"
               >
                 <Eye className="h-4 w-4" />
