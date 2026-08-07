@@ -1005,24 +1005,24 @@ export default function SchoolSelectionView() {
                     </div>
 
       {mainTab === "reports" && (
-                      <div className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative max-w-md flex-1">
+        <div className="w-full min-w-0 space-y-4">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative w-full min-w-0 max-w-md flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <Input
                 value={reportSearch}
                 onChange={(e) => setReportSearch(e.target.value)}
                 placeholder="Search by student name…"
-                className="h-9 rounded-lg border-slate-800 bg-slate-900/50 pl-9 text-sm"
+                className="h-9 w-full rounded-lg border-slate-800 bg-slate-900/50 pl-9 text-sm"
               />
-                            </div>
+            </div>
             <p className="shrink-0 text-xs text-slate-500">
               <span className="font-semibold text-slate-300">
                 {reportsLoading ? "…" : planReports.length}
               </span>{" "}
               {planReports.length === 1 ? "report" : "reports"}
             </p>
-                          </div>
+          </div>
 
           {reportsLoading ? (
             <div className="flex h-48 items-center justify-center">
@@ -1040,7 +1040,7 @@ export default function SchoolSelectionView() {
               }
             />
           ) : (
-            <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid w-full min-w-0 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredReports.map((report) => {
                 const external = Boolean(
                   report.student?.isExternal || report.external_id || report.externalId,
@@ -1063,13 +1063,13 @@ export default function SchoolSelectionView() {
                 return (
                   <div
                     key={report.id}
-                    className="group relative flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900/50 p-5 transition-colors hover:border-indigo-500/30"
+                    className="group relative flex h-full w-full min-w-0 max-w-full flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5 transition-colors hover:border-indigo-500/30"
                   >
                     <Button
                       type="button"
                       size="icon"
                       variant="ghost"
-                      className="absolute right-2 top-2 h-8 w-8 text-rose-400 opacity-100 transition-opacity hover:text-rose-300 sm:opacity-0 sm:group-hover:opacity-100"
+                      className="absolute right-2 top-2 z-10 h-8 w-8 text-rose-400 opacity-100 transition-opacity hover:text-rose-300 sm:opacity-0 sm:group-hover:opacity-100"
                       title="Delete report"
                       onClick={() => {
                         if (!window.confirm(`Delete report for ${name}?`)) return;
@@ -1086,20 +1086,22 @@ export default function SchoolSelectionView() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
 
-                    <div className="flex items-start gap-3 pr-8">
+                    <div className="flex min-w-0 items-start gap-3 pr-8">
                       <Avatar
                         name={name}
                         src={report.student?.avatar || undefined}
                         size="md"
                         className="shrink-0 rounded-xl"
                       />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <h3 className="truncate text-base font-bold text-white">{name}</h3>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                          <h3 className="max-w-full truncate text-base font-bold text-white">
+                            {name}
+                          </h3>
                           {external ? (
-                            <span className="rounded border border-slate-700 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                            <span className="shrink-0 rounded border border-slate-700 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-slate-400">
                               External
-                          </span>
+                            </span>
                           ) : null}
                         </div>
                         <p className="truncate text-xs text-slate-500">
@@ -1108,37 +1110,37 @@ export default function SchoolSelectionView() {
                             ? ` · Updated ${new Date(updated).toLocaleDateString()}`
                             : ""}
                         </p>
-                        </div>
                       </div>
+                    </div>
 
-                    <div className="mt-4">
+                    <div className="mt-4 min-w-0">
                       <div className="mb-1.5 flex items-center justify-between gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                           Overall strength
                         </span>
-                        <span className="text-sm font-bold tabular-nums text-indigo-300">
+                        <span className="shrink-0 text-sm font-bold tabular-nums text-indigo-300">
                           {score}%
                         </span>
-                            </div>
+                      </div>
                       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
                         <div
                           className="h-full rounded-full bg-indigo-500"
                           style={{ width: `${score}%` }}
                         />
-                          </div>
-                        </div>
+                      </div>
+                    </div>
 
-                    <p className="mt-3 line-clamp-2 min-h-[2.5rem] flex-1 text-sm text-slate-400">
+                    <p className="mt-3 line-clamp-2 min-h-[2.5rem] min-w-0 flex-1 break-words text-sm text-slate-400">
                       {snapshot}
                     </p>
 
-                    <div className="mt-4 grid grid-cols-2 gap-2">
+                    <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                       <Button
                         type="button"
                         size="sm"
                         variant="secondary"
-                        className="h-9 text-xs"
-                        leftIcon={<Eye className="h-3.5 w-3.5" />}
+                        className="h-9 w-full min-w-0 text-xs"
+                        leftIcon={<Eye className="h-3.5 w-3.5 shrink-0" />}
                         disabled={!canOpen}
                         onClick={() => openReport(report)}
                       >
@@ -1148,12 +1150,12 @@ export default function SchoolSelectionView() {
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="h-9 text-xs"
+                        className="h-9 w-full min-w-0 text-xs"
                         leftIcon={
                           downloading ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                           ) : (
-                            <Download className="h-3.5 w-3.5" />
+                            <Download className="h-3.5 w-3.5 shrink-0" />
                           )
                         }
                         disabled={!canOpen || downloading || exportingPdf}
@@ -1161,13 +1163,13 @@ export default function SchoolSelectionView() {
                       >
                         Download PDF
                       </Button>
-                            </div>
+                    </div>
                   </div>
                 );
               })}
-                            </div>
-                          )}
-                        </div>
+            </div>
+          )}
+        </div>
       )}
 
       {mainTab === "create" && (

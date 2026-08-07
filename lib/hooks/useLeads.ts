@@ -48,8 +48,18 @@ export function useCreateLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: LeadInput) => leadsApi.create(input),
-    onSuccess: () => {
+    onSuccess: async (lead) => {
       qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      // Admin-only in-app + push (backend never targets mentors; dedupes by lead id)
+      try {
+        const { notificationsApi } = await import("@/lib/api/notifications");
+        const { useAuthStore } = await import("@/lib/stores/authStore");
+        const setterName = useAuthStore.getState().user?.name || "A setter";
+        await notificationsApi.notifyNewLead({ lead, setterName });
+      } catch {
+        /* best-effort */
+      }
     },
   });
 }

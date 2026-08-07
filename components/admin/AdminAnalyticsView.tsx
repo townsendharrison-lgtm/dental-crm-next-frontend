@@ -343,8 +343,8 @@ export default function AdminAnalyticsView({
   const pieHasData = (rows: { value: number }[]) => rows.some((r) => r.value > 0);
 
   return (
-    <div className="space-y-5 pb-10">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="w-full min-w-0 space-y-5 overflow-x-hidden pb-10">
+      <div className="grid w-full min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Total Students"
           value={summary.totalStudents}
@@ -1050,8 +1050,8 @@ export default function AdminAnalyticsView({
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
-          <table className="w-full min-w-[720px] text-left text-sm">
+        <div className="max-w-full overflow-x-auto overflow-y-hidden rounded-xl border border-slate-800 no-scrollbar">
+          <table className="w-full min-w-[640px] text-left text-sm sm:min-w-[720px]">
             <thead className="border-b border-slate-800 bg-slate-950/60 text-[10px] font-bold uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="px-3 py-2.5">Student</th>

@@ -75,15 +75,15 @@ function OpsKpi({
   }[tone];
 
   return (
-    <div className={cn("rounded-xl border p-4", wrap)}>
-      <div className="mb-3 flex items-center justify-between">
-        <div className={cn("rounded-lg border border-slate-800 bg-slate-950/50 p-2", iconTone)}>
+    <div className={cn("min-w-0 rounded-xl border p-3 sm:p-4", wrap)}>
+      <div className="mb-2 flex items-center justify-between sm:mb-3">
+        <div className={cn("rounded-lg border border-slate-800 bg-slate-950/50 p-1.5 sm:p-2", iconTone)}>
           <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-white">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{hint}</p>
+      <p className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="mt-1 text-xl font-bold tabular-nums text-white sm:text-2xl">{value}</p>
+      <p className="mt-1 line-clamp-2 text-[11px] text-slate-500 sm:text-xs">{hint}</p>
     </div>
   );
 }
@@ -141,17 +141,17 @@ export default function MentorManagerAnalyticsView({
   }, [complianceRows]);
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300 pb-10">
+    <div className="w-full min-w-0 space-y-5 overflow-x-hidden pb-10 animate-in fade-in duration-300">
       {/* Mentorship ops snapshot — live compliance data */}
-      <section className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+      <section className="w-full min-w-0 space-y-4">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
             <h2 className="text-sm font-semibold text-white">Mentorship operations</h2>
             <p className="mt-0.5 text-xs text-slate-500">
               Live compliance, SLA, and caseload signals across your mentor roster
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex min-w-0 flex-wrap gap-2">
             <Link
               href={complianceHref}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-[11px] font-semibold text-slate-300 transition-colors hover:border-slate-700 hover:text-white"
@@ -176,7 +176,7 @@ export default function MentorManagerAnalyticsView({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
+        <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-6">
           <OpsKpi
             label="Avg compliance"
             value={`${summary.avgCompliance}%`}
@@ -221,13 +221,13 @@ export default function MentorManagerAnalyticsView({
           />
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
+        <div className="grid w-full min-w-0 gap-3 lg:grid-cols-2">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+            <div className="mb-4 flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
                 <Users className="h-5 w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-white">Mentor caseload</h3>
                 <p className="text-xs text-slate-500">Top 10 by assigned students</p>
               </div>
@@ -239,9 +239,9 @@ export default function MentorManagerAnalyticsView({
                 description="Caseload appears once mentors have assigned students."
               />
             ) : (
-              <div className="h-[240px]">
+              <div className="h-[220px] w-full min-w-0 overflow-hidden sm:h-[240px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={caseloadData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+                  <BarChart data={caseloadData} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                     <XAxis
                       dataKey="name"
@@ -281,12 +281,12 @@ export default function MentorManagerAnalyticsView({
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-400">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+            <div className="mb-4 flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-400">
                 <Clock className="h-5 w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-white">Response latency</h3>
                 <p className="text-xs text-slate-500">Hours — bars over 12h exceed SLA</p>
               </div>
@@ -298,9 +298,9 @@ export default function MentorManagerAnalyticsView({
                 description="Mentor response times will show once profiles have averages set."
               />
             ) : (
-              <div className="h-[240px]">
+              <div className="h-[220px] w-full min-w-0 overflow-hidden sm:h-[240px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={latencyData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+                  <BarChart data={latencyData} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                     <XAxis
                       dataKey="name"
@@ -346,12 +346,12 @@ export default function MentorManagerAnalyticsView({
       </section>
 
       {/* Cohort / outcomes — real platform analytics */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
+      <section className="w-full min-w-0 space-y-3 overflow-x-hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
             <BarChart3 className="h-5 w-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h2 className="text-sm font-semibold text-white">Cohort outcomes</h2>
             <p className="text-xs text-slate-500">
               Application, interview, and acceptance analytics from live student data

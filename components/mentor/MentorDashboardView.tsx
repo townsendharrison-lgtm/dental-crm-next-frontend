@@ -48,6 +48,7 @@ import type {
   Student,
 } from "@/lib/types";
 import { ReadinessStatus as RS } from "@/lib/types";
+import { filterNotificationsForRole } from "@/lib/utils/notificationVisibility";
 import {
   parseLocalDate,
   isUpcomingMeetingDate,
@@ -728,7 +729,9 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       acceptingAssignment.student?.name
     : undefined;
 
-  const unreadNotifications = notifications.filter((n) => !n.is_read).slice(0, 4);
+  const unreadNotifications = filterNotificationsForRole(notifications, "MENTOR")
+    .filter((n) => !n.is_read)
+    .slice(0, 4);
   const pendingTaskCount = mentorTasks.filter((t) => t.status !== "COMPLETED").length;
   const activeTasks = mentorTasks.filter((t) => t.status !== "COMPLETED");
 

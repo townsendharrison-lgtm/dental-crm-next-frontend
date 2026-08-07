@@ -127,4 +127,15 @@ export const notificationsApi = {
       data: { token },
     });
   },
+
+  /**
+   * Notify admins of a new setter lead (backend targets ADMIN only).
+   * Safe to call after /api/leads create — dedupes by related lead id.
+   */
+  notifyNewLead: async (payload: {
+    lead: { id?: string; name?: string; phone?: string; email?: string; source?: string; notes?: string };
+    setterName?: string;
+  }): Promise<{ success: boolean; notified?: number }> => {
+    return apiPost("/api/notifications/new-lead", payload);
+  },
 };

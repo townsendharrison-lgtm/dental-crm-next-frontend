@@ -105,26 +105,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const showMobilePreview = isAdmin && isPreviewing;
+
   return (
     <div className="flex h-screen max-w-[100vw] overflow-x-hidden bg-slate-950 text-slate-200">
       <PopupOverlay />
       <MobileHeader />
       <Sidebar />
       <RoleSwitcher />
+
+      {/* Mobile: pin preview strip directly under the fixed header (never mid-page) */}
+      {showMobilePreview && (
+        <div className="fixed left-0 right-0 top-[calc(max(env(safe-area-inset-top),0.75rem)+3.25rem)] z-[45] border-b border-amber-500/20 bg-slate-950/95 px-3 py-1.5 backdrop-blur-md lg:hidden">
+          <RolePreviewBanner />
+        </div>
+      )}
+
       <main
         className={cn(
-          "relative flex-1 overflow-y-auto p-4 pt-[calc(max(env(safe-area-inset-top),0.75rem)+4rem)] lg:ml-72 lg:px-6 lg:pt-0",
+          "relative min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 lg:ml-72 lg:px-6 lg:pt-0",
+          showMobilePreview
+            ? "pt-[calc(max(env(safe-area-inset-top),0.75rem)+3.25rem+2.75rem)]"
+            : "pt-[calc(max(env(safe-area-inset-top),0.75rem)+4rem)]",
           isAdmin ? "pb-24" : "pb-6",
         )}
       >
-        {/* Mobile: preview strip sits under the fixed top bar */}
-        {isAdmin && isPreviewing && (
-          <div className="sticky top-[calc(max(env(safe-area-inset-top),0.75rem)+3.75rem)] z-30 -mx-4 mb-3 bg-slate-950/95 px-4 backdrop-blur-md lg:hidden">
-            <RolePreviewBanner />
-          </div>
-        )}
         <GlobalHeader />
-        <div key={role || "default"} className="mx-auto max-w-7xl duration-300 animate-in fade-in">
+        <div
+          key={role || "default"}
+          className="mx-auto w-full min-w-0 max-w-7xl duration-300 animate-in fade-in"
+        >
           {children}
         </div>
       </main>

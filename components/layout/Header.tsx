@@ -42,6 +42,7 @@ import {
 } from "@/lib/hooks/useNotifications";
 import type { SystemNotification } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
+import { filterNotificationsForRole } from "@/lib/utils/notificationVisibility";
 import { RolePreviewBanner } from "./RolePreviewBanner";
 
 const LOGO_URL =
@@ -140,9 +141,11 @@ function NotificationBell() {
   const clearAllMutation = useClearAllNotifications();
 
   const visibleNotifications = useMemo(() => {
-    const list = [...notifications]
+    // Use effective role so admin preview-as-mentor hides admin-only lead alerts
+    const viewRole = role || actualRole;
+    const list = filterNotificationsForRole(notifications, viewRole)
       .filter((n) => {
-        if (actualRole === "STUDENT") return true;
+        if (actualRole === "STUDENT" || role === "STUDENT") return true;
         return !isStudentOnlyLorReviewNotif({
           category: n.category,
           title: n.title,
@@ -155,19 +158,21 @@ function NotificationBell() {
       });
     if (filter === "unread") return list.filter((n) => !n.is_read);
     return list;
-  }, [notifications, filter, actualRole]);
+  }, [notifications, filter, actualRole, role]);
 
   const unreadCount = useMemo(
-    () =>
-      notifications.filter((n) => {
+    () => {
+      const viewRole = role || actualRole;
+      return filterNotificationsForRole(notifications, viewRole).filter((n) => {
         if (n.is_read) return false;
-        if (actualRole === "STUDENT") return true;
+        if (actualRole === "STUDENT" || role === "STUDENT") return true;
         return !isStudentOnlyLorReviewNotif({
           category: n.category,
           title: n.title,
         });
-      }).length,
-    [notifications, actualRole],
+      }).length;
+    },
+    [notifications, actualRole, role],
   );
 
   useEffect(() => {
@@ -812,22 +817,17 @@ export function MobileHeader() {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={LOGO_URL}
-              alt="Logo"
-              className="h-full w-full object-contain"
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </div>
-          <h1 className="truncate bg-gradient-to-r from-white to-slate-400 bg-clip-text text-sm font-black tracking-tight text-transparent">
-            Dental School Guide
-          </h1>
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={LOGO_URL}
+            alt="Dental School Guide"
+            className="h-full w-full object-contain"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">

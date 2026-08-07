@@ -26,11 +26,12 @@ export function RolePreviewBanner() {
   const roleLabel = ROLE_LABELS[previewRole as UserRole] || previewRole;
 
   return (
-    <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3">
-      <div className="flex items-center gap-2 py-1.5 sm:gap-3">
+    <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 sm:px-3">
+      <div className="flex min-w-0 items-center gap-1.5 py-1.5 sm:gap-3">
         <Eye className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-        <p className="min-w-0 flex-1 truncate text-xs font-medium text-amber-100">
-          Previewing as {roleLabel}
+        <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-amber-100 sm:text-xs">
+          <span className="sm:hidden">Preview: {roleLabel}</span>
+          <span className="hidden sm:inline">Previewing as {roleLabel}</span>
         </p>
 
         {subject && subject.options.length > 0 && (
@@ -39,8 +40,9 @@ export function RolePreviewBanner() {
             onChange={(e) => subject.setSubjectId(e.target.value)}
             aria-label={`Select ${kind === "STUDENT" ? "student" : "mentor"}`}
             className={cn(
-              "max-w-[10rem] truncate rounded-md border border-amber-500/25 bg-slate-950/50 px-2 py-1",
-              "text-[11px] font-medium text-amber-50 focus:outline-none focus:ring-1 focus:ring-amber-500/40 sm:max-w-[14rem]",
+              "max-w-[7.5rem] truncate rounded-md border border-amber-500/25 bg-slate-950/50 px-1.5 py-1",
+              "text-[10px] font-medium text-amber-50 focus:outline-none focus:ring-1 focus:ring-amber-500/40",
+              "sm:max-w-[14rem] sm:px-2 sm:text-[11px]",
             )}
           >
             {subject.options.map((opt) => (
@@ -57,10 +59,11 @@ export function RolePreviewBanner() {
             setPreviewRole(null);
             setPreviewCollapsed(false);
           }}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-amber-100/90 transition-colors hover:bg-amber-500/15 hover:text-amber-50"
+          className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-amber-100/90 transition-colors hover:bg-amber-500/15 hover:text-amber-50 sm:px-2"
+          aria-label="Exit preview"
         >
           <X className="h-3 w-3" />
-          Exit
+          <span>Exit</span>
         </button>
       </div>
     </div>
