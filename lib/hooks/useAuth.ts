@@ -64,6 +64,16 @@ export function useAuth() {
     }
   }, []);
 
+  const updatePassword = useCallback(async (password: string, accessToken: string) => {
+    try {
+      await authApi.updatePassword(password, accessToken);
+      return { success: true as const };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update password.";
+      return { success: false as const, error: message };
+    }
+  }, []);
+
   const hasRole = useCallback(
     (...roles: UserRole[]) => !!user && roles.includes(user.role),
     [user],
@@ -82,6 +92,7 @@ export function useAuth() {
     login,
     logout,
     resetPassword,
+    updatePassword,
     hasRole,
     can,
   };

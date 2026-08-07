@@ -44,6 +44,16 @@ function LoginForm() {
     setSuccess("");
   }, [mode]);
 
+  // Legacy reset emails used `/#/reset-password` and often bounced to /login while
+  // keeping `#...access_token=...&type=recovery` in the URL. Forward those here.
+  useEffect(() => {
+    const href = window.location.href;
+    const tokenMatch = href.match(/access_token=([^&#]+)/);
+    const typeMatch = href.match(/[?#&]type=([^&#]+)/);
+    if (!tokenMatch?.[1] || typeMatch?.[1]?.toLowerCase() !== "recovery") return;
+    router.replace(`/reset-password#access_token=${tokenMatch[1]}&type=recovery`);
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
