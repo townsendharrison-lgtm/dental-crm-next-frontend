@@ -969,10 +969,10 @@ export function StudentProfileDocumentsView({
   return (
     <div
       ref={contentRef}
-      className="grid w-full min-w-0 grid-cols-1 gap-4 overflow-x-clip pb-20 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-x-8 lg:gap-y-6"
+      className="flex w-full min-w-0 flex-col gap-4 pb-20 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-x-8 lg:gap-y-6"
     >
       {/* Profile header — first on mobile so sticky nav cannot cover the name */}
-      <header className="order-1 min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 sm:rounded-3xl lg:col-start-2 lg:row-start-1">
+      <header className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 sm:rounded-3xl lg:col-start-2 lg:row-start-1">
         <div className="flex min-w-0 flex-col gap-4 p-4 sm:gap-6 sm:p-6 md:flex-row md:items-center md:justify-between md:p-8">
           <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-5">
             <div className="relative shrink-0">
@@ -1113,12 +1113,12 @@ export function StudentProfileDocumentsView({
         </div>
       </header>
 
-      {/* Section nav — below header on mobile; left rail on desktop */}
+      {/* Section nav — sticks under app chrome on mobile once header scrolls away */}
       <aside
         aria-label="Records sections"
-        className="sticky top-2 z-20 order-2 min-w-0 self-start lg:col-start-1 lg:row-span-2 lg:top-24 lg:self-start"
+        className="sticky top-0 z-30 -mx-4 min-w-0 self-start bg-slate-950/95 px-4 py-2 backdrop-blur-md lg:col-start-1 lg:row-span-2 lg:top-24 lg:mx-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none"
       >
-        <nav className="overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md no-scrollbar sm:p-2 lg:overflow-visible lg:bg-slate-950 lg:shadow-none lg:backdrop-blur-none">
+        <nav className="overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-800 bg-slate-950 p-1.5 shadow-lg shadow-black/30 no-scrollbar sm:p-2 lg:overflow-visible lg:shadow-none">
           <div className="flex gap-1 lg:flex-col lg:space-y-1 lg:gap-0">
             {sections.map((section) => (
               <button
@@ -1140,7 +1140,7 @@ export function StudentProfileDocumentsView({
       </aside>
 
       {/* Main sections */}
-      <div className="order-3 min-w-0 space-y-8 sm:space-y-12 lg:col-start-2 lg:row-start-2">
+      <div className="min-w-0 space-y-8 sm:space-y-12 lg:col-start-2 lg:row-start-2">
         {/* Student Snapshot Section — identity / progress only (academics live below) */}
         <section id="snapshot" className="min-w-0 space-y-5 scroll-mt-24 lg:scroll-mt-28">
           <div className="flex flex-wrap items-end justify-between gap-3">

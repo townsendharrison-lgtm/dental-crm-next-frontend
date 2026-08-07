@@ -30,7 +30,7 @@ export default function StudentProfilePage() {
   }
 
   return (
-    <div className="min-w-0 overflow-x-hidden pt-6">
+    <div className="min-w-0 pt-2 sm:pt-6">
       <StudentProfileDocumentsView
         student={student}
         currentUserId={user.id}

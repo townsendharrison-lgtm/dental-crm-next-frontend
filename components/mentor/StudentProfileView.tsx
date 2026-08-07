@@ -1039,7 +1039,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           />
         </TabsContent>
 
-        <TabsContent value="records" className="mt-4 min-w-0 w-full overflow-x-hidden">
+        <TabsContent value="records" className="mt-4 min-w-0 w-full">
           <StudentProfileDocumentsView
             student={student}
             currentUserId={currentUserId}
