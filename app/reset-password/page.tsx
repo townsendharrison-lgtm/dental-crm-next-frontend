@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   Lock,
   CheckCircle,
@@ -19,6 +18,11 @@ function extractRecoveryToken(href: string): string | null {
   // /login?next=/dashboard#/reset-password#access_token=...&type=recovery (legacy)
   const tokenMatch = href.match(/access_token=([^&#]+)/);
   return tokenMatch?.[1] ? decodeURIComponent(tokenMatch[1]) : null;
+}
+
+/** Hard navigate so the recovery hash is not carried over to /login. */
+function goToLogin() {
+  window.location.assign("/login");
 }
 
 export default function ResetPasswordPage() {
@@ -66,6 +70,8 @@ export default function ResetPasswordPage() {
     try {
       const result = await updatePassword(password, accessToken);
       if (result.success) {
+        // Drop recovery tokens from the URL so Sign In doesn't bounce back here.
+        window.history.replaceState(null, "", "/reset-password");
         setSuccess(true);
       } else {
         setError(result.error || "Failed to update password.");
@@ -98,9 +104,9 @@ export default function ResetPasswordPage() {
                 password.
               </p>
             </div>
-            <Link href="/login" className="login-submit w-full">
+            <button type="button" onClick={goToLogin} className="login-submit w-full">
               Go to Sign In <ArrowRight className="h-5 w-5" />
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -199,9 +205,9 @@ export default function ResetPasswordPage() {
           )}
 
           <div className="text-center">
-            <Link href="/login" className="login-link text-sm">
+            <button type="button" onClick={goToLogin} className="login-link text-sm">
               Back to Sign In
-            </Link>
+            </button>
           </div>
         </div>
       </div>
