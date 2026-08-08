@@ -4,8 +4,15 @@ import { Suspense, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
+import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
-import { useMentors, useMentorStudents } from "@/lib/hooks/useMentors";
+import {
+  useMentors,
+  useMentor,
+  useMentorStudents,
+  useUpdateMentor,
+} from "@/lib/hooks/useMentors";
+import { toast } from "sonner";
 import {
   useMeetings,
   useCreateMeeting,
@@ -27,11 +34,15 @@ function SchedulePageContent() {
   const { role } = useRole();
   const canListMentors = role === "ADMIN" || role === "MENTOR_MANAGER";
   const isMentorRole = role === "MENTOR";
+  const { subjectId: previewMentorId } = usePreviewSubject("MENTOR");
+  const mentorSubjectId = isMentorRole ? previewMentorId || user?.id || "" : "";
 
   const { data: studentsRaw = [], isLoading: isStudentsLoading } = useStudents();
   const { data: mentorStudentsRaw = [], isLoading: isMentorStudentsLoading } = useMentorStudents(
-    isMentorRole && user?.id ? user.id : "",
+    mentorSubjectId,
   );
+  const { data: mentorProfile } = useMentor(mentorSubjectId);
+  const updateMentorMutation = useUpdateMentor();
   const { data: mentorsRaw = [], isLoading: isMentorsLoading } = useMentors(canListMentors);
   const { data: meetingsRaw = [], isLoading: isMeetingsLoading } = useMeetings();
   const { data: actionItemsRaw = [], isLoading: isActionItemsLoading } = useActionItems();
@@ -156,16 +167,39 @@ function SchedulePageContent() {
     });
   };
 
+  const defaultAvailability =
+    mentorProfile?.defaultAvailability ||
+    mentorProfile?.profile?.default_availability ||
+    [];
+
   return (
     <ScheduleView
       role={role}
-      currentUserId={user.id}
+      currentUserId={isMentorRole && mentorSubjectId ? mentorSubjectId : user.id}
       meetings={meetings}
       actionItems={actionItems}
       staffTasks={staffTasks}
       students={students}
       mentors={mentors}
       inviteDirectory={inviteDirectory}
+      defaultAvailability={isMentorRole ? defaultAvailability : []}
+      isSavingPresets={updateMentorMutation.isPending}
+      onSavePresets={
+        isMentorRole && mentorSubjectId
+          ? async (presets) => {
+              try {
+                await updateMentorMutation.mutateAsync({
+                  id: mentorSubjectId,
+                  updates: { default_availability: presets },
+                });
+                toast.success("Time presets saved");
+              } catch (err: any) {
+                toast.error(err?.message || "Failed to save presets");
+                throw err;
+              }
+            }
+          : undefined
+      }
       onAddMeeting={handleAddMeeting}
       onUpdateMeeting={handleUpdateMeeting}
       onDeleteMeeting={handleDeleteMeeting}

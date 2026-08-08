@@ -10,8 +10,10 @@ import { DatePicker } from "@/components/ui/DatePicker";
 import { TimePicker } from "@/components/ui/TimePicker";
 import { TimezoneHint } from "@/components/ui/TimezoneHint";
 import { getBrowserTimezone, zonedDateTimeToUtcIso } from "@/lib/utils/dateUtils";
+import { timezoneSelectOptions } from "@/lib/utils/timezoneOptions";
 import type { CreateMeetingPayload } from "@/lib/api/meetings";
 import type { Mentor, Student } from "@/lib/types";
+import { MeetingTimePresetsPicker } from "@/components/mentor/MeetingTimePresetsPicker";
 
 export interface QuickScheduleMeetingModalProps {
   open: boolean;
@@ -25,9 +27,13 @@ export interface QuickScheduleMeetingModalProps {
   mentors?: Mentor[];
   /** Prefill date (YYYY-MM-DD), e.g. selected day on weekly schedule. */
   defaultDate?: string;
+  /** Mentor saved time presets (default_availability). */
+  defaultAvailability?: string[];
   isSubmitting?: boolean;
+  isSavingPresets?: boolean;
   onClose: () => void;
   onSubmit: (payload: CreateMeetingPayload) => void | Promise<void>;
+  onSavePresets?: (presets: string[]) => void | Promise<void>;
 }
 
 function isShellStudent(s: Student) {
@@ -41,9 +47,12 @@ export function QuickScheduleMeetingModal({
   mentorId: fixedMentorId,
   mentors = [],
   defaultDate,
+  defaultAvailability = [],
   isSubmitting = false,
+  isSavingPresets = false,
   onClose,
   onSubmit,
+  onSavePresets,
 }: QuickScheduleMeetingModalProps) {
   const studentChoices = useMemo(
     () =>
@@ -224,6 +233,18 @@ export function QuickScheduleMeetingModal({
           />
         </FormField>
 
+        <MeetingTimePresetsPicker
+          mode="apply"
+          savedPresets={defaultAvailability}
+          onApply={(_label, next) => {
+            setDate(next.date);
+            setTime(next.time);
+            setAmpm(next.ampm);
+          }}
+          onSavePresets={onSavePresets}
+          isSavingPresets={isSavingPresets}
+        />
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="Date" required>
             <DatePicker value={date} onChange={setDate} />
@@ -257,26 +278,7 @@ export function QuickScheduleMeetingModal({
               value={timezone}
               leftIcon={<Globe className="h-4 w-4 text-slate-500" />}
               onChange={setTimezone}
-              options={[
-                { value: "America/New_York", label: "Eastern Time (ET)" },
-                { value: "America/Chicago", label: "Central Time (CT)" },
-                { value: "America/Denver", label: "Mountain Time (MT)" },
-                { value: "America/Phoenix", label: "Mountain Time - AZ" },
-                { value: "America/Los_Angeles", label: "Pacific Time (PT)" },
-                { value: "UTC", label: "UTC" },
-                ...(
-                  [
-                    "America/New_York",
-                    "America/Chicago",
-                    "America/Denver",
-                    "America/Phoenix",
-                    "America/Los_Angeles",
-                    "UTC",
-                  ].includes(timezone)
-                    ? []
-                    : [{ value: timezone, label: timezone }]
-                ),
-              ]}
+              options={timezoneSelectOptions(timezone)}
             />
           </FormField>
           <FormField label="Duration (min)" required>

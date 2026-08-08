@@ -106,6 +106,8 @@ interface MentorDashboardProps {
   welcomeMessageTemplate: string;
   defaultAvailability?: string[];
   acceptBusy?: boolean;
+  isSavingPresets?: boolean;
+  onSavePresets?: (presets: string[]) => void | Promise<void>;
   /** Open the standard Accept modal for this assignment (e.g. from push CTA). */
   autoOpenAcceptAssignmentId?: string | null;
   onAutoOpenAcceptConsumed?: () => void;
@@ -236,6 +238,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
   welcomeMessageTemplate,
   defaultAvailability = [],
   acceptBusy = false,
+  isSavingPresets = false,
+  onSavePresets,
   autoOpenAcceptAssignmentId = null,
   onAutoOpenAcceptConsumed,
 }) => {
@@ -2285,6 +2289,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         defaultAvailability={defaultAvailability}
         welcomeTemplate={welcomeMessageTemplate}
         isSubmitting={acceptBusy}
+        isSavingPresets={isSavingPresets}
+        onSavePresets={onSavePresets}
         onClose={() => setAcceptingAssignment(null)}
         onConfirm={(availableTimes, timezone, welcomeMessage) => {
           if (!acceptingAssignment) return;
@@ -2303,7 +2309,10 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         student={scheduleStudent}
         students={students}
         mentorId={mentor.id}
+        defaultAvailability={defaultAvailability}
         isSubmitting={quickScheduleBusy}
+        isSavingPresets={isSavingPresets}
+        onSavePresets={onSavePresets}
         onClose={() => {
           if (!quickScheduleBusy) closeScheduleMeeting();
         }}
@@ -2323,7 +2332,10 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         open={!!suggestStudent}
         student={suggestStudent}
         mentorName={mentor.name || "Mentor"}
+        defaultAvailability={defaultAvailability}
         isSubmitting={suggestMessageBusy}
+        isSavingPresets={isSavingPresets}
+        onSavePresets={onSavePresets}
         onClose={() => {
           if (!suggestMessageBusy) setSuggestStudent(null);
         }}

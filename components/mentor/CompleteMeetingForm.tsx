@@ -30,7 +30,14 @@ import {
   zonedDateTimeToUtcIso,
 } from "@/lib/utils/dateUtils";
 import { usePlatformConfig } from "@/lib/hooks/usePlatformConfig";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { useRole } from "@/lib/hooks/useRole";
+import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
+import { useMentor, useUpdateMentor } from "@/lib/hooks/useMentors";
 import { DEFAULT_MEETING_TYPES } from "@/lib/api/adminSettings";
+import { timezoneSelectOptions } from "@/lib/utils/timezoneOptions";
+import { MeetingTimePresetsPicker } from "@/components/mentor/MeetingTimePresetsPicker";
+import { toast } from "sonner";
 
 interface CompleteMeetingFormProps {
   student: Student;
@@ -68,16 +75,6 @@ const PRIORITY_OPTIONS = [
   { value: "LOW", label: "Low" },
 ];
 
-const TIMEZONE_OPTIONS = [
-  { value: "America/New_York", label: "Eastern Time (ET)" },
-  { value: "America/Chicago", label: "Central Time (CT)" },
-  { value: "America/Denver", label: "Mountain Time (MT)" },
-  { value: "America/Los_Angeles", label: "Pacific Time (PT)" },
-  { value: "America/Anchorage", label: "Alaska Time (AKT)" },
-  { value: "Pacific/Honolulu", label: "Hawaii Time (HST)" },
-  { value: "UTC", label: "UTC" },
-];
-
 const FALLBACK_OTHER_TEMPLATE =
   DEFAULT_MEETING_TYPES.find((t) => t.label === "Other")?.summaryTemplate ||
   "Hi {name}, thanks for our meeting today. We discussed {notes}. I've updated your action items accordingly.";
@@ -104,6 +101,17 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
 }) => {
   const studentTz = resolveStudentTimezone(student);
   const platformConfig = usePlatformConfig();
+  const { user } = useAuth();
+  const { role } = useRole();
+  const { subjectId: previewMentorId } = usePreviewSubject("MENTOR");
+  const mentorId =
+    role === "MENTOR" ? previewMentorId || user?.id || "" : "";
+  const { data: mentorProfile } = useMentor(mentorId);
+  const updateMentorMutation = useUpdateMentor();
+  const defaultAvailability =
+    mentorProfile?.defaultAvailability ||
+    mentorProfile?.profile?.default_availability ||
+    [];
 
   const meetingTypes = useMemo(() => {
     const types =
@@ -183,9 +191,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const timezoneOptions = TIMEZONE_OPTIONS.some((o) => o.value === nextMeetingTimezone)
-    ? TIMEZONE_OPTIONS
-    : [...TIMEZONE_OPTIONS, { value: nextMeetingTimezone, label: nextMeetingTimezone }];
+  const timezoneOptions = timezoneSelectOptions(nextMeetingTimezone);
 
   useEffect(() => {
     if (!meetingTypeLabels.includes(meetingType)) {
@@ -465,6 +471,34 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                       className="w-full"
                     />
                   </FormField>
+                  {!!mentorId && (
+                    <div className="sm:col-span-2">
+                      <MeetingTimePresetsPicker
+                        mode="apply"
+                        savedPresets={defaultAvailability}
+                        onApply={(_label, next) => {
+                          setNextMeetingDateOnly(next.date);
+                          setNextMeetingTime(next.time);
+                          setNextMeetingAmpm(next.ampm);
+                        }}
+                        isSavingPresets={updateMentorMutation.isPending}
+                        onSavePresets={async (presets) => {
+                          try {
+                            await updateMentorMutation.mutateAsync({
+                              id: mentorId,
+                              updates: { default_availability: presets },
+                            });
+                            toast.success("Time presets saved");
+                          } catch (err: unknown) {
+                            toast.error(
+                              err instanceof Error ? err.message : "Failed to save presets",
+                            );
+                            throw err;
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
                   <FormField label="Date" htmlFor="next-meeting-date">
                     <DatePicker value={nextMeetingDateOnly} onChange={setNextMeetingDateOnly} />
                   </FormField>

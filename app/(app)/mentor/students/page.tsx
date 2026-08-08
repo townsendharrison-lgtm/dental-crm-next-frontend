@@ -11,6 +11,7 @@ import {
   useMyPendingAssignments,
   useAcceptAssignment,
   useDeclineAssignment,
+  useUpdateMentor,
 } from "@/lib/hooks/useMentors";
 import { useMeetings } from "@/lib/hooks/useMeetings";
 import { useExperiences } from "@/lib/hooks/useExperiences";
@@ -65,6 +66,7 @@ function MentorStudentsContent() {
 
   const acceptAssignmentMutation = useAcceptAssignment();
   const declineAssignmentMutation = useDeclineAssignment();
+  const updateMentorMutation = useUpdateMentor();
 
   // Queries for selected student
   const { data: selectedStudent, isLoading: isStudentLoading } = useStudent(studentId);
@@ -228,6 +230,20 @@ function MentorStudentsContent() {
         defaultAvailability={mentor?.defaultAvailability || mentor?.profile?.default_availability || []}
         welcomeMessageTemplate={welcomeMessageTemplate}
         acceptBusy={acceptAssignmentMutation.isPending}
+        isSavingPresets={updateMentorMutation.isPending}
+        onSavePresets={async (presets) => {
+          if (!mentorId) return;
+          try {
+            await updateMentorMutation.mutateAsync({
+              id: mentorId,
+              updates: { default_availability: presets },
+            });
+            toast.success("Time presets saved");
+          } catch (err: any) {
+            toast.error(err?.message || "Failed to save presets");
+            throw err;
+          }
+        }}
         onSelectStudent={(id, tab) =>
           router.push(
             tab

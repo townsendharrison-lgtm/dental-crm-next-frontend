@@ -37,6 +37,8 @@ import {
   getZonedWallClock,
   zonedDateTimeToUtcIso,
 } from "@/lib/utils/dateUtils";
+import { timezoneSelectOptions } from "@/lib/utils/timezoneOptions";
+import { MeetingTimePresetsPicker } from "@/components/mentor/MeetingTimePresetsPicker";
 
 function meetingMentorId(m: Meeting) {
   return m.mentor_id || m.mentorId || "";
@@ -181,6 +183,10 @@ interface ScheduleViewProps {
   ) => void;
   onDeleteMeeting?: (id: string) => void;
   onAttendMeeting?: (meetingId: string) => void;
+  /** Mentor saved time presets (default_availability). */
+  defaultAvailability?: string[];
+  isSavingPresets?: boolean;
+  onSavePresets?: (presets: string[]) => void | Promise<void>;
 }
 
 const ScheduleView: React.FC<ScheduleViewProps> = ({
@@ -196,6 +202,9 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
   onUpdateMeeting,
   onDeleteMeeting,
   onAttendMeeting,
+  defaultAvailability = [],
+  isSavingPresets = false,
+  onSavePresets,
 }) => {
   const filteredMentors = React.useMemo(
     () => mentors.filter((m) => m.role === "MENTOR" || !m.role),
@@ -1018,6 +1027,23 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
             />
           </FormField>
 
+          {(role === "MENTOR" || onSavePresets || defaultAvailability.length > 0) && (
+            <MeetingTimePresetsPicker
+              mode="apply"
+              savedPresets={defaultAvailability}
+              onApply={(_label, next) => {
+                setNewMeeting((prev) => ({
+                  ...prev,
+                  date: next.date,
+                  time: next.time,
+                  ampm: next.ampm,
+                }));
+              }}
+              onSavePresets={onSavePresets}
+              isSavingPresets={isSavingPresets}
+            />
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Date" required>
               <DatePicker
@@ -1056,26 +1082,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                 value={newMeeting.timezone}
                 leftIcon={<Globe className="h-4 w-4 text-slate-500" />}
                 onChange={(timezone) => setNewMeeting({ ...newMeeting, timezone })}
-                options={[
-                  { value: "America/New_York", label: "Eastern Time (ET)" },
-                  { value: "America/Chicago", label: "Central Time (CT)" },
-                  { value: "America/Denver", label: "Mountain Time (MT)" },
-                  { value: "America/Phoenix", label: "Mountain Time - AZ" },
-                  { value: "America/Los_Angeles", label: "Pacific Time (PT)" },
-                  { value: "UTC", label: "UTC" },
-                  ...(
-                    [
-                      "America/New_York",
-                      "America/Chicago",
-                      "America/Denver",
-                      "America/Phoenix",
-                      "America/Los_Angeles",
-                      "UTC",
-                    ].includes(newMeeting.timezone)
-                      ? []
-                      : [{ value: newMeeting.timezone, label: newMeeting.timezone }]
-                  ),
-                ]}
+                options={timezoneSelectOptions(newMeeting.timezone)}
               />
             </FormField>
             <FormField label="Duration (min)" required>

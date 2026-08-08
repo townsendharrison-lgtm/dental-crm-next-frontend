@@ -44,14 +44,45 @@ function LoginForm() {
     setSuccess("");
   }, [mode]);
 
-  // Legacy reset emails used `/#/reset-password` and often bounced to /login while
-  // keeping `#...access_token=...&type=recovery` in the URL. Forward those here.
+  // Legacy hash routes from the old SPA often bounce through /login while keeping
+  // `#/…` in the URL. Forward guests to the real Next.js public pages.
   useEffect(() => {
     const href = window.location.href;
+    const hash = window.location.hash || "";
+
     const tokenMatch = href.match(/access_token=([^&#]+)/);
     const typeMatch = href.match(/[?#&]type=([^&#]+)/);
-    if (!tokenMatch?.[1] || typeMatch?.[1]?.toLowerCase() !== "recovery") return;
-    router.replace(`/reset-password#access_token=${tokenMatch[1]}&type=recovery`);
+    if (tokenMatch?.[1] && typeMatch?.[1]?.toLowerCase() === "recovery") {
+      router.replace(`/reset-password#access_token=${tokenMatch[1]}&type=recovery`);
+      return;
+    }
+
+    // #/letter-upload?code=LOR-…
+    if (/#\/letter-upload/i.test(hash) || /#\/letter-portal/i.test(hash)) {
+      const codeMatch = hash.match(/[?&]code=([^&]+)/i);
+      const code = codeMatch?.[1] ? decodeURIComponent(codeMatch[1]) : "";
+      router.replace(
+        code ? `/letters/upload?code=${encodeURIComponent(code)}` : "/letters/upload",
+      );
+      return;
+    }
+
+    // #/guest-letter-track?token=…
+    if (/#\/guest-letter-track/i.test(hash)) {
+      const tokenMatchHash = hash.match(/[?&]token=([^&]+)/i);
+      const token = tokenMatchHash?.[1] ? decodeURIComponent(tokenMatchHash[1]) : "";
+      router.replace(
+        token
+          ? `/guest-letter-track?token=${encodeURIComponent(token)}`
+          : "/guest-letter-track",
+      );
+      return;
+    }
+
+    // #/guest-letter-request
+    if (/#\/guest-letter-request/i.test(hash)) {
+      router.replace("/guest-letter-request");
+    }
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {

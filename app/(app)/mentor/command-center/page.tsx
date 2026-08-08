@@ -10,6 +10,7 @@ import {
   useMyPendingAssignments,
   useAcceptAssignment,
   useDeclineAssignment,
+  useUpdateMentor,
 } from "@/lib/hooks/useMentors";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
 import { useTasks, useUpdateTask, useCreateTask, useDeleteTask } from "@/lib/hooks/useTasks";
@@ -59,6 +60,7 @@ export default function MentorCommandCenterPage() {
   const createMeetingMutation = useCreateMeeting();
   const acceptAssignmentMutation = useAcceptAssignment();
   const declineAssignmentMutation = useDeclineAssignment();
+  const updateMentorMutation = useUpdateMentor();
   const deleteNotificationMutation = useDeleteNotification();
   const submitSurveyMutation = useSubmitSurveyResponse();
 
@@ -177,6 +179,20 @@ export default function MentorCommandCenterPage() {
         autoOpenAcceptAssignmentId={pushAcceptAssignmentId}
         onAutoOpenAcceptConsumed={() => setPushAcceptAssignmentId(null)}
         acceptBusy={acceptAssignmentMutation.isPending}
+        isSavingPresets={updateMentorMutation.isPending}
+        onSavePresets={async (presets) => {
+          if (!mentorId) return;
+          try {
+            await updateMentorMutation.mutateAsync({
+              id: mentorId,
+              updates: { default_availability: presets },
+            });
+            toast.success("Time presets saved");
+          } catch (err: any) {
+            toast.error(err?.message || "Failed to save presets");
+            throw err;
+          }
+        }}
         onSelectStudent={(id, tab) => {
           const params = new URLSearchParams({ studentId: id });
           if (tab) params.set("tab", tab);

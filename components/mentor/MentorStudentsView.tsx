@@ -43,6 +43,8 @@ interface MentorStudentsViewProps {
   defaultAvailability?: string[];
   welcomeMessageTemplate?: string;
   acceptBusy?: boolean;
+  isSavingPresets?: boolean;
+  onSavePresets?: (presets: string[]) => void | Promise<void>;
   hideTitle?: boolean;
 }
 
@@ -110,6 +112,8 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
   defaultAvailability = [],
   welcomeMessageTemplate = DEFAULT_ASSIGNMENT_WELCOME,
   acceptBusy = false,
+  isSavingPresets = false,
+  onSavePresets,
   hideTitle = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -699,6 +703,8 @@ const MentorStudentsView: React.FC<MentorStudentsViewProps> = ({
         defaultAvailability={defaultAvailability}
         welcomeTemplate={welcomeMessageTemplate}
         isSubmitting={acceptBusy}
+        isSavingPresets={isSavingPresets}
+        onSavePresets={onSavePresets}
         onClose={() => setAcceptingAssignment(null)}
         onConfirm={(times, timezone, message) => {
           if (!acceptingAssignment || !onAcceptAssignment) return;

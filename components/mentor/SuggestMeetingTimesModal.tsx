@@ -10,14 +10,18 @@ import { TimePicker } from "@/components/ui/TimePicker";
 import { TimezoneHint } from "@/components/ui/TimezoneHint";
 import { getBrowserTimezone } from "@/lib/utils/dateUtils";
 import type { Student } from "@/lib/types";
+import { MeetingTimePresetsPicker } from "@/components/mentor/MeetingTimePresetsPicker";
 
 export interface SuggestMeetingTimesModalProps {
   open: boolean;
   student: Student | null;
   mentorName: string;
+  defaultAvailability?: string[];
   isSubmitting?: boolean;
+  isSavingPresets?: boolean;
   onClose: () => void;
   onSend: (message: string) => void | Promise<void>;
+  onSavePresets?: (presets: string[]) => void | Promise<void>;
 }
 
 type Slot = { id: string; date: string; time: string; ampm: "AM" | "PM" };
@@ -72,9 +76,12 @@ export function SuggestMeetingTimesModal({
   open,
   student,
   mentorName,
+  defaultAvailability = [],
   isSubmitting = false,
+  isSavingPresets = false,
   onClose,
   onSend,
+  onSavePresets,
 }: SuggestMeetingTimesModalProps) {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [draftDate, setDraftDate] = useState(new Date().toISOString().split("T")[0]);
@@ -147,6 +154,24 @@ export function SuggestMeetingTimesModal({
       }
     >
       <div className="space-y-5">
+        <MeetingTimePresetsPicker
+          mode="apply"
+          savedPresets={defaultAvailability}
+          onApply={(_label, next) => {
+            setSlots((prev) => [
+              ...prev,
+              {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                date: next.date,
+                time: next.time,
+                ampm: next.ampm,
+              },
+            ]);
+          }}
+          onSavePresets={onSavePresets}
+          isSavingPresets={isSavingPresets}
+        />
+
         <FormField label="Add available days & times" hint="Add at least one option for the student.">
           <div className="space-y-3">
             <DatePicker value={draftDate} onChange={setDraftDate} />
