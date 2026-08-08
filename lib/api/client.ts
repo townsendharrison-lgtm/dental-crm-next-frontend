@@ -11,6 +11,7 @@ import {
   getRefreshToken,
   persistTokens,
 } from "@/lib/auth/cookies";
+import { isPublicPath } from "@/lib/auth/roles";
 
 /** Normalised application error surfaced to callers. */
 export class ApiRequestError extends Error {
@@ -75,10 +76,12 @@ async function refreshAccessToken(): Promise<string | null> {
 
 function onAuthFailure() {
   clearAuthStorage();
-  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-    const next = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = `/login?next=${next}`;
-  }
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  // Never bounce guests off public letter-writer / invite pages on a 401.
+  if (isPublicPath(path)) return;
+  const next = encodeURIComponent(path + window.location.search);
+  window.location.href = `/login?next=${next}`;
 }
 
 // --- Response interceptor: refresh on 401, normalise errors -----------------

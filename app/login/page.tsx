@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { getInitialRouteForRole } from "@/lib/navigation";
+import { isPublicPath } from "@/lib/auth/roles";
 
 const LOGO_URL =
   "https://images.squarespace-cdn.com/content/64d0277a0640507c114633ad/b8543df7-ec9e-4d64-912e-e80bb44c8757/Untitled+design-3.png?content-type=image%2Fpng";
@@ -46,9 +47,28 @@ function LoginForm() {
 
   // Legacy hash routes from the old SPA often bounce through /login while keeping
   // `#/…` in the URL. Forward guests to the real Next.js public pages.
+  // Also: if middleware already sent a guest here with ?next=/letters/upload…,
+  // send them straight to that public page (no account needed).
   useEffect(() => {
     const href = window.location.href;
     const hash = window.location.hash || "";
+    const nextParam = params.get("next");
+
+    if (nextParam) {
+      try {
+        const target = new URL(nextParam, window.location.origin);
+        if (
+          target.origin === window.location.origin &&
+          isPublicPath(target.pathname) &&
+          target.pathname !== "/login"
+        ) {
+          router.replace(target.pathname + target.search + target.hash);
+          return;
+        }
+      } catch {
+        // ignore malformed next
+      }
+    }
 
     const tokenMatch = href.match(/access_token=([^&#]+)/);
     const typeMatch = href.match(/[?#&]type=([^&#]+)/);
@@ -83,7 +103,7 @@ function LoginForm() {
     if (/#\/guest-letter-request/i.test(hash)) {
       router.replace("/guest-letter-request");
     }
-  }, [router]);
+  }, [router, params]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

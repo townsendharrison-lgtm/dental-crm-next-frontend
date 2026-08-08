@@ -17,6 +17,13 @@ export function proxy(request: NextRequest) {
   const isAuthed = !!token && !isExpired;
   const role = decoded?.user_metadata?.role;
 
+  // Guest / public routes (letter upload, invite, reset, etc.) skip auth gates.
+  // Important: `/letters/upload` is under the `/letters` prefix, so it must be
+  // checked before the protected-prefix redirect or writers get bounced to login.
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+
   // Authenticated users shouldn't see the login page.
   if (isAuthed && (pathname === "/login" || pathname === "/")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
@@ -34,8 +41,6 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard?denied=1", request.url));
   }
 
-  // Public auth pages remain accessible; everything else passes through.
-  void isPublicPath;
   return NextResponse.next();
 }
 

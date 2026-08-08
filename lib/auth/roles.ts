@@ -72,5 +72,8 @@ export function isPublicPath(pathname: string): boolean {
 }
 
 export function isProtectedPath(pathname: string): boolean {
+  // Public exceptions win over broader protected prefixes (e.g. /letters/upload
+  // under /letters).
+  if (isPublicPath(pathname)) return false;
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
