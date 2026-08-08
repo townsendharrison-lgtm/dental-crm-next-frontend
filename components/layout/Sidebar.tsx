@@ -63,8 +63,8 @@ export function Sidebar() {
               }}
             />
           </div>
-          <h1 className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-lg font-black leading-tight tracking-tighter text-transparent lg:text-xl">
-            DSG
+          <h1 className="min-w-0 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-base font-black leading-tight tracking-tighter text-transparent lg:text-xl">
+            Dental School Guide
           </h1>
           <button
             onClick={closeMobile}
