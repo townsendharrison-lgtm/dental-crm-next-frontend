@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "./client";
+import { apiClient, apiGet, apiPost, apiPut, apiPatch, apiDelete, ApiRequestError } from "./client";
 import type { LetterOfRecommendationRequest, LOREmailConfig } from "@/lib/types";
 
 export interface CreateLorRequestInput {
@@ -96,6 +96,30 @@ export const lorApi = {
       params: { download: download.toString() },
     });
     return data?.url ?? "";
+  },
+
+  /**
+   * Fetch the PDF bytes via same-origin API proxy (best for PWA / iOS).
+   * Prefer this over opening a Supabase signed URL in a new tab.
+   */
+  fetchDocumentBlob: async (requestId: string, download = false): Promise<Blob> => {
+    const response = await apiClient.get(`/api/lor/documents/${requestId}/file`, {
+      params: { download: download ? "true" : "false" },
+      responseType: "blob",
+    });
+    const blob = response.data as Blob;
+    const contentType = String(response.headers["content-type"] || blob.type || "");
+    if (contentType.includes("application/json")) {
+      const text = await blob.text();
+      let message = "Failed to load letter PDF";
+      try {
+        message = (JSON.parse(text) as { error?: string }).error || message;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiRequestError(message, response.status);
+    }
+    return blob.type ? blob : new Blob([blob], { type: "application/pdf" });
   },
 
   /** Get LOR tracking link (Admin only). */

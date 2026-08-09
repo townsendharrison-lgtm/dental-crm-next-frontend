@@ -34,6 +34,7 @@ import {
 import { RefreshButton } from "@/components/ui/RefreshButton";
 import { Button } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { downloadBlob, isAppleTouchDevice, isStandalonePwa } from "@/lib/utils/mobileFile";
 
 interface AdminLetterReviewProps {
   students?: Student[];
@@ -116,6 +117,7 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
   const [declineReason, setDeclineReason] = useState("");
   const [docLoading, setDocLoading] = useState(false);
   const [docDownloadLoading, setDocDownloadLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
   const [copyingLink, setCopyingLink] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     type: "single" | "bulk";
@@ -225,43 +227,63 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
     }
   };
 
-  const handleViewDocument = async (requestId: string) => {
+  const closePdfPreview = () => {
+    setPdfPreview((prev) => {
+      if (prev?.url) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  };
+
+  const handleViewDocument = async (
+    requestId: string,
+    title = "Letter of Recommendation.pdf",
+  ) => {
     setDocLoading(true);
     try {
-      const url = await lorApi.getDocumentSignedUrl(requestId, false);
-      if (url) {
-        window.open(url, "_blank");
-      } else {
-        toast.error("Signed URL not found.");
+      const blob = await lorApi.fetchDocumentBlob(requestId, false);
+      const objectUrl = URL.createObjectURL(blob);
+
+      // PWA / iOS: new tabs are blocked after async work — show in-app viewer.
+      if (isStandalonePwa() || isAppleTouchDevice()) {
+        setPdfPreview((prev) => {
+          if (prev?.url) URL.revokeObjectURL(prev.url);
+          return { url: objectUrl, title };
+        });
+        return;
       }
-    } catch {
-      toast.error("Failed to fetch letter document view URL.");
+
+      const opened = window.open(objectUrl, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        setPdfPreview({ url: objectUrl, title });
+      } else {
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to open letter PDF.");
+    } finally {
+      setDocLoading(false);
     }
-    setDocLoading(false);
   };
 
   const handleDownloadDocument = async (req: LetterOfRecommendationRequest) => {
     setDocDownloadLoading(true);
     try {
-      const url = await lorApi.getDocumentSignedUrl(req.id, true);
-      if (url) {
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `LOR_${getName(req).replace(/\s+/g, "_")}_${getWriter(req).replace(
-          /\s+/g,
-          "_"
-        )}.pdf`;
-        a.target = "_blank";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+      const fileName = `LOR_${getName(req).replace(/\s+/g, "_")}_${getWriter(req).replace(
+        /\s+/g,
+        "_",
+      )}.pdf`;
+      const blob = await lorApi.fetchDocumentBlob(req.id, true);
+      const result = await downloadBlob(blob, fileName);
+      if (result === "shared") {
+        toast.success("Use Share to save or open the PDF");
       } else {
-        toast.error("Signed URL not found.");
+        toast.success("Download started");
       }
-    } catch {
-      toast.error("Failed to fetch letter document download URL.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to download letter PDF.");
+    } finally {
+      setDocDownloadLoading(false);
     }
-    setDocDownloadLoading(false);
   };
 
   const handleCopyTrackingLink = async (requestId: string) => {
@@ -678,7 +700,12 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                         </p>
                         <div className="flex flex-col gap-3 w-full">
                           <button
-                            onClick={() => handleViewDocument(selectedRequest.id)}
+                            onClick={() =>
+                              handleViewDocument(
+                                selectedRequest.id,
+                                `LOR_${getName(selectedRequest).replace(/\s+/g, "_")}.pdf`,
+                              )
+                            }
                             disabled={docLoading}
                             className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all w-full cursor-pointer disabled:opacity-50 text-sm"
                           >
@@ -868,7 +895,12 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
                             {(req.status === "UPLOADED" || req.status === "REVIEWED") && (
                               <>
                                 <button
-                                  onClick={() => handleViewDocument(req.id)}
+                                  onClick={() =>
+                                    handleViewDocument(
+                                      req.id,
+                                      `LOR_${getName(req).replace(/\s+/g, "_")}.pdf`,
+                                    )
+                                  }
                                   className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 cursor-pointer"
                                 >
                                   <Eye className="w-3 h-3" /> View
@@ -1010,6 +1042,65 @@ export const AdminLetterReview: React.FC<AdminLetterReviewProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {pdfPreview && (
+        <div className="fixed inset-0 z-[220] flex flex-col bg-slate-950 pt-[env(safe-area-inset-top)]">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{pdfPreview.title}</p>
+              <p className="text-[11px] text-slate-500">
+                {isAppleTouchDevice()
+                  ? "If the preview is blank, tap Save to open/share the PDF"
+                  : "In-app PDF viewer"}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      const res = await fetch(pdfPreview.url);
+                      const blob = await res.blob();
+                      const result = await downloadBlob(blob, pdfPreview.title);
+                      toast.success(
+                        result === "shared" ? "Use Share to save or open the PDF" : "Download started",
+                      );
+                    } catch {
+                      toast.error("Could not download from preview");
+                    }
+                  })();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white cursor-pointer"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={closePdfPreview}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+                aria-label="Close PDF"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          {/* object first — more reliable than iframe for PDF on some mobile browsers */}
+          <object
+            data={pdfPreview.url}
+            type="application/pdf"
+            className="min-h-0 w-full flex-1 bg-slate-900"
+            aria-label={pdfPreview.title}
+          >
+            <iframe
+              title={pdfPreview.title}
+              src={pdfPreview.url}
+              className="h-full w-full border-0 bg-slate-900"
+            />
+          </object>
         </div>
       )}
 
