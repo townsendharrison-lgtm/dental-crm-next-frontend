@@ -1330,5 +1330,188 @@ export interface MentorReminder {
   message: string;
 }
 
+// --- School Intelligence & Predictive Modeling Types -------------------------
 
+export type EvidenceCategory =
+  | "Prerequisites"
+  | "DAT Requirements"
+  | "GPA Requirements"
+  | "Shadowing & Volunteering"
+  | "Residency & Quotas"
+  | "Letters of Recommendation"
+  | "Rubrics & Weights"
+  | "Mission & Culture"
+  | "Interview Format"
+  | "General Information";
 
+export interface SchoolEvidence {
+  id: string;
+  school_id: string;
+  category: EvidenceCategory;
+  field_key: string;
+  field_label: string;
+  extracted_value: Record<string, unknown> | string | number | boolean;
+  source_type: "URL" | "PDF" | "TXT" | "IMAGE" | "MANUAL";
+  source_name: string;
+  source_url?: string | null;
+  page_number?: number | null;
+  raw_snippet: string;
+  confidence_score?: number;
+  is_verified: boolean;
+  verified_by?: string | null;
+  verified_at?: string | null;
+  verified_user?: { name: string; email: string };
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SchoolRubricWeights {
+  gpaWeight: number;
+  datWeight: number;
+  shadowingWeight: number;
+  volunteeringWeight: number;
+  researchWeight: number;
+  inStateWeight: number;
+  lorWeight: number;
+}
+
+export interface SchoolRubricCutoffs {
+  minCgpa?: number;
+  minSgpa?: number;
+  avgCgpa?: number;
+  avgSgpa?: number;
+  minDatAa?: number;
+  avgDatAa?: number;
+  minDatTs?: number;
+  avgDatTs?: number;
+  minDatPat?: number;
+  minShadowing?: number;
+  recommendedShadowing?: number;
+  minVolunteering?: number;
+  recommendedVolunteering?: number;
+  minLor?: number;
+}
+
+export interface SchoolPrerequisiteItem {
+  course: string;
+  credits?: number;
+  required: boolean;
+  labRequired?: boolean;
+  minGrade?: string;
+}
+
+export interface SchoolHolisticFactors {
+  inStatePreferenceMultiplier?: number;
+  canadianDatAccepted?: boolean;
+  communityCollegeAccepted?: boolean;
+  casperRequired?: boolean;
+  interviewFormat?: string;
+  missionKeywords?: string[];
+  notes?: string;
+}
+
+export interface SchoolScoringRubric {
+  school_id: string;
+  weights: SchoolRubricWeights;
+  cutoffs: SchoolRubricCutoffs;
+  prerequisites: SchoolPrerequisiteItem[];
+  holistic_factors: SchoolHolisticFactors;
+  calibrated_from_outcomes_count?: number;
+  last_calibrated_at?: string | null;
+  calibration_notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HistoricalApplication {
+  id: string;
+  student_name_anonymized: string;
+  school_id: string;
+  school_name: string;
+  cycle: string;
+  cgpa: number;
+  sgpa?: number | null;
+  dat_aa: number;
+  dat_ts: number;
+  dat_pat?: number | null;
+  shadowing_hours: number;
+  volunteering_hours: number;
+  dental_experience_hours: number;
+  research_hours: number;
+  is_in_state: boolean;
+  state?: string | null;
+  applicant_type: "FIRST_TIME" | "REAPPLICANT";
+  outcome: "ACCEPTED" | "INTERVIEWED" | "WAITLISTED" | "REJECTED";
+  source: "CRM_SYNC" | "CSV_UPLOAD" | "MANUAL_ENTRY" | "RESEARCH_CASE";
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface RequirementCheckItem {
+  id: string;
+  name: string;
+  status: "MET" | "WARNING" | "UNMET" | "UNKNOWN" | "RECOMMENDED_MISSING";
+  studentValue: string | number;
+  schoolRequirement: string | number;
+  details: string;
+  isHardRequirement: boolean;
+  citationId?: string;
+}
+
+export interface RoiImprovement {
+  id: string;
+  actionTitle: string;
+  description: string;
+  category: "DAT" | "GPA" | "SHADOWING" | "VOLUNTEERING" | "RESEARCH" | "PREREQUISITES" | "LOR";
+  currentMetric: string | number;
+  targetMetric: string | number;
+  probabilityLift: {
+    interviewLift: number;
+    acceptanceLift: number;
+  };
+  impactLevel: "HIGH" | "MEDIUM" | "MODERATE";
+}
+
+export interface PredictionResult {
+  schoolId: string;
+  schoolName: string;
+  location: string;
+  fitCategory: "Strong Fit" | "Target" | "Reach" | "Safety" | "High Risk";
+  matchScore: number; // 0 to 100
+  requirementsStatus: "MEETS_ALL" | "WARNINGS" | "FAILS_REQUIREMENTS";
+  requirementsPassedCount: number;
+  requirementsTotalCount: number;
+  requirements: RequirementCheckItem[];
+  probabilities: {
+    interviewProbability: number;
+    acceptedProbability: number;
+    waitlistProbability: number;
+    rejectionProbability: number;
+  };
+  diagnostics: {
+    mostLikelyReason: string;
+    mostLimitingFactor: string;
+    highestRoiImprovements: RoiImprovement[];
+  };
+}
+
+export interface StudentProfileForPrediction {
+  id?: string;
+  name?: string;
+  cgpa?: number | null;
+  sgpa?: number | null;
+  datAa?: number | null;
+  datTs?: number | null;
+  datPat?: number | null;
+  shadowingHours?: number | null;
+  volunteeringHours?: number | null;
+  dentalExperienceHours?: number | null;
+  researchHours?: number | null;
+  lorCount?: number | null;
+  state?: string | null;
+  isReapplicant?: boolean | null;
+  tookCcClasses?: boolean | null;
+  isCanadianDat?: boolean | null;
+  completedCourses?: string[] | null;
+}

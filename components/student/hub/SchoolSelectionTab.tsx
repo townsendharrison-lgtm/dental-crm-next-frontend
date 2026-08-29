@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
-  Plus, School as SchoolIcon, PartyPopper, Sparkles, Clock, Star, Save
+  Plus, School as SchoolIcon, PartyPopper, Sparkles, Clock, Star, Save, Loader2, Sliders
 } from 'lucide-react';
 import {
   DndContext,
@@ -59,6 +59,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/api/queryKeys';
 import { useSchoolCategories, useReplaceSchoolCategories } from '@/lib/hooks/useSchoolCategories';
 import { useDentalSchoolsCatalog } from '@/lib/hooks/useDentalSchoolsCatalog';
+import SchoolPredictiveModelView from '@/components/student/SchoolPredictiveModelView';
+import { useStudentFit } from '@/lib/api/schoolIntelligence';
+import { cn } from '@/lib/utils/cn';
 
 const EMPTY_SCHOOLS: School[] = [];
 const EMPTY_APPLICATIONS: Application[] = [];
@@ -124,6 +127,8 @@ export default function SchoolSelectionTab({
   const [newCategoryIcon, setNewCategoryIcon] = useState('SchoolIcon');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [subViewMode, setSubViewMode] = useState<'board' | 'predictive'>('board');
+  const { data: fitData, isLoading: fitLoading } = useStudentFit(student.id);
   const { schools: catalogSchools, refetch: refetchCatalog } = useDentalSchoolsCatalog();
   const sectionRef = useRef<HTMLDivElement>(null);
 
@@ -657,37 +662,101 @@ export default function SchoolSelectionTab({
             </p>
           </div>
           <div className="flex shrink-0 flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="shrink-0"
-              leftIcon={<Plus size={16} />}
-              onClick={openAddSchoolsBrowser}
-            >
-              Add Schools
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="shrink-0"
-              leftIcon={<Plus size={16} />}
-              onClick={() => setIsAddingCategory(true)}
-            >
-              New Category
-            </Button>
-            <Button
-              size="sm"
-              className="shrink-0"
-              leftIcon={<Save size={16} />}
-              onClick={() => void handleSaveSelection()}
-              disabled={!dirty || saving}
-            >
-              {saving ? 'Saving…' : localOnly ? 'Confirm list' : 'Save selection'}
-            </Button>
+            <div className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900 p-1 mr-2">
+              <button
+                type="button"
+                onClick={() => setSubViewMode('board')}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-semibold transition cursor-pointer",
+                  subViewMode === 'board'
+                    ? "bg-slate-800 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                )}
+              >
+                Categories & List
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubViewMode('predictive')}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer",
+                  subViewMode === 'predictive'
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                )}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                AI Predictive Model
+              </button>
+            </div>
+
+            {subViewMode === 'board' && (
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  leftIcon={<Plus size={16} />}
+                  onClick={openAddSchoolsBrowser}
+                >
+                  Add Schools
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  leftIcon={<Plus size={16} />}
+                  onClick={() => setIsAddingCategory(true)}
+                >
+                  New Category
+                </Button>
+                <Button
+                  size="sm"
+                  className="shrink-0"
+                  leftIcon={<Save size={16} />}
+                  onClick={() => void handleSaveSelection()}
+                  disabled={!dirty || saving}
+                >
+                  {saving ? 'Saving…' : localOnly ? 'Confirm list' : 'Save selection'}
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
-        {isAddingCategory && (
+        {subViewMode === 'predictive' && (
+          <div className="pt-2">
+            {fitLoading ? (
+              <div className="text-center py-16 text-slate-400">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-indigo-500" />
+                Calculating school fit and admission probabilities...
+              </div>
+            ) : (
+              <SchoolPredictiveModelView
+                initialStudent={
+                  fitData?.student || {
+                    id: student.id,
+                    name: student.name,
+                    cgpa: student.gpa || student.profile?.gpa || 3.5,
+                    sgpa: student.profile?.sgpa || 3.4,
+                    datAa: student.datAA || student.profile?.dat_aa || student.datScore || 20,
+                    datTs: student.datTS || student.profile?.dat_ts || 20,
+                    datPat: student.profile?.dat_pat || 19,
+                    shadowingHours: 60,
+                    volunteeringHours: 50,
+                    state: student.state || student.profile?.state,
+                    isReapplicant: student.isReapplicant || student.profile?.is_reapplicant,
+                    lorCount: student.lorRequired || student.profile?.lor_required || 3,
+                  }
+                }
+                initialPredictions={fitData?.predictions || []}
+                isMentorView={isMentorView}
+              />
+            )}
+          </div>
+        )}
+
+        {subViewMode === 'board' && isAddingCategory && (
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <FormField label="Category Name" htmlFor="new-category-name">
@@ -751,7 +820,8 @@ export default function SchoolSelectionTab({
           </div>
         )}
 
-        <DndContext
+        {subViewMode === 'board' && (
+          <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
           autoScroll={{
@@ -835,6 +905,7 @@ export default function SchoolSelectionTab({
             ) : null}
           </DragOverlay>
         </DndContext>
+        )}
       </div>
 
       <Modal
