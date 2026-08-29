@@ -294,10 +294,15 @@ export interface Student {
   applications?: Application[];
   badges?: Array<{ badgeId: string; earnedAt: string }>;
   gpa?: number | null;
+  cgpa?: number | null;
+  sgpa?: number | null;
   strengthScore?: number;
   readiness?: ReadinessStatus;
   datScore?: number | null;
   datAA?: number | null;
+  datPAT?: number | null;
+  shadowingHours?: number | null;
+  volunteeringHours?: number | null;
   progress?: number;
   status?: string;
   timezone?: string | null;
