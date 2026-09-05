@@ -36,6 +36,7 @@ export const PROTECTED_PREFIXES = ROUTE_ACCESS.map((r) => r.prefix);
 export const PUBLIC_PREFIXES = [
   "/login",
   "/reset-password",
+  "/complete-invitation",
   "/invitation",
   "/forgot-password",
   "/letters/upload",

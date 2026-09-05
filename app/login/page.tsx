@@ -70,10 +70,30 @@ function LoginForm() {
       }
     }
 
+    // Check for error parameters in hash or query (e.g. expired invite/recovery links)
+    const errorDesc = href.match(/[?#&]error_description=([^&#]+)/);
+    if (errorDesc?.[1]) {
+      setError(decodeURIComponent(errorDesc[1].replace(/\+/g, " ")));
+    }
+
     const tokenMatch = href.match(/access_token=([^&#]+)/);
     const typeMatch = href.match(/[?#&]type=([^&#]+)/);
-    if (tokenMatch?.[1] && typeMatch?.[1]?.toLowerCase() === "recovery") {
-      router.replace(`/reset-password#access_token=${tokenMatch[1]}&type=recovery`);
+    if (tokenMatch?.[1]) {
+      const type = typeMatch?.[1]?.toLowerCase();
+      if (type === "recovery") {
+        router.replace(`/reset-password#access_token=${tokenMatch[1]}&type=recovery`);
+        return;
+      }
+      if (type === "invite" || type === "signup") {
+        router.replace(`/complete-invitation#access_token=${tokenMatch[1]}&type=${type}`);
+        return;
+      }
+    }
+
+    // Legacy #/complete-invitation
+    if (/#\/complete-invitation/i.test(hash)) {
+      const cleanHash = hash.replace(/#\/complete-invitation/i, "");
+      router.replace(`/complete-invitation${cleanHash}`);
       return;
     }
 
