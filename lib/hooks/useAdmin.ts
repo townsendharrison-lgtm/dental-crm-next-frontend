@@ -67,8 +67,12 @@ export function useDeleteInvitation() {
 
 /** Resend an invitation. */
 export function useResendInvitation() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: adminApi.resendInvitation,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.invitations() });
+    },
   });
 }
 

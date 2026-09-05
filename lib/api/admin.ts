@@ -105,8 +105,12 @@ export const adminApi = {
   },
 
   /** Resend an invitation. */
-  resendInvitation: async (id: string): Promise<{ message: string }> => {
-    return apiPost<{ message: string }>(`/api/admin/invitations/${id}/resend`);
+  resendInvitation: async (
+    id: string,
+  ): Promise<{ message: string; invitationLink?: string; emailSent?: boolean }> => {
+    return apiPost<{ message: string; invitationLink?: string; emailSent?: boolean }>(
+      `/api/admin/invitations/${id}/resend`,
+    );
   },
 
   /** Delete a user (admin only). */

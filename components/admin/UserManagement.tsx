@@ -190,16 +190,29 @@ export default function UserManagement() {
   const handleDeleteInvitation = async (invId: string) => {
     try {
       await deleteInviteMutation.mutateAsync(invId);
-    } catch {
-      // silent
+      toast.success("Invitation revoked successfully");
+      refetchInvites();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to revoke invitation");
     }
   };
 
   const handleResendInvitation = async (invId: string) => {
     try {
-      await resendInviteMutation.mutateAsync(invId);
-    } catch {
-      // silent
+      const res = await resendInviteMutation.mutateAsync(invId);
+      if (res?.invitationLink) {
+        toast.success(res.message || "Invitation resent successfully!", {
+          action: {
+            label: "Copy Link",
+            onClick: () => copyLink(res.invitationLink!),
+          },
+        });
+      } else {
+        toast.success(res?.message || "Invitation resent successfully!");
+      }
+      refetchInvites();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to resend invitation. Please try again in a moment.");
     }
   };
 
