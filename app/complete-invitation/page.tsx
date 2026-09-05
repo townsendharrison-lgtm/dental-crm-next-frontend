@@ -280,8 +280,8 @@ export default function CompleteInvitationPage() {
               Complete Your Account
             </h2>
             <p className="text-slate-400 text-sm">
-              {inviterName
-                ? `${inviterName} has invited you to join Dental School Guide`
+              {inviterName && !/^(admin|admin user|administrator)$/i.test(inviterName.trim())
+                ? `You've been invited by ${inviterName} to join Dental School Guide`
                 : "You've been invited to join Dental School Guide"}
             </p>
 
