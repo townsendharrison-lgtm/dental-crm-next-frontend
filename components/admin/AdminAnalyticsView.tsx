@@ -37,6 +37,7 @@ import {
   Line,
   Legend,
 } from "recharts";
+import { formatDATScore, toCanonicalDAT } from "@/lib/utils/datUtils";
 import { toast } from "sonner";
 import { Badge, Button, EmptyState, Input, SelectMenu } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
@@ -197,7 +198,7 @@ export default function AdminAnalyticsView({
 
   const [insightFilters, setInsightFilters] = useState({
     minGpa: 3.0,
-    minDatAA: 18,
+    minDatAA: 360,
     minShadowing: 50,
     minMentorshipMonths: 3,
     cycle: "All",
@@ -205,7 +206,7 @@ export default function AdminAnalyticsView({
 
   const [benchmarkThresholds, setBenchmarkThresholds] = useState({
     gpa: 3.4,
-    dat: 20,
+    dat: 400,
     shadowing: 100,
     mentorship: 6,
   });
@@ -242,7 +243,7 @@ export default function AdminAnalyticsView({
   const insightData = useMemo(() => {
     const filtered = students.filter((s) => {
       const gpa = s.gpa ?? 0;
-      const dat = s.datAA ?? 0;
+      const dat = toCanonicalDAT(s.datAA ?? 0);
       if (gpa < insightFilters.minGpa) return false;
       if (dat < insightFilters.minDatAA) return false;
       if (s.shadowingHours < insightFilters.minShadowing) return false;
@@ -258,7 +259,7 @@ export default function AdminAnalyticsView({
 
     const conditions: string[] = [];
     if (insightFilters.minGpa > 0) conditions.push(`a GPA of ${insightFilters.minGpa}+`);
-    if (insightFilters.minDatAA > 0) conditions.push(`a ${insightFilters.minDatAA}+ DAT`);
+    if (insightFilters.minDatAA > 0) conditions.push(`a ${formatDATScore(insightFilters.minDatAA)}+ DAT`);
     if (insightFilters.minShadowing > 0) {
       conditions.push(`${insightFilters.minShadowing}+ shadowing hours`);
     }
@@ -278,7 +279,7 @@ export default function AdminAnalyticsView({
     const matched = students.filter(
       (s) =>
         (s.gpa ?? 0) >= benchmarkThresholds.gpa &&
-        (s.datAA ?? 0) >= benchmarkThresholds.dat &&
+        toCanonicalDAT(s.datAA ?? 0) >= benchmarkThresholds.dat &&
         s.shadowingHours >= benchmarkThresholds.shadowing &&
         s.mentorshipMonths >= benchmarkThresholds.mentorship,
     );
@@ -293,7 +294,7 @@ export default function AdminAnalyticsView({
       .filter((s) => {
         if (q && !s.name.toLowerCase().includes(q)) return false;
         if ((s.gpa ?? 0) < minGpa) return false;
-        if ((s.datAA ?? 0) < minDat) return false;
+        if (toCanonicalDAT(s.datAA ?? 0) < minDat) return false;
         if (outcomeFilter !== "ALL" && studentExplorerOutcome(s) !== outcomeFilter) return false;
         return true;
       })
@@ -532,13 +533,13 @@ export default function AdminAnalyticsView({
               <div className="space-y-2">
                 <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   <span>Min DAT AA</span>
-                  <span className="text-white">{insightFilters.minDatAA}</span>
+                  <span className="text-white">{formatDATScore(insightFilters.minDatAA)}</span>
                 </div>
                 <input
                   type="range"
-                  min={15}
-                  max={30}
-                  step={1}
+                  min={200}
+                  max={600}
+                  step={10}
                   value={insightFilters.minDatAA}
                   onChange={(e) =>
                     setInsightFilters({ ...insightFilters, minDatAA: parseInt(e.target.value, 10) })
@@ -728,7 +729,7 @@ export default function AdminAnalyticsView({
               {(
                 [
                   { key: "gpa" as const, label: "GPA", min: 3, max: 4, step: 0.1 },
-                  { key: "dat" as const, label: "DAT", min: 17, max: 25, step: 1 },
+                  { key: "dat" as const, label: "DAT", min: 200, max: 600, step: 10 },
                   { key: "shadowing" as const, label: "Shadowing (h)", min: 0, max: 200, step: 10 },
                   { key: "mentorship" as const, label: "Mentorship (mo)", min: 1, max: 12, step: 1 },
                 ] as const
@@ -736,7 +737,7 @@ export default function AdminAnalyticsView({
                 <div key={field.key} className="space-y-2">
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
                     <span>{field.label}</span>
-                    <span className="text-white">{benchmarkThresholds[field.key]}</span>
+                    <span className="text-white">{field.key === "dat" ? formatDATScore(benchmarkThresholds[field.key]) : benchmarkThresholds[field.key]}</span>
                   </div>
                   <input
                     type="range"

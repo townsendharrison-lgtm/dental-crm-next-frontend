@@ -17,6 +17,7 @@ import { Input, FormField, Textarea } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils/cn";
+import { formatDATScore } from "@/lib/utils/datUtils";
 
 interface AdminResearchViewProps {
   researchCases: ResearchCase[];
@@ -325,7 +326,7 @@ const AdminResearchView: React.FC<AdminResearchViewProps> = ({
                       <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1.5">
                         <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">DAT AA</p>
                         <p className="text-sm font-bold tabular-nums text-indigo-400">
-                          {c.datAA ?? c.dat_aa ?? "—"}
+                          {formatDATScore(c.datAA ?? c.dat_aa)}
                         </p>
                       </div>
                     </div>
@@ -374,7 +375,7 @@ const AdminResearchView: React.FC<AdminResearchViewProps> = ({
                   <div className="text-right">
                     <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Avg</p>
                     <p className="text-sm font-bold tabular-nums text-white">
-                      {trend.avgGPA.toFixed(2)} / {Math.round(trend.avgDAT)} AA
+                      {trend.avgGPA.toFixed(2)} / {formatDATScore(trend.avgDAT)}
                     </p>
                   </div>
                 </div>
@@ -426,8 +427,8 @@ const AdminResearchView: React.FC<AdminResearchViewProps> = ({
           <div className="space-y-4 p-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Metric label="GPA" value={(detail.gpa ?? 0).toFixed(2)} />
-              <Metric label="DAT AA" value={detail.datAA ?? detail.dat_aa ?? "—"} />
-              <Metric label="DAT TS" value={detail.datTS ?? detail.dat_ts ?? "—"} />
+              <Metric label="DAT AA" value={formatDATScore(detail.datAA ?? detail.dat_aa)} />
+              <Metric label="DAT TS" value={formatDATScore(detail.datTS ?? detail.dat_ts)} />
               <Metric
                 label="Research hrs"
                 value={detail.research_hours ?? detail.researchExperience ?? 0}

@@ -25,6 +25,14 @@ import {
   ChevronDown,
   UserCheck,
   Check,
+  Scale,
+  Percent,
+  HelpCircle,
+  Target,
+  FileCheck,
+  Stethoscope,
+  HeartHandshake,
+  Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -44,9 +52,13 @@ import {
   StudentComparisonProfile,
   DentalSchoolProfile,
   PredictionResult,
+  ComparisonPointItem,
+  DetailedProbabilitiesAndRates,
+  PreparationAuditChecklist,
 } from "@/lib/api/aiServer";
 import type { School } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
+import { formatDATScore, toCanonicalDAT } from "@/lib/utils/datUtils";
 
 interface Props {
   schools: School[] | DentalSchoolProfile[];
@@ -75,9 +87,12 @@ export default function AdminStudentSchoolComparisonView({
   // What-If Simulator toggle & state
   const [showSimulator, setShowSimulator] = useState(false);
   const [simGpa, setSimGpa] = useState<number>(3.65);
-  const [simDat, setSimDat] = useState<number>(21);
+  const [simDat, setSimDat] = useState<number>(420);
   const [simShadowing, setSimShadowing] = useState<number>(85);
   const [simVolunteering, setSimVolunteering] = useState<number>(100);
+
+  // Comparison chart filter
+  const [chartFilter, setChartFilter] = useState<"ALL" | "SURPLUS" | "FULFILLED" | "PARTIAL" | "MISSING">("ALL");
 
   // Set default initial selections
   useEffect(() => {
@@ -108,7 +123,7 @@ export default function AdminStudentSchoolComparisonView({
       const rawGpa = activeStudent.gpa || (activeStudent as any).cgpa || 3.5;
       setSimGpa(Number(rawGpa));
       const rawDat = activeStudent.datAA || activeStudent.datScore || 20;
-      setSimDat(rawDat <= 30 ? rawDat : 21);
+      setSimDat(toCanonicalDAT(rawDat));
       setSimShadowing(85);
       setSimVolunteering(100);
       setPrediction(null);
@@ -127,7 +142,7 @@ export default function AdminStudentSchoolComparisonView({
   const studentOptions: SelectMenuOption[] = useMemo(() => {
     return realStudents.map((st) => ({
       value: st.id,
-      label: `${st.name} (GPA: ${st.gpa || "N/A"} · DAT: ${st.datAA || st.datScore || "N/A"})`,
+      label: `${st.name} (GPA: ${st.gpa || "N/A"} · DAT: ${formatDATScore(st.datAA || st.datScore)})`,
     }));
   }, [realStudents]);
 
@@ -172,7 +187,7 @@ export default function AdminStudentSchoolComparisonView({
     setIsEvaluating(true);
     try {
       const studentGpa = showSimulator ? simGpa : Number(activeStudent.gpa || (activeStudent as any).cgpa || 3.65);
-      const studentDat = showSimulator ? simDat : Number(activeStudent.datAA || activeStudent.datScore || 21);
+      const studentDat = showSimulator ? simDat : toCanonicalDAT(Number(activeStudent.datAA || activeStudent.datScore || 21));
       const studentShadowing = showSimulator ? simShadowing : Number((activeStudent as any).shadowingHours || (activeStudent as any).profile?.shadowing_hours || 85);
       const studentVolunteering = showSimulator ? simVolunteering : Number((activeStudent as any).volunteeringHours || (activeStudent as any).profile?.volunteering_hours || 100);
 
@@ -181,8 +196,8 @@ export default function AdminStudentSchoolComparisonView({
         name: activeStudent.name,
         email: activeStudent.email,
         cgpa: studentGpa,
-        sgpa: Number((activeStudent as any).sgpa || activeStudent.profile?.sgpa || (studentGpa - 0.05)),
-        bcp_gpa: Number((activeStudent as any).sgpa || activeStudent.profile?.sgpa || (studentGpa - 0.05)),
+        sgpa: Number((activeStudent as any).sgpa || activeStudent.profile?.sgpa || studentGpa - 0.05),
+        bcp_gpa: Number((activeStudent as any).sgpa || activeStudent.profile?.sgpa || studentGpa - 0.05),
         dat_aa: studentDat,
         dat_ts: Number(activeStudent.datTS || activeStudent.profile?.dat_ts || studentDat),
         dat_pat: Number((activeStudent as any).datPAT || activeStudent.profile?.dat_pat || 20),
@@ -194,11 +209,15 @@ export default function AdminStudentSchoolComparisonView({
         undergrad_institution: activeStudent.undergradInstitution || "University",
         major: activeStudent.profile?.major || "Biology",
         completed_courses: [],
+        lor_science_faculty_count: 2,
+        lor_dentist_count: 1,
+        total_lor_count: 3,
       };
 
       const result = await aiServerApi.compareStudentWithSchool({
         school_id: activeSchool.id,
         custom_student_profile: studentPayload,
+        include_ai_reasoning: true,
       });
 
       setPrediction(result);
@@ -211,6 +230,55 @@ export default function AdminStudentSchoolComparisonView({
     }
   };
 
+  // Helper badge for status
+  const getPointStatusBadge = (status: string) => {
+    switch (status) {
+      case "SURPLUS":
+        return (
+          <span className="rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold">
+            SURPLUS / EXCEEDS
+          </span>
+        );
+      case "FULFILLED":
+        return (
+          <span className="rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-bold">
+            FULFILLED
+          </span>
+        );
+      case "PARTIAL":
+        return (
+          <span className="rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 text-[10px] font-bold">
+            PARTIAL
+          </span>
+        );
+      case "MISSING":
+      default:
+        return (
+          <span className="rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 text-[10px] font-bold">
+            MISSING / DEFICIT
+          </span>
+        );
+    }
+  };
+
+  // Filter comparison points
+  const filteredPoints = useMemo(() => {
+    if (!prediction?.comparison_points) return [];
+    if (chartFilter === "ALL") return prediction.comparison_points;
+    return prediction.comparison_points.filter((pt) => pt.status === chartFilter);
+  }, [prediction, chartFilter]);
+
+  // Points breakdown counts
+  const pointCounts = useMemo(() => {
+    const points = prediction?.comparison_points || [];
+    return {
+      total: points.length,
+      fulfilled: points.filter((p) => p.status === "FULFILLED" || p.status === "SURPLUS").length,
+      partial: points.filter((p) => p.status === "PARTIAL").length,
+      missing: points.filter((p) => p.status === "MISSING" || p.status === "CRITICAL_DEFICIT").length,
+    };
+  }, [prediction]);
+
   return (
     <div className="space-y-6 text-slate-200 font-sans">
       {/* =================================================================== */}
@@ -219,13 +287,13 @@ export default function AdminStudentSchoolComparisonView({
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-sm space-y-6">
         <div className="border-b border-slate-800 pb-4">
           <span className="rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-400 border border-indigo-500/20">
-            1-on-1 Student Profile Comparison
+            1-on-1 Student Profile Comparison & Saturated Audit
           </span>
           <h2 className="text-lg font-bold text-white mt-1">
             Compare Applicant Against Target Dental School
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Select an admin-managed school and a student profile, then click evaluate to generate accurate predictive admission odds.
+            Benchmarks the student profile against school requirements calibrated on a percentile target range, generates an interactive comparison chart, and computes detailed acceptance odds.
           </p>
         </div>
 
@@ -265,7 +333,7 @@ export default function AdminStudentSchoolComparisonView({
                 </div>
                 <div className="flex items-center gap-4 pt-1 text-[11px] font-mono text-slate-300">
                   <span>Avg cGPA: <strong className="text-emerald-400">{activeSchool.avg_gpa || "3.55"}</strong></span>
-                  <span>Avg DAT AA: <strong className="text-indigo-400">{activeSchool.dat_avg || "20.5"}</strong></span>
+                  <span>Avg DAT AA: <strong className="text-indigo-400">{formatDATScore(activeSchool.dat_avg || 420)}</strong></span>
                   <span>Acceptance: <strong className="text-slate-200">{activeSchool.acceptance_rate ? `${activeSchool.acceptance_rate}%` : "8.5%"}</strong></span>
                 </div>
               </div>
@@ -311,7 +379,7 @@ export default function AdminStudentSchoolComparisonView({
                 <div className="flex items-center gap-4 pt-1 text-[11px] font-mono text-slate-300">
                   <span>cGPA: <strong className="text-emerald-400">{activeStudent.gpa || "3.50"}</strong></span>
                   <span>sGPA: <strong className="text-emerald-400">{activeStudent.profile?.sgpa || "3.45"}</strong></span>
-                  <span>DAT AA: <strong className="text-indigo-400">{activeStudent.datAA || activeStudent.datScore || "21"}</strong></span>
+                  <span>DAT AA: <strong className="text-indigo-400">{formatDATScore(activeStudent.datAA || activeStudent.datScore || 21)}</strong></span>
                   <span>Shadowing: <strong className="text-slate-200">85h</strong></span>
                 </div>
               </div>
@@ -319,7 +387,7 @@ export default function AdminStudentSchoolComparisonView({
           </div>
         </div>
 
-        {/* Data Sufficiency Warning Notices (if incomplete) */}
+        {/* Data Sufficiency Warning Notices */}
         {!dataSufficiency.isValid && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
@@ -367,7 +435,7 @@ export default function AdminStudentSchoolComparisonView({
               ) : (
                 <>
                   <Zap className="h-4 w-4" />
-                  Evaluate & Generate Insights
+                  Evaluate & Generate Comparison Chart
                 </>
               )}
             </Button>
@@ -396,7 +464,7 @@ export default function AdminStudentSchoolComparisonView({
               size="sm"
               onClick={() => {
                 setSimGpa(activeStudent?.gpa || 3.5);
-                setSimDat(activeStudent?.datAA || 21);
+                setSimDat(toCanonicalDAT(activeStudent?.datAA || 21));
                 setSimShadowing(85);
                 setSimVolunteering(100);
               }}
@@ -426,13 +494,13 @@ export default function AdminStudentSchoolComparisonView({
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-semibold">
                 <span className="text-slate-300">Simulated DAT AA</span>
-                <span className="text-indigo-400 font-mono text-sm">{simDat}</span>
+                <span className="text-indigo-400 font-mono text-sm">{formatDATScore(simDat)}</span>
               </div>
               <input
                 type="range"
-                min="15"
-                max="30"
-                step="1"
+                min="200"
+                max="600"
+                step="10"
                 value={simDat}
                 onChange={(e) => setSimDat(parseInt(e.target.value))}
                 className="w-full accent-indigo-500"
@@ -482,7 +550,7 @@ export default function AdminStudentSchoolComparisonView({
           <EmptyState
             icon={<Sparkles className="h-10 w-10 text-indigo-400" />}
             title="Ready for Evaluation"
-            description="Click 'Evaluate & Generate Insights' above to benchmark this applicant against the target school."
+            description="Click 'Evaluate & Generate Comparison Chart' above to benchmark this applicant against the target school with dynamic percentile weighting."
           />
         </div>
       )}
@@ -492,42 +560,13 @@ export default function AdminStudentSchoolComparisonView({
           <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
           <div className="text-sm font-bold text-white">Running LangGraph Predictive Model...</div>
           <p className="text-xs text-slate-400">
-            Benchmarking prerequisite coursework, calculating 4-outcome admission probabilities, and generating committee insights.
+            Evaluating student profile against school requirements on a normalized percentile scale, auditing preparation checklist, and computing acceptance rate breakdown.
           </p>
         </div>
       )}
 
       {hasEvaluated && prediction && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          {/* ATTACHED DOCUMENTS INGESTED & ANALYZED BY AI */}
-          {prediction.attached_documents_analyzed && prediction.attached_documents_analyzed.length > 0 && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  Student Documents Read & Verified by AI
-                </span>
-                <span className="text-[11px] text-emerald-300/80 font-medium">
-                  {prediction.attached_documents_analyzed.length} Source Document(s) Analyzed
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                {prediction.attached_documents_analyzed.map((docName, dIdx) => (
-                  <span
-                    key={dIdx}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-900/40 border border-emerald-500/40 px-3 py-1 text-xs font-medium text-emerald-200"
-                  >
-                    <BookOpen className="h-3.5 w-3.5 text-emerald-400" />
-                    {docName}
-                  </span>
-                ))}
-              </div>
-              <p className="text-[11px] text-slate-300">
-                Official course transcript records, grades, and clinical shadowing entries were parsed directly from the applicant's uploaded application documents before evaluating admission odds.
-              </p>
-            </div>
-          )}
-
           {/* A. STANDING & 4-OUTCOME PROBABILITY CARDS */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {/* Match Score & Fit */}
@@ -606,110 +645,352 @@ export default function AdminStudentSchoolComparisonView({
             </div>
           </div>
 
-          {/* B. SIDE-BY-SIDE PERCENTILE BENCHMARK */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-100 flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-indigo-400" />
-              Applicant vs School Matriculant Percentiles
-            </h4>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {/* cGPA */}
-              <div className="rounded-lg border border-slate-800 bg-slate-950 p-3.5 space-y-2">
-                <span className="text-[11px] text-slate-400 font-medium">Cumulative GPA</span>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-lg font-bold text-emerald-400 font-mono">{simGpa.toFixed(2)}</span>
-                  <span className="text-xs text-slate-400">
-                    School Avg: <strong className="text-slate-200">{activeSchool?.avg_gpa || "3.55"}</strong>
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 rounded-full"
-                    style={{ width: `${Math.min(100, (simGpa / 4.0) * 100)}%` }}
-                  />
-                </div>
+          {/* =================================================================== */}
+          {/* B. INTERACTIVE COMPARISON CHART (Fulfilled vs Partial vs Missing) */}
+          {/* =================================================================== */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Scale className="h-4 w-4 text-indigo-400" />
+                  Interactive Comparison Chart & Criteria Breakdown
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Points evaluated against school requirements with school-specific weights calibrated from the percentile directory.
+                </p>
               </div>
 
-              {/* DAT AA */}
-              <div className="rounded-lg border border-slate-800 bg-slate-950 p-3.5 space-y-2">
-                <span className="text-[11px] text-slate-400 font-medium">DAT Academic Average</span>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-lg font-bold text-indigo-400 font-mono">{simDat}</span>
-                  <span className="text-xs text-slate-400">
-                    School Avg: <strong className="text-slate-200">{activeSchool?.dat_avg || "20.5"}</strong>
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-500 rounded-full"
-                    style={{ width: `${Math.min(100, (simDat / 30.0) * 100)}%` }}
-                  />
-                </div>
+              {/* Status Filter Badges */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setChartFilter("ALL")}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-xs font-semibold transition-all",
+                    chartFilter === "ALL"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  )}
+                >
+                  All ({pointCounts.total})
+                </button>
+                <button
+                  onClick={() => setChartFilter("FULFILLED")}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-xs font-semibold transition-all",
+                    chartFilter === "FULFILLED"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/40 border border-emerald-500/30"
+                  )}
+                >
+                  Fulfilled ({pointCounts.fulfilled})
+                </button>
+                <button
+                  onClick={() => setChartFilter("PARTIAL")}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-xs font-semibold transition-all",
+                    chartFilter === "PARTIAL"
+                      ? "bg-amber-600 text-white"
+                      : "bg-amber-950/40 text-amber-300 hover:bg-amber-900/40 border border-amber-500/30"
+                  )}
+                >
+                  Partial ({pointCounts.partial})
+                </button>
+                <button
+                  onClick={() => setChartFilter("MISSING")}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-xs font-semibold transition-all",
+                    chartFilter === "MISSING"
+                      ? "bg-rose-600 text-white"
+                      : "bg-rose-950/40 text-rose-300 hover:bg-rose-900/40 border border-rose-500/30"
+                  )}
+                >
+                  Missing ({pointCounts.missing})
+                </button>
               </div>
+            </div>
 
-              {/* Shadowing */}
-              <div className="rounded-lg border border-slate-800 bg-slate-950 p-3.5 space-y-2">
-                <span className="text-[11px] text-slate-400 font-medium">Dental Shadowing</span>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-lg font-bold text-slate-200 font-mono">{simShadowing}h</span>
-                  <span className="text-xs text-slate-400">Target: <strong className="text-slate-200">100h</strong></span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 rounded-full"
-                    style={{ width: `${Math.min(100, (simShadowing / 100.0) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Volunteering */}
-              <div className="rounded-lg border border-slate-800 bg-slate-950 p-3.5 space-y-2">
-                <span className="text-[11px] text-slate-400 font-medium">Community Service</span>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-lg font-bold text-slate-200 font-mono">{simVolunteering}h</span>
-                  <span className="text-xs text-slate-400">Target: <strong className="text-slate-200">100h</strong></span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-amber-500 rounded-full"
-                    style={{ width: `${Math.min(100, (simVolunteering / 100.0) * 100)}%` }}
-                  />
-                </div>
-              </div>
+            {/* Comparison Points Table */}
+            <div className="overflow-x-auto rounded-lg border border-slate-800">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-medium">
+                  <tr>
+                    <th className="py-3 px-4">Evaluation Point</th>
+                    <th className="py-3 px-4 text-center">Student Score</th>
+                    <th className="py-3 px-4 text-center">School Target</th>
+                    <th className="py-3 px-4 text-center">Target Range</th>
+                    <th className="py-3 px-4 text-center">Calibrated Weight</th>
+                    <th className="py-3 px-4 text-center">Fulfillment Bar</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {filteredPoints.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-500">
+                        No criteria matching current status filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPoints.map((pt, idx) => (
+                      <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-slate-100">{pt.metric_name}</div>
+                          <div className="text-[11px] text-slate-400">{pt.impact_description}</div>
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-emerald-400">
+                          {pt.student_value}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-slate-200">
+                          {pt.school_target}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-slate-400 text-[11px]">
+                          {pt.baseline_value} → {pt.skyline_value}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="rounded bg-indigo-500/10 px-2 py-0.5 font-mono text-indigo-300 font-bold border border-indigo-500/20">
+                            {pt.weight_percentage}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-20 h-2 bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full",
+                                  pt.fulfillment_percentage >= 100
+                                    ? "bg-emerald-500"
+                                    : pt.fulfillment_percentage >= 70
+                                    ? "bg-amber-500"
+                                    : "bg-rose-500"
+                                )}
+                                style={{ width: `${Math.min(100, pt.fulfillment_percentage)}%` }}
+                              />
+                            </div>
+                            <span className="font-mono text-[11px] text-slate-300">
+                              {pt.fulfillment_percentage}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {getPointStatusBadge(pt.status)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          {/* C. ADMISSIONS COMMITTEE DIAGNOSTIC & INSIGHTS */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4" />
-                Primary Admission Factor
-              </span>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {prediction.diagnostics?.mostLikelyReason || "Strong metric alignment with historical matriculants."}
-              </p>
-            </div>
+          {/* =================================================================== */}
+          {/* C. COMPLETE SUITE OF ACCEPTANCE PROBABILITIES & DETAILED RATES */}
+          {/* =================================================================== */}
+          {prediction.detailed_probabilities && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-indigo-400" />
+                  Comprehensive Suite of Acceptance Probabilities & Detailed Rates
+                </h3>
+                <span className="text-xs text-slate-400">
+                  Official Demographic & Sub-Cohort Breakdown
+                </span>
+              </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                <AlertCircle className="h-4 w-4" />
-                Most Limiting Factor / Constraint
-              </span>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {prediction.diagnostics?.mostLimitingFactor || "Ensure all lab prerequisites and secondary essays are completed early."}
-              </p>
-            </div>
-          </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-1">
+                {/* 1. Overall Acceptance Rate */}
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Overall Acceptance</span>
+                  <div className="text-2xl font-black font-mono text-emerald-400">
+                    {prediction.detailed_probabilities.overall_acceptance_rate}%
+                  </div>
+                  <div className="text-[10px] text-slate-500">General applicant pool</div>
+                </div>
 
-          {/* D. PREREQUISITE REQUIREMENT AUDIT CHECKLIST */}
+                {/* 2. Interviewed Acceptance Rate */}
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Interviewed Acceptance</span>
+                  <div className="text-2xl font-black font-mono text-emerald-400">
+                    {prediction.detailed_probabilities.interviewed_acceptance_rate}%
+                  </div>
+                  <div className="text-[10px] text-slate-500">Post-interview offer rate</div>
+                </div>
+
+                {/* 3. In-State Acceptance Rate */}
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">In-State Acceptance</span>
+                  <div className="text-2xl font-black font-mono text-indigo-400">
+                    {prediction.detailed_probabilities.in_state_acceptance_rate}%
+                  </div>
+                  <div className="text-[10px] text-slate-500">Resident applicants</div>
+                </div>
+
+                {/* 4. Out-of-State Acceptance Rate */}
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Out-of-State Acceptance</span>
+                  <div className="text-2xl font-black font-mono text-indigo-400">
+                    {prediction.detailed_probabilities.out_of_state_acceptance_rate}%
+                  </div>
+                  <div className="text-[10px] text-slate-500">Non-resident applicants</div>
+                </div>
+
+                {/* 5. International Acceptance Rate */}
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">International Acceptance</span>
+                  <div className="text-2xl font-black font-mono text-amber-400">
+                    {prediction.detailed_probabilities.international_acceptance_rate}%
+                  </div>
+                  <div className="text-[10px] text-slate-500">Foreign degree holders</div>
+                </div>
+
+                {/* 6. Male Acceptance Rate */}
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Male Acceptance</span>
+                  <div className="text-2xl font-black font-mono text-slate-200">
+                    {prediction.detailed_probabilities.male_acceptance_rate}%
+                  </div>
+                  <div className="text-[10px] text-slate-500">Gender sub-cohort</div>
+                </div>
+
+                {/* 7. Female Acceptance Rate */}
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Female Acceptance</span>
+                  <div className="text-2xl font-black font-mono text-slate-200">
+                    {prediction.detailed_probabilities.female_acceptance_rate}%
+                  </div>
+                  <div className="text-[10px] text-slate-500">Gender sub-cohort</div>
+                </div>
+
+                {/* 8. Reapplicant vs First-Time */}
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">Reapplicant Rate</span>
+                  <div className="text-2xl font-black font-mono text-indigo-400">
+                    {prediction.detailed_probabilities.reapplicant_acceptance_rate}%
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    vs First-Time: {prediction.detailed_probabilities.first_time_applicant_acceptance_rate}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Interview Invitation Metrics Sub-Bar */}
+              <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 text-xs flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <span className="text-slate-400">Overall Interview Rate:</span>{" "}
+                  <strong className="text-amber-400 font-mono text-sm ml-1">
+                    {prediction.detailed_probabilities.overall_interview_rate}%
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-slate-400">Applicants Interviewed:</span>{" "}
+                  <strong className="text-slate-200 font-mono text-sm ml-1">
+                    ~{prediction.detailed_probabilities.number_applicants_interviewed}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-slate-400">Interviewed Resident Breakdown:</span>{" "}
+                  <span className="font-mono text-slate-300 ml-1">
+                    {prediction.detailed_probabilities.in_state_interviewed_percentage}% IS / {prediction.detailed_probabilities.out_of_state_interviewed_percentage}% OOS
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =================================================================== */}
+          {/* D. REQUIREMENTS & PREPARATION AUDIT CHECKLIST */}
+          {/* =================================================================== */}
+          {prediction.preparation_audit && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-indigo-400" />
+                    Requirements & Preparation Audit Checklist
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Verification of institutional policies for online courses, labs, pass/fail, expiration, and shadowing rules.
+                  </p>
+                </div>
+
+                <div>
+                  {prediction.preparation_audit.student_audit_status === "ALL_VERIFIED" ? (
+                    <span className="rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 text-xs font-bold flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4" /> ALL REQUIREMENTS VERIFIED
+                    </span>
+                  ) : prediction.preparation_audit.student_audit_status === "POTENTIAL_RISKS" ? (
+                    <span className="rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1 text-xs font-bold flex items-center gap-1.5">
+                      <AlertCircle className="h-4 w-4" /> POTENTIAL DEFICITS IDENTIFIED
+                    </span>
+                  ) : (
+                    <span className="rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 px-3 py-1 text-xs font-bold flex items-center gap-1.5">
+                      <XCircle className="h-4 w-4" /> ACTION REQUIRED BEFORE APPLICATION
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Student Risk Warnings */}
+              {prediction.preparation_audit.student_notes && prediction.preparation_audit.student_notes.length > 0 && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 space-y-1.5">
+                  <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4" />
+                    Admissions Committee Compliance Action Items:
+                  </div>
+                  <ul className="list-disc pl-5 text-xs text-amber-200/90 space-y-1">
+                    {prediction.preparation_audit.student_notes.map((note, nIdx) => (
+                      <li key={nIdx}>{note}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Requirements Policy Matrix Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs pt-1">
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Online Coursework</span>
+                  <p className="text-slate-200">{prediction.preparation_audit.online_coursework_accepted}</p>
+                </div>
+
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Online Labs</span>
+                  <p className="text-slate-200">{prediction.preparation_audit.online_labs_accepted}</p>
+                </div>
+
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Pass / Fail Grades</span>
+                  <p className="text-slate-200">{prediction.preparation_audit.pass_fail_grades_accepted}</p>
+                </div>
+
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Course Expiration</span>
+                  <p className="text-slate-200">{prediction.preparation_audit.expiration_of_classes}</p>
+                </div>
+
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Shadowing Mandate</span>
+                  <p className="text-slate-200">
+                    {prediction.preparation_audit.is_shadowing_required ? `Mandatory (${prediction.preparation_audit.required_shadowing_hours}h required)` : "Recommended"}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-1">
+                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Dental Assisting Rules</span>
+                  <p className="text-slate-200">{prediction.preparation_audit.dental_assisting_counts_towards_shadowing}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =================================================================== */}
+          {/* E. PREREQUISITE REQUIREMENT AUDIT CHECKLIST */}
+          {/* =================================================================== */}
           {prediction.requirements && prediction.requirements.length > 0 && (
             <div className="rounded-xl border border-slate-800 bg-slate-900 overflow-hidden shadow-sm">
               <div className="bg-slate-800/80 px-5 py-3 border-b border-slate-700/60 flex items-center justify-between">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-100 flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-indigo-400" />
-                  Prerequisite Requirement Audit Checklist ({prediction.requirements.length} Courses)
+                  Prerequisite Course Audit ({prediction.requirements.length} Courses)
                 </h4>
                 <span className="text-xs text-slate-400 font-mono">
                   {prediction.requirements.filter((c) => c.status === "MET").length} / {prediction.requirements.length} Met
@@ -759,43 +1040,28 @@ export default function AdminStudentSchoolComparisonView({
             </div>
           )}
 
-          {/* E. ACTIONABLE HIGH-ROI RECOMMENDATIONS */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-100 flex items-center gap-2">
-              <Zap className="h-4 w-4 text-amber-400" />
-              Highest-ROI Improvement Action Plan
-            </h4>
+          {/* =================================================================== */}
+          {/* F. ADMISSIONS COMMITTEE DIAGNOSTIC & ROI RECOMMENDATIONS */}
+          {/* =================================================================== */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4" />
+                Primary Admission Factor
+              </span>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {prediction.diagnostics?.mostLikelyReason || "Strong metric alignment with historical matriculants."}
+              </p>
+            </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-2">
-                <span className="rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-bold uppercase">
-                  DAT Score Target
-                </span>
-                <h5 className="font-semibold text-slate-100 text-xs">Targeting 22+ Academic Average</h5>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Moving from {simDat} to 22+ places you above the 75th percentile for {activeSchool?.name}, increasing interview invitations by +24%.
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-2">
-                <span className="rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase">
-                  Shadowing Hours
-                </span>
-                <h5 className="font-semibold text-slate-100 text-xs">Fulfill 100+ Total Hours</h5>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Logging additional shadowing with general dentists satisfies institutional screening cutoffs.
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-2">
-                <span className="rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[10px] font-bold uppercase">
-                  Application Timing
-                </span>
-                <h5 className="font-semibold text-slate-100 text-xs">Submit in June / Rolling Cycle</h5>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Submitting within the first month of AADSAS opening maximizes rolling interview slots.
-                </p>
-              </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4" />
+                Most Limiting Factor / Constraint
+              </span>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {prediction.diagnostics?.mostLimitingFactor || "Ensure all lab prerequisites and secondary essays are completed early."}
+              </p>
             </div>
           </div>
         </div>
