@@ -39,7 +39,7 @@ import {
   type SchoolAiScoreRow,
   type SchoolAiWebSource,
 } from "@/lib/api/schoolAi";
-import type { School as CrmSchool } from "@/lib/types";
+import type { School as CrmSchool, Student } from "@/lib/types";
 
 type CrmSchoolRow = CrmSchool & { ai_school_id?: string | null };
 type PrimaryTab = "schools" | "sources" | "rubric" | "compare";
@@ -71,36 +71,22 @@ function normalizeFactorBreakdown(
   return [];
 }
 
-function studentCompareAttrs(student: {
-  gpa?: number | null;
-  cgpa?: number | null;
-  sgpa?: number | null;
-  datAA?: number | null;
-  datTS?: number | null;
-  datPAT?: number | null;
-  datBio?: number | null;
-  datGC?: number | null;
-  datOC?: number | null;
-  datRC?: number | null;
-  datQR?: number | null;
-  shadowingHours?: number | null;
-  profile?: Record<string, unknown> | null;
-}): Record<string, number | string | null> {
-  const p = student.profile || {};
+function studentCompareAttrs(student: Student): Record<string, number | string | null> {
+  const p = student.profile;
   const num = (v: unknown) =>
     v == null || v === "" ? null : typeof v === "number" ? v : Number(v);
   return {
-    avg_gpa: num(student.gpa ?? student.cgpa ?? p.gpa ?? p.cgpa),
-    avg_science_gpa: num(student.sgpa ?? p.sgpa),
-    avg_dat_aa: num(student.datAA ?? p.dat_aa),
-    avg_dat_total_science: num(student.datTS ?? p.dat_ts),
-    avg_dat_pat: num(student.datPAT ?? p.dat_pat),
-    avg_dat_biology: num(student.datBio ?? p.dat_bio),
-    avg_dat_general_chemistry: num(student.datGC ?? p.dat_gc),
-    avg_dat_organic_chemistry: num(student.datOC ?? p.dat_oc),
-    avg_dat_reading_comprehension: num(student.datRC ?? p.dat_rc),
-    avg_dat_quantitative_reasoning: num(student.datQR ?? p.dat_qr),
-    shadowing_hours: num(student.shadowingHours ?? p.shadowing_hours),
+    avg_gpa: num(student.gpa ?? student.cgpa ?? p?.gpa),
+    avg_science_gpa: num(student.sgpa ?? p?.sgpa),
+    avg_dat_aa: num(student.datAA ?? p?.dat_aa),
+    avg_dat_total_science: num(p?.dat_ts),
+    avg_dat_pat: num(student.datPAT ?? p?.dat_pat),
+    avg_dat_biology: num(p?.dat_bio),
+    avg_dat_general_chemistry: num(p?.dat_gc),
+    avg_dat_organic_chemistry: num(p?.dat_oc),
+    avg_dat_reading_comprehension: num(p?.dat_rc),
+    avg_dat_quantitative_reasoning: num(p?.dat_qr),
+    shadowing_hours: num(student.shadowingHours),
   };
 }
 
@@ -1580,7 +1566,7 @@ export default function AdmissionResearchView() {
                                     ...score,
                                     schools: score.schools ?? s.schools ?? {
                                       id: s.school_id,
-                                      name: s.schools?.name || s.school_id,
+                                      name: selectedSchool?.name || s.school_id,
                                     },
                                   };
                                   if (persisted) await loadScores(studentId);
