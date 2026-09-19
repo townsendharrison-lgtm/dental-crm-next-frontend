@@ -23,6 +23,19 @@ export function canSeeNewLeadNotifications(role?: UserRole | string | null) {
   return String(role || "").toUpperCase() === "ADMIN";
 }
 
+/**
+ * Hide setter-lead alerts on student UI — including admin preview of a student
+ * profile, where the JWT role is still ADMIN but the surface is student-facing.
+ */
+export function shouldHideNewLeadNotifications(
+  role?: UserRole | string | null,
+  pathname?: string | null,
+) {
+  const path = String(pathname || "");
+  if (path === "/student" || path.startsWith("/student/")) return true;
+  return !canSeeNewLeadNotifications(role);
+}
+
 /** Mentor dashboard / mentor bell: drop notifications older than 48 hours. */
 export function isWithinMentorNotificationTtl(n: SystemNotification, now = Date.now()) {
   const created = notifCreatedAtMs(n);

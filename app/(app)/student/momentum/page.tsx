@@ -9,6 +9,7 @@ import { useStudent, useStudentStrengthPercentile } from "@/lib/hooks/useStudent
 import { useBadges, useEarnedBadges, useEvaluateBadges } from "@/lib/hooks/useBadges";
 import { useActionItems, useUpdateActionItem, useCreateActionItem, useDeleteActionItem } from "@/lib/hooks/useActionItems";
 import { useDeleteNotification, useNotifications } from "@/lib/hooks/useNotifications";
+import { filterNotificationsForRole } from "@/lib/utils/notificationVisibility";
 import type { SystemNotification } from "@/lib/types";
 import { useSurveys, useSubmitSurveyResponse } from "@/lib/hooks/useSurveys";
 import { useMeetings } from "@/lib/hooks/useMeetings";
@@ -49,7 +50,12 @@ export default function StudentMomentumPage() {
   const { data: earnedBadgeRows = [] } = useEarnedBadges(subjectId);
   const evaluateBadges = useEvaluateBadges();
   const { data: actionItems = [] } = useActionItems(subjectId);
-  const { data: notifications = [] } = useNotifications();
+  const { data: notificationsRaw = [] } = useNotifications();
+  // Always treat this page as student UI so admin preview never shows setter leads.
+  const notifications = useMemo(
+    () => filterNotificationsForRole(notificationsRaw, "STUDENT"),
+    [notificationsRaw],
+  );
   const deleteNotification = useDeleteNotification();
   const { data: surveys = [] } = useSurveys();
   const { data: meetings = [] } = useMeetings();

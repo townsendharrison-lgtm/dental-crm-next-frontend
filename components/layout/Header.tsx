@@ -42,7 +42,11 @@ import {
 } from "@/lib/hooks/useNotifications";
 import type { SystemNotification } from "@/lib/types";
 import { cn } from "@/lib/utils/cn";
-import { filterNotificationsForRole } from "@/lib/utils/notificationVisibility";
+import {
+  filterNotificationsForRole,
+  isNewLeadNotification,
+  shouldHideNewLeadNotifications,
+} from "@/lib/utils/notificationVisibility";
 import { RolePreviewBanner } from "./RolePreviewBanner";
 
 const LOGO_URL =
@@ -121,6 +125,7 @@ function isStudentOnlyLorReviewNotif(opts: {
 function NotificationBell() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const { role, actualRole } = useRole();
   const token = getAccessToken();
@@ -141,10 +146,17 @@ function NotificationBell() {
   const clearAllMutation = useClearAllNotifications();
 
   const visibleNotifications = useMemo(() => {
-    // Use effective role so admin preview-as-mentor hides admin-only lead alerts
+    // Use effective role so admin preview-as-mentor hides admin-only lead alerts.
+    // Student routes (including admin preview of a student) never show setter leads.
     const viewRole = role || actualRole;
     const list = filterNotificationsForRole(notifications, viewRole)
       .filter((n) => {
+        if (
+          isNewLeadNotification(n) &&
+          shouldHideNewLeadNotifications(viewRole, pathname)
+        ) {
+          return false;
+        }
         if (actualRole === "STUDENT" || role === "STUDENT") return true;
         return !isStudentOnlyLorReviewNotif({
           category: n.category,
@@ -158,13 +170,19 @@ function NotificationBell() {
       });
     if (filter === "unread") return list.filter((n) => !n.is_read);
     return list;
-  }, [notifications, filter, actualRole, role]);
+  }, [notifications, filter, actualRole, role, pathname]);
 
   const unreadCount = useMemo(
     () => {
       const viewRole = role || actualRole;
       return filterNotificationsForRole(notifications, viewRole).filter((n) => {
         if (n.is_read) return false;
+        if (
+          isNewLeadNotification(n) &&
+          shouldHideNewLeadNotifications(viewRole, pathname)
+        ) {
+          return false;
+        }
         if (actualRole === "STUDENT" || role === "STUDENT") return true;
         return !isStudentOnlyLorReviewNotif({
           category: n.category,
@@ -172,7 +190,7 @@ function NotificationBell() {
         });
       }).length;
     },
-    [notifications, actualRole, role],
+    [notifications, actualRole, role, pathname],
   );
 
   useEffect(() => {
@@ -250,6 +268,15 @@ function NotificationBell() {
             return;
           }
 
+          // Setter-lead alerts stay admin-only, including student preview.
+          if (
+            isNewLeadNotification(newNotif) &&
+            shouldHideNewLeadNotifications(role || actualRole, pathname)
+          ) {
+            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            return;
+          }
+
           const isAssignment =
             category === "ASSIGNMENT" &&
             !!relatedId &&
@@ -295,7 +322,7 @@ function NotificationBell() {
     return () => {
       supabaseClient.removeChannel(channel);
     };
-  }, [user?.id, token, queryClient, router, role, actualRole]);
+  }, [user?.id, token, queryClient, router, role, actualRole, pathname]);
 
   useEffect(() => {
     const initialized = initializeFirebase();
@@ -317,6 +344,18 @@ function NotificationBell() {
         return;
       }
 
+      if (
+        isNewLeadNotification({
+          category: data.type,
+          title,
+          message: body,
+        }) &&
+        shouldHideNewLeadNotifications(role || actualRole, pathname)
+      ) {
+        queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        return;
+      }
+
       if (isAssignment) {
         // Realtime INSERT already shows an Accept/Decline toast while the tab is open.
         // Only refresh caches here to avoid a duplicate prompt.
@@ -335,7 +374,7 @@ function NotificationBell() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [queryClient, actualRole]);
+  }, [queryClient, actualRole, role, pathname]);
 
   // Service worker Accept/Decline fallback when navigate() is unavailable
   useEffect(() => {

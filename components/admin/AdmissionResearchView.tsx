@@ -327,6 +327,17 @@ export default function AdmissionResearchView() {
 
   const selectedSchool = schools.find((s) => s.id === crmSchoolId);
 
+  const schoolOptions = useMemo(
+    () =>
+      [...schools]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((s) => ({
+          value: s.id,
+          label: s.location ? `${s.name} · ${s.location}` : s.name,
+        })),
+    [schools],
+  );
+
   const filteredSchools = useMemo(() => {
     const q = schoolSearch.trim().toLowerCase();
     const list = [...schools].sort((a, b) => a.name.localeCompare(b.name));
@@ -534,34 +545,46 @@ export default function AdmissionResearchView() {
     <div className="mx-auto max-w-6xl space-y-4 pb-10">
       {/* Page header */}
       <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
-        <div className="flex items-start gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-400">
             <FlaskConical className="h-5 w-5" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="text-base font-semibold text-white">Admission Research</h1>
             <p className="mt-0.5 text-xs text-slate-500">
               Manage schools, feed data sources, review extracted rubrics, and compare students.
             </p>
-            {selectedSchool ? (
-              <p className="mt-2 text-xs text-slate-400">
-                Working on{" "}
-                <span className="font-medium text-teal-300">{selectedSchool.name}</span>
-                {aiSchoolId ? (
-                  <>
-                    {" "}
-                    · linked{" "}
-                    <code className="rounded bg-slate-950 px-1 py-0.5 text-[10px] text-slate-400">
-                      {aiSchoolId.slice(0, 8)}…
-                    </code>
-                  </>
-                ) : (
-                  <span className="text-amber-400/80"> · not linked yet</span>
-                )}
-              </p>
-            ) : (
-              <p className="mt-2 text-xs text-amber-400/80">Select a school in the Schools tab to continue.</p>
-            )}
+            <div className="mt-3 max-w-md">
+              <FormField label="Working school">
+                <SelectMenu
+                  value={crmSchoolId}
+                  onChange={(id) => selectSchool(id)}
+                  options={schoolOptions}
+                  placeholder={
+                    schoolsLoading
+                      ? "Loading schools…"
+                      : schoolOptions.length === 0
+                        ? "No schools yet — add one in Schools"
+                        : "Select a school…"
+                  }
+                  className="w-full"
+                />
+              </FormField>
+              {selectedSchool ? (
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  {aiSchoolId ? (
+                    <>
+                      Linked{" "}
+                      <code className="rounded bg-slate-950 px-1 py-0.5 text-[10px] text-slate-400">
+                        {aiSchoolId.slice(0, 8)}…
+                      </code>
+                    </>
+                  ) : (
+                    <span className="text-amber-400/80">Not linked yet — use Link in the Schools list</span>
+                  )}
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
         <HealthBadge status={health} />
@@ -670,7 +693,7 @@ export default function AdmissionResearchView() {
 
           <Panel
             title="School list"
-            subtitle="Select a school to feed data, review its rubric, or compare students"
+            subtitle="Link or delete schools here. Pick the working school with the dropdown at the top."
             action={
               <Input
                 value={schoolSearch}
@@ -795,11 +818,8 @@ export default function AdmissionResearchView() {
           {!crmSchoolId ? (
             <Panel title="Select a school first">
               <p className="text-xs text-slate-500">
-                Go to the Schools tab and choose a school before adding data sources.
+                Choose a school from the Working school dropdown at the top of this page.
               </p>
-              <Button type="button" size="sm" className="mt-3" onClick={() => setTab("schools")}>
-                Open Schools
-              </Button>
             </Panel>
           ) : (
             <>
@@ -1043,11 +1063,8 @@ export default function AdmissionResearchView() {
           {!crmSchoolId ? (
             <Panel title="Select a school first">
               <p className="text-xs text-slate-500">
-                Choose a school, feed data sources, then review extracted facts and the scoring rubric here.
+                Choose a school from the Working school dropdown at the top, then feed data sources and review the rubric here.
               </p>
-              <Button type="button" size="sm" className="mt-3" onClick={() => setTab("schools")}>
-                Open Schools
-              </Button>
             </Panel>
           ) : (
             <>
@@ -1456,7 +1473,7 @@ export default function AdmissionResearchView() {
             </div>
             <div className="mt-3 space-y-1 text-xs">
               {!crmSchoolId ? (
-                <p className="text-amber-400/80">Select a school in the Schools tab first.</p>
+                <p className="text-amber-400/80">Select a school from the Working school dropdown above.</p>
               ) : (
                 <p className="text-slate-400">
                   School:{" "}

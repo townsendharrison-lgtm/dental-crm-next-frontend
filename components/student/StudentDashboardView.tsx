@@ -53,6 +53,7 @@ import { useExperiences } from "@/lib/hooks/useExperiences";
 import { useLorRequests } from "@/lib/hooks/useLor";
 import { useStudentCredentials } from "@/lib/hooks/useStudentNotesDexterity";
 import { buildApplicationReadiness } from "@/lib/utils/applicationReadiness";
+import { isNewLeadNotification } from "@/lib/utils/notificationVisibility";
 
 interface StudentDashboardProps {
   student: Student;
@@ -413,6 +414,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     return [...notifications]
       .filter((n) => {
+        if (isNewLeadNotification(n)) return false;
         const created = new Date(notifCreatedAt(n)).getTime();
         return Number.isFinite(created) && created >= cutoff;
       })
