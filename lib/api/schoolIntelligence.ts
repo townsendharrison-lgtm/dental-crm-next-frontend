@@ -1,5 +1,5 @@
-import { apiGet, apiPost, apiPut, apiDelete } from "./client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiGet, apiPost, apiPut } from "./client";
+import { useQuery } from "@tanstack/react-query";
 import type {
   SchoolEvidence,
   SchoolScoringRubric,
@@ -8,64 +8,7 @@ import type {
   StudentProfileForPrediction,
 } from "@/lib/types";
 
-export interface CrawlResponse {
-  schoolId: string;
-  schoolName: string;
-  sourceType: string;
-  sourceName: string;
-  sourceUrl?: string;
-  extractedRubric: any;
-  evidenceList: any[];
-}
-
 export const schoolIntelligenceApi = {
-  /** Crawl and extract admissions criteria from a dental school URL */
-  crawl: async (payload: {
-    url: string;
-    schoolName?: string;
-    schoolId?: string;
-  }): Promise<CrawlResponse> => {
-    return await apiPost<CrawlResponse>("/api/school-intelligence/crawl", payload);
-  },
-
-  /** Upload and ingest PDF, TXT, or Image (PNG/JPG) using Gemini Multimodal Vision */
-  ingestFile: async (
-    file: File,
-    meta?: { schoolName?: string; schoolId?: string }
-  ): Promise<CrawlResponse> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    if (meta?.schoolName) formData.append("schoolName", meta.schoolName);
-    if (meta?.schoolId) formData.append("schoolId", meta.schoolId);
-
-    // Call backend endpoint with multipart/form-data
-    const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}/api/school-intelligence/ingest-file`,
-      {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      }
-    );
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: "File upload failed" }));
-      throw new Error(err.error || `Upload failed with HTTP ${res.status}`);
-    }
-
-    return await res.json();
-  },
-
-  /** Ingest manual text or interview notes */
-  ingestText: async (payload: {
-    text: string;
-    schoolName?: string;
-    schoolId?: string;
-    sourceName?: string;
-  }): Promise<CrawlResponse> => {
-    return await apiPost<CrawlResponse>("/api/school-intelligence/ingest-text", payload);
-  },
 
   /** Fetch evidence citations for a school */
   getEvidence: async (schoolId: string): Promise<SchoolEvidence[]> => {
@@ -73,24 +16,6 @@ export const schoolIntelligenceApi = {
       `/api/school-intelligence/evidence/${schoolId}`
     );
     return res.evidence || [];
-  },
-
-  /** Verify or unverify an evidence citation snippet */
-  verifyEvidence: async (
-    id: string,
-    payload: { isVerified: boolean; notes?: string }
-  ): Promise<SchoolEvidence> => {
-    return await apiPut<SchoolEvidence>(
-      `/api/school-intelligence/evidence/${id}/verify`,
-      payload
-    );
-  },
-
-  /** Delete an evidence item */
-  deleteEvidence: async (id: string): Promise<{ message: string }> => {
-    return await apiDelete<{ message: string }>(
-      `/api/school-intelligence/evidence/${id}`
-    );
   },
 
   /** Fetch school scoring rubric */

@@ -1,7 +1,21 @@
+import { getAccessToken } from "@/lib/auth/cookies";
+
+export interface VerifiedCriterion {
+  field: string;
+  category: string;
+  label: string;
+  value: unknown;
+  status: string;
+  student_value?: unknown;
+  comparison_status?: string;
+  explanation?: string;
+  evidence: Array<{ id: string; source_name: string; source_url?: string | null; quote: string;
+    value: unknown; status: string; page_number?: number | null; retrieved_at?: string; cycle: string; reason?: string }>;
+}
+
 /**
  * Client for the Python LangGraph AI Server (ai-server/ on port 8000)
- * Saturated 14-category extraction, dynamic baseline-skyline calibration,
- * and comprehensive predictive admission engine.
+ * Shared school profiles, calibration, and student comparison/prediction APIs.
  */
 
 export const AI_SERVER_BASE_URL =
@@ -345,6 +359,8 @@ export interface SchoolDynamicWeights {
 
 
 export interface DentalSchoolProfile {
+  criteria?: VerifiedCriterion[];
+  research_revision?: number;
   id: string;
   name: string;
   cycle: string;
@@ -502,23 +518,14 @@ export interface ComparisonPointItem {
 }
 
 export interface DetailedProbabilitiesAndRates {
-  acceptance_probability: number;
-  overall_acceptance_rate: number;
-  interviewed_acceptance_rate: number;
-  in_state_acceptance_rate: number;
-  out_of_state_acceptance_rate: number;
-  international_acceptance_rate: number;
-  male_acceptance_rate: number;
-  female_acceptance_rate: number;
-  ethnicity_and_gender_rates?: Record<string, number>;
-  reapplicant_acceptance_rate: number;
-  first_time_applicant_acceptance_rate: number;
-  interview_probability: number;
-  overall_interview_rate: number;
-  number_applicants_interviewed: number;
-  in_state_interviewed_percentage: number;
-  out_of_state_interviewed_percentage: number;
-  international_interviewed_percentage: number;
+  overall_acceptance_rate: number | null;
+  overall_interview_rate: number | null;
+  interviewed_acceptance_rate: number | null;
+  in_state_acceptance_rate: number | null;
+  out_of_state_acceptance_rate: number | null;
+  international_acceptance_rate: number | null;
+  acceptance_probability: number | null;
+  interview_probability: number | null;
 }
 
 export interface PreparationAuditChecklist {
@@ -535,20 +542,25 @@ export interface PreparationAuditChecklist {
 }
 
 export interface PredictionResult {
+  scoreMethod?: string;
+  probabilityStatus?: string;
+  probabilityExplanation?: string;
+  criteria_comparison?: VerifiedCriterion[];
+  evidenceCoverage?: { verifiedSchoolFields: number; totalSchoolFields: number; numericalComparisons: number; scoredCategories: number; cycle: string };
   schoolId: string;
   schoolName: string;
   location: string;
-  fitCategory: "Strong Fit" | "Target" | "Reach" | "Safety" | "High Risk / Unqualified";
-  matchScore: number;
-  requirementsStatus: "MEETS_ALL" | "WARNINGS" | "FAILS_REQUIREMENTS";
+  fitCategory: string;
+  matchScore: number | null;
+  requirementsStatus: "MEETS_ALL" | "WARNINGS" | "FAILS_REQUIREMENTS" | "UNKNOWN";
   requirementsPassedCount: number;
   requirementsTotalCount: number;
   requirements: RequirementCheckItem[];
   probabilities: {
-    interviewProbability: number;
-    acceptedProbability: number;
-    waitlistProbability: number;
-    rejectionProbability: number;
+    interviewProbability: number | null;
+    acceptedProbability: number | null;
+    waitlistProbability: number | null;
+    rejectionProbability: number | null;
   };
   detailed_probabilities?: DetailedProbabilitiesAndRates;
   preparation_audit?: PreparationAuditChecklist;
@@ -565,120 +577,26 @@ export interface PredictionResult {
   document_insights?: Record<string, any>;
 }
 
-export interface BaselineSkylineResponse {
-  total_schools: number;
-  baseline: Record<string, number>;
-  skyline: Record<string, number>;
+async function aiFetch(url: string, options: RequestInit = {}) {
+  const headers = new Headers(options.headers);
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(url, { ...options, headers });
 }
 
 export const aiServerApi = {
-  /** Fetch all dental school profiles with extracted completeness stats */
-  listSchools: async (search?: string): Promise<DentalSchoolProfile[]> => {
-    const url = `${AI_SERVER_BASE_URL}/api/research/schools${search ? `?search=${encodeURIComponent(search)}` : ""}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Failed to fetch schools from AI server");
-    return res.json();
-  },
 
   /** Fetch full school profile */
   getSchool: async (schoolId: string): Promise<DentalSchoolProfile> => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/research/schools/${schoolId}`);
-    if (!res.ok) throw new Error(`Failed to fetch school ${schoolId}`);
-    return res.json();
-  },
-
-  /** Fetch Baseline and Skyline computed matrix across all schools */
-  getBaselineSkyline: async (): Promise<BaselineSkylineResponse> => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/research/baseline-skyline`);
-    if (!res.ok) throw new Error("Failed to fetch baseline-skyline directory calibration");
-    return res.json();
-  },
-
-  /** Crawl dental school website using Python LangGraph agent */
-  crawlWebsite: async (payload: { url: string; school_id?: string; school_name?: string; cycle?: string }) => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/research/crawl`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("Crawl request failed on AI server");
-    return res.json();
-  },
-
-  /** Create a new school profile on AI server */
-  createSchoolProfile: async (payload: {
-    id?: string;
-    name: string;
-    location: string;
-    website_url?: string;
-    avg_cgpa?: number;
-    avg_dat_aa?: number;
-    overall_acceptance_rate?: number;
-    cycle?: string;
-    crawl_now?: boolean;
-  }): Promise<DentalSchoolProfile> => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/research/schools`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("Failed to create school profile on AI server");
-    return res.json();
-  },
-
-  /** Ingest PDF, TXT, or Image OCR using LangGraph */
-  ingestFile: async (formData: FormData) => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/research/ingest-file`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!res.ok) throw new Error("File ingestion failed on AI server");
-    return res.json();
-  },
-
-  /** Fetch spreadsheet matrix */
-  getSpreadsheet: async (category?: string) => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/research/spreadsheet`);
-    if (!res.ok) throw new Error("Failed to fetch spreadsheet matrix");
-    return res.json();
-  },
-
-  /** Fetch review queue items */
-  getReviewQueue: async (schoolId?: string) => {
-    const url = `${AI_SERVER_BASE_URL}/api/research/review-queue${schoolId ? `?school_id=${schoolId}` : ""}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Failed to fetch review queue");
-    return res.json();
-  },
-
-  /** Resolve review queue item */
-  resolveReviewItem: async (itemId: string, status: string = "VERIFIED", overrideValue?: any) => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/research/review-queue/${itemId}/resolve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_verified: status === "VERIFIED", status, override_value: overrideValue }),
-    });
-    if (!res.ok) throw new Error("Failed to resolve review item");
-    return res.json();
-  },
-
-  /** Delete knowledge base source by URL or Name */
-  deleteKbSource: async (params: { school_id?: string; source_name?: string; source_url?: string }) => {
-    const query = new URLSearchParams();
-    if (params.school_id) query.append("school_id", params.school_id);
-    if (params.source_name) query.append("source_name", params.source_name);
-    if (params.source_url) query.append("source_url", params.source_url);
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/research/knowledgebase/source?${query.toString()}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) throw new Error("Failed to delete knowledge base source");
+    const res = await aiFetch(`${AI_SERVER_BASE_URL}/api/research/schools/${schoolId}`);
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(typeof error.detail === "string" ? error.detail : `Failed to fetch school ${schoolId}`); }
     return res.json();
   },
 
   /** List mock/CRM students for comparison */
   listStudents: async (): Promise<StudentComparisonProfile[]> => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/compare/students`);
-    if (!res.ok) throw new Error("Failed to fetch student profiles for comparison");
+    const res = await aiFetch(`${AI_SERVER_BASE_URL}/api/compare/students`);
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(typeof error.detail === "string" ? error.detail : "Failed to fetch student profiles for comparison"); }
     return res.json();
   },
 
@@ -690,12 +608,12 @@ export const aiServerApi = {
     cycle?: string;
     include_ai_reasoning?: boolean;
   }): Promise<PredictionResult> => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/compare/student-school`, {
+    const res = await aiFetch(`${AI_SERVER_BASE_URL}/api/compare/student-school`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to execute student vs school comparison");
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(typeof error.detail === "string" ? error.detail : "Failed to execute student vs school comparison"); }
     return res.json();
   },
 
@@ -705,26 +623,28 @@ export const aiServerApi = {
     custom_student_profile?: StudentComparisonProfile;
     cycle?: string;
   }) => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/compare/student-all-schools`, {
+    const res = await aiFetch(`${AI_SERVER_BASE_URL}/api/compare/student-all-schools`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to execute batch school comparison");
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(typeof error.detail === "string" ? error.detail : "Failed to execute batch school comparison"); }
     return res.json();
   },
 
   /** Rank all students for a specific school */
   compareAllStudentsSchool: async (schoolId: string, cycle: string = "2025-2026") => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/compare/all-students-school?school_id=${schoolId}&cycle=${cycle}`, {
+    const res = await aiFetch(`${AI_SERVER_BASE_URL}/api/compare/all-students-school?school_id=${schoolId}&cycle=${cycle}`, {
       method: "POST",
     });
-    if (!res.ok) throw new Error("Failed to compare all students against school");
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(typeof error.detail === "string" ? error.detail : "Failed to compare all students against school"); }
     return res.json();
   },
 
   /** What-If Simulator Real-time calculation */
   whatIfSimulate: async (payload: {
+    dat_type?: string;
+    dat_score_scale?: string;
     school_id: string;
     cgpa: number;
     dat_aa: number;
@@ -733,50 +653,31 @@ export const aiServerApi = {
     research_hours?: number;
     state?: string;
   }): Promise<PredictionResult> => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/predict/what-if`, {
+    const res = await aiFetch(`${AI_SERVER_BASE_URL}/api/predict/what-if`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("What-if simulation failed");
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(typeof error.detail === "string" ? error.detail : "What-if simulation failed"); }
     return res.json();
   },
 
   /** Recalibrate historical rubrics */
   recalibrateRubrics: async (schoolId: string = "sch6") => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/calibration/recalibrate?school_id=${schoolId}`, {
+    const res = await aiFetch(`${AI_SERVER_BASE_URL}/api/calibration/recalibrate?school_id=${schoolId}`, {
       method: "POST",
     });
-    if (!res.ok) throw new Error("Recalibration failed");
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(typeof error.detail === "string" ? error.detail : "Recalibration failed"); }
     return res.json();
   },
 
   /** Upload historical outcome CSV */
   uploadHistoricalCsv: async (formData: FormData, schoolId: string = "sch6") => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/calibration/upload-csv?school_id=${schoolId}`, {
+    const res = await aiFetch(`${AI_SERVER_BASE_URL}/api/calibration/upload-csv?school_id=${schoolId}`, {
       method: "POST",
       body: formData,
     });
-    if (!res.ok) throw new Error("Failed to upload historical CSV");
-    return res.json();
-  },
-
-  /** Autonomous AI Web Research — searches the web for missing admissions criteria across all 14 domains */
-  findCriteria: async (payload: { school_id: string; school_name: string; cycle?: string }): Promise<{
-    success: boolean;
-    message: string;
-    profile: DentalSchoolProfile;
-    domains_updated: string[];
-    sources_searched: number;
-    sources_found: Array<{ url: string; title: string; relevance: string }>;
-    logs: string[];
-  }> => {
-    const res = await fetch(`${AI_SERVER_BASE_URL}/api/research/find-criteria`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("AI web research request failed on AI server");
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(typeof error.detail === "string" ? error.detail : "Failed to upload historical CSV"); }
     return res.json();
   },
 };

@@ -666,6 +666,8 @@ export interface School {
   ethnicity?: Record<string, number> | null;
   min_dat_5th?: number | null;
   min_cgpa_5th?: number | null;
+  /** Linked school-ai-service school UUID (migration 059) */
+  ai_school_id?: string | null;
   created_at?: string;
   updated_at?: string;
   type?: string;
@@ -1482,17 +1484,17 @@ export interface PredictionResult {
   schoolId: string;
   schoolName: string;
   location: string;
-  fitCategory: "Strong Fit" | "Target" | "Reach" | "Safety" | "High Risk";
-  matchScore: number; // 0 to 100
-  requirementsStatus: "MEETS_ALL" | "WARNINGS" | "FAILS_REQUIREMENTS";
+  fitCategory: string;
+  matchScore: number | null; // Unknown is not zero
+  requirementsStatus: "MEETS_ALL" | "WARNINGS" | "FAILS_REQUIREMENTS" | "UNKNOWN";
   requirementsPassedCount: number;
   requirementsTotalCount: number;
   requirements: RequirementCheckItem[];
   probabilities: {
-    interviewProbability: number;
-    acceptedProbability: number;
-    waitlistProbability: number;
-    rejectionProbability: number;
+    interviewProbability: number | null;
+    acceptedProbability: number | null;
+    waitlistProbability: number | null;
+    rejectionProbability: number | null;
   };
   diagnostics: {
     mostLikelyReason: string;
@@ -1502,6 +1504,8 @@ export interface PredictionResult {
 }
 
 export interface StudentProfileForPrediction {
+  datType?: string | null;
+  datScoreScale?: string | null;
   id?: string;
   name?: string;
   cgpa?: number | null;

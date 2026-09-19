@@ -19,6 +19,7 @@ import {
   Calendar as CalendarIcon,
   Target,
   GraduationCap,
+  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
@@ -42,9 +43,9 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { label: "Engagement & Comms", href: "/admin/engagement", icon: Megaphone },
     { label: "Mentor Ops", href: "/admin/mentors", icon: UserCog },
     { label: "School Selection", href: "/admin/school-selection", icon: GraduationCap },
+    { label: "Admission Research", href: "/admin/admission-research", icon: FlaskConical },
     { label: "Courses", href: "/admin/courses", icon: FileText },
     { label: "Global Data", href: "/admin/analytics", icon: BarChart3 },
-    { label: "Admissions Research", href: "/admin/research", icon: Sparkles },
     { label: "LOR Config", href: "/admin/lor-config", icon: ShieldAlert },
     { label: "LOR Review", href: "/admin/letter-portal", icon: FileText },
     { label: "Inbox", href: "/admin/messages", icon: MessageSquare },
@@ -105,4 +106,3 @@ export function getInitialRouteForRole(role: UserRole | undefined): string {
 export function showAiTools(role: UserRole | undefined): boolean {
   return !!role && !["LETTER_WRITER", "SETTER"].includes(role);
 }
-

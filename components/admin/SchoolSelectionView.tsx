@@ -12,7 +12,6 @@ import {
   Loader2,
   Save,
   Clock,
-  Wand2,
   Eye,
   CheckCircle2,
   Download,
@@ -61,7 +60,6 @@ import type {
 } from "@/lib/types";
 
 type MainTab = "reports" | "create";
-type CreateMode = "manual" | "ai";
 type KpiLevel = "Strong" | "Moderate" | "Developing" | "Weak";
 type Impact = "High" | "Moderate" | "Lower";
 type Severity = "High" | "Medium" | "Low";
@@ -113,11 +111,6 @@ const SEVERITY_OPTIONS = [
 const MAIN_TABS: { id: MainTab; label: string; icon: typeof FileText }[] = [
   { id: "reports", label: "Created Reports", icon: FileText },
   { id: "create", label: "Create New Report", icon: Plus },
-];
-
-const CREATE_MODES: { id: CreateMode; label: string; icon: typeof Target }[] = [
-  { id: "manual", label: "Manual", icon: Target },
-  { id: "ai", label: "AI", icon: Wand2 },
 ];
 
 function isExternalStudentEmail(email?: string | null) {
@@ -660,7 +653,6 @@ function PlanPreviewBody({
 
 export default function SchoolSelectionView() {
   const [mainTab, setMainTab] = useState<MainTab>("reports");
-  const [createMode, setCreateMode] = useState<CreateMode>("manual");
   const [studentId, setStudentId] = useState("");
   const [externalId, setExternalId] = useState("");
   const [studentName, setStudentName] = useState("");
@@ -894,7 +886,6 @@ export default function SchoolSelectionView() {
     setDraft(EMPTY_DRAFT());
     setManualSchools([]);
     setManualCategories(DEFAULT_CATEGORIES);
-    setCreateMode("manual");
   };
 
   const openReport = (report: OptimizationPlanListItem) => {
@@ -908,7 +899,6 @@ export default function SchoolSelectionView() {
 
     setStudentName(name);
     setDraft(planToDraft(report));
-    setCreateMode("manual");
 
     if (isExternal) {
       setStudentId("");
@@ -951,7 +941,7 @@ export default function SchoolSelectionView() {
   const saveDisabled = !canEditPlan || savingPlan || upsertPlan.isPending;
 
   usePageHeaderAction(
-    mainTab === "create" && createMode === "manual"
+    mainTab === "create"
       ? {
           label: existingPlan || studentId ? "Save plan" : "Create plan",
           icon:
@@ -1173,55 +1163,15 @@ export default function SchoolSelectionView() {
       )}
 
       {mainTab === "create" && (
-                      <div className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              type="button"
-              onClick={() => setMainTab("reports")}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to reports
-            </button>
-            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1">
-              {CREATE_MODES.map((item) => {
-                const Icon = item.icon;
-                const selected = createMode === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setCreateMode(item.id)}
-                    className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
-                      selected
-                        ? "bg-indigo-600 text-white"
-                        : "text-slate-400 hover:bg-slate-800 hover:text-white",
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {item.label}
-                    {item.id === "ai" && (
-                      <span className="rounded border border-amber-500/20 bg-amber-500/15 px-1 py-0.5 text-[9px] uppercase tracking-wide text-amber-300">
-                        Soon
-                          </span>
-                    )}
-                  </button>
-                );
-              })}
-                        </div>
-                      </div>
-
-          {createMode === "ai" && (
-            <EmptyState
-              icon={<Sparkles className="h-6 w-6" />}
-              title="AI Generated Plan"
-              description="Not wired yet. In a later phase, admins will generate strategic selection plans from student profiles, documents, and notes."
-            />
-          )}
-
-          {createMode === "manual" && (
         <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setMainTab("reports")}
+            className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to reports
+          </button>
           <SectionCard
             icon={Target}
             iconClass="bg-indigo-500/10 text-indigo-400"
@@ -1577,11 +1527,8 @@ export default function SchoolSelectionView() {
               </SectionCard>
                     </div>
           )}
-                          </div>
-          )}
-                      </div>
+        </div>
       )}
-
       <Modal
         open={previewOpen && canEditPlan}
         onClose={() => setPreviewOpen(false)}

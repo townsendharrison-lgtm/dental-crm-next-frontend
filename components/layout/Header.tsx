@@ -870,7 +870,11 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
   },
   "/admin/school-selection": {
     title: "School Selection",
-    description: "Create strategic selection plans for students — manually or with AI.",
+    description: "Create strategic selection plans for students.",
+  },
+  "/admin/admission-research": {
+    title: "Admission Research",
+    description: "Research school admissions factors, rubrics, and student fit scores via school-ai-service.",
   },
   "/admin/courses": {
     title: "Courses",
@@ -883,10 +887,6 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
   "/admin/benchmarks": {
     title: "Rules Engine",
     description: "Meeting types, benchmarks, and platform automation rules.",
-  },
-  "/admin/research": {
-    title: "Admissions Research",
-    description: "Explore statistics and requirements for dental schools.",
   },
   "/admin/lor-config": {
     title: "LOR Config",

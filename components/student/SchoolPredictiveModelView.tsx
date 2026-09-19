@@ -1,5 +1,7 @@
 "use client";
 
+import { EvidenceComparisonResult } from "../admin/EvidenceComparisonResult";
+import type { PredictionResult as EvidencePrediction } from "@/lib/api/aiServer";
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -94,7 +96,7 @@ export default function SchoolPredictiveModelView({
     try {
       const res = await schoolIntelligenceApi.predict(updated);
       if (res && res.length > 0) {
-        setPredictions(res.sort((a, b) => b.matchScore - a.matchScore));
+        setPredictions(res.sort((a, b) => (b.matchScore ?? -1) - (a.matchScore ?? -1)));
       }
     } catch (err: any) {
       console.error("Simulation error:", err);
@@ -108,7 +110,7 @@ export default function SchoolPredictiveModelView({
     setIsPredicting(true);
     try {
       const res = await schoolIntelligenceApi.predict(initialStudent);
-      if (res) setPredictions(res.sort((a, b) => b.matchScore - a.matchScore));
+      if (res) setPredictions(res.sort((a, b) => (b.matchScore ?? -1) - (a.matchScore ?? -1)));
       toast.success("Reset simulator to active student profile");
     } finally {
       setIsPredicting(false);
@@ -208,13 +210,13 @@ export default function SchoolPredictiveModelView({
           <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800/60">
             <div className="text-xs text-slate-400 font-medium">Shadowing Hours</div>
             <div className="text-lg font-bold text-emerald-400 mt-0.5">
-              {simulatedStudent.shadowingHours || 0} hrs
+              {simulatedStudent.shadowingHours ?? "Unknown"} hrs
             </div>
           </div>
           <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800/60">
             <div className="text-xs text-slate-400 font-medium">Volunteering</div>
             <div className="text-lg font-bold text-indigo-400 mt-0.5">
-              {simulatedStudent.volunteeringHours || 0} hrs
+              {simulatedStudent.volunteeringHours ?? "Unknown"} hrs
             </div>
           </div>
           <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800/60">
@@ -226,7 +228,7 @@ export default function SchoolPredictiveModelView({
           <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800/60">
             <div className="text-xs text-slate-400 font-medium">LORs Collected</div>
             <div className="text-lg font-bold text-purple-400 mt-0.5">
-              {simulatedStudent.lorCount || 3} Letters
+              {simulatedStudent.lorCount ?? "Unknown"} Letters
             </div>
           </div>
         </div>
@@ -322,7 +324,7 @@ export default function SchoolPredictiveModelView({
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="text-slate-300">Shadowing Hours</span>
                     <span className="text-emerald-400 font-bold text-sm">
-                      {simulatedStudent.shadowingHours || 0} hrs
+                      {simulatedStudent.shadowingHours ?? "Unknown"} hrs
                     </span>
                   </div>
                   <input
@@ -330,7 +332,7 @@ export default function SchoolPredictiveModelView({
                     min="0"
                     max="250"
                     step="10"
-                    value={simulatedStudent.shadowingHours || 0}
+                    value={simulatedStudent.shadowingHours ?? "Unknown"}
                     onChange={(e) =>
                       handleSimulateUpdate({ shadowingHours: parseInt(e.target.value, 10) })
                     }
@@ -348,7 +350,7 @@ export default function SchoolPredictiveModelView({
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="text-slate-300">Volunteering Hours</span>
                     <span className="text-purple-400 font-bold text-sm">
-                      {simulatedStudent.volunteeringHours || 0} hrs
+                      {simulatedStudent.volunteeringHours ?? "Unknown"} hrs
                     </span>
                   </div>
                   <input
@@ -356,7 +358,7 @@ export default function SchoolPredictiveModelView({
                     min="0"
                     max="300"
                     step="10"
-                    value={simulatedStudent.volunteeringHours || 0}
+                    value={simulatedStudent.volunteeringHours ?? "Unknown"}
                     onChange={(e) =>
                       handleSimulateUpdate({ volunteeringHours: parseInt(e.target.value, 10) })
                     }
@@ -452,11 +454,11 @@ export default function SchoolPredictiveModelView({
                       {/* Match Score Badge */}
                       <div className="text-right flex flex-col items-end">
                         <div className="text-base font-extrabold text-white flex items-center gap-1">
-                          {pred.matchScore}%
+                          {pred.matchScore == null ? "Unknown" : `${pred.matchScore}/100 fit`}
                           <span className="text-[10px] text-slate-400 font-normal">Match</span>
                         </div>
                         <div className="text-[11px] text-emerald-400 font-medium">
-                          {pred.probabilities.acceptedProbability}% Accept
+                          {pred.probabilities.acceptedProbability == null ? "Probability unavailable" : `${pred.probabilities.acceptedProbability ?? 0}% Accept`}
                         </div>
                       </div>
                     </div>
@@ -465,15 +467,15 @@ export default function SchoolPredictiveModelView({
                     <div className="mt-3 w-full bg-slate-800 rounded-full h-1.5 overflow-hidden flex">
                       <div
                         className="bg-emerald-500 h-full transition-all"
-                        style={{ width: `${pred.probabilities.acceptedProbability}%` }}
+                        style={{ width: `${pred.probabilities.acceptedProbability ?? 0}%` }}
                       />
                       <div
                         className="bg-indigo-500 h-full transition-all"
-                        style={{ width: `${pred.probabilities.waitlistProbability}%` }}
+                        style={{ width: `${pred.probabilities.waitlistProbability ?? 0}%` }}
                       />
                       <div
                         className="bg-rose-500/60 h-full transition-all"
-                        style={{ width: `${pred.probabilities.rejectionProbability}%` }}
+                        style={{ width: `${pred.probabilities.rejectionProbability ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -486,192 +488,7 @@ export default function SchoolPredictiveModelView({
         {/* Right Column: Detailed Prediction & Diagnostics Dashboard */}
         <div className="lg:col-span-7 space-y-6">
           {currentSelected ? (
-            <div className="space-y-6">
-              {/* Main School Card & Multi-Outcome Probability Gauges */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "px-2.5 py-1 rounded-md text-xs font-bold border",
-                          getFitBadgeStyle(currentSelected.fitCategory)
-                        )}
-                      >
-                        {currentSelected.fitCategory}
-                      </span>
-                      <span className="text-sm text-slate-400">{currentSelected.location}</span>
-                    </div>
-                    <h3 className="text-xl font-bold text-white mt-1">{currentSelected.schoolName}</h3>
-                  </div>
-
-                  <button
-                    onClick={() => openCitationInspector(currentSelected.schoolId)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-indigo-300 transition cursor-pointer self-start"
-                  >
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    Verify School Citations
-                  </button>
-                </div>
-
-                {/* 4 Outcome Probabilities Grid */}
-                <div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                    Admissions Probability Breakdown
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-slate-950/70 p-3.5 rounded-xl border border-emerald-500/20 text-center">
-                      <div className="text-xs text-slate-400 font-medium">Interview Offer</div>
-                      <div className="text-2xl font-extrabold text-indigo-400 mt-1">
-                        {currentSelected.probabilities.interviewProbability}%
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">Invited to Interview</div>
-                    </div>
-
-                    <div className="bg-slate-950/70 p-3.5 rounded-xl border border-emerald-500/30 text-center">
-                      <div className="text-xs text-slate-400 font-medium">Final Acceptance</div>
-                      <div className="text-2xl font-extrabold text-emerald-400 mt-1">
-                        {currentSelected.probabilities.acceptedProbability}%
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">Offered Admission</div>
-                    </div>
-
-                    <div className="bg-slate-950/70 p-3.5 rounded-xl border border-indigo-500/20 text-center">
-                      <div className="text-xs text-slate-400 font-medium">Waitlist</div>
-                      <div className="text-2xl font-extrabold text-amber-400 mt-1">
-                        {currentSelected.probabilities.waitlistProbability}%
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">Alternate List</div>
-                    </div>
-
-                    <div className="bg-slate-950/70 p-3.5 rounded-xl border border-rose-500/20 text-center">
-                      <div className="text-xs text-slate-400 font-medium">Rejection</div>
-                      <div className="text-2xl font-extrabold text-rose-400 mt-1">
-                        {currentSelected.probabilities.rejectionProbability}%
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">Without Offer</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Explainable AI Diagnostics: Reason & Limiting Factor */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="p-4 rounded-xl bg-indigo-950/30 border border-indigo-500/30 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-400">
-                      <TrendingUp className="w-4 h-4" />
-                      Most Likely Reason for Standing
-                    </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      {currentSelected.diagnostics.mostLikelyReason}
-                    </p>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                      <AlertTriangle className="w-4 h-4" />
-                      Most Limiting Factor (Bottleneck)
-                    </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      {currentSelected.diagnostics.mostLimitingFactor}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Highest ROI Improvements Section */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
-                      <Zap className="w-4 h-4" />
-                    </div>
-                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">
-                      Highest ROI Improvements for {currentSelected.schoolName}
-                    </h4>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {currentSelected.diagnostics.highestRoiImprovements.length === 0 ? (
-                    <p className="text-xs text-slate-400">Profile is currently well-optimized for this school.</p>
-                  ) : (
-                    currentSelected.diagnostics.highestRoiImprovements.map((roi) => (
-                      <div
-                        key={roi.id}
-                        className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-emerald-500/40 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-white">{roi.actionTitle}</span>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                              +{roi.probabilityLift.acceptanceLift}% Acceptance Chance
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-400">{roi.description}</p>
-                        </div>
-
-                        <button
-                          onClick={() => handleApplyRoiAction(roi)}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition whitespace-nowrap cursor-pointer self-start sm:self-center"
-                        >
-                          + Apply in Simulator
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Requirements & Prerequisites Line-by-Line Checklist */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-400" />
-                    Requirements & Prerequisites Verification (
-                    {currentSelected.requirementsPassedCount} / {currentSelected.requirementsTotalCount} Passed)
-                  </h4>
-                </div>
-
-                <div className="space-y-2.5">
-                  {currentSelected.requirements.map((req) => (
-                    <div
-                      key={req.id}
-                      className="p-3.5 rounded-xl bg-slate-950/50 border border-slate-800/80 flex items-start justify-between gap-3"
-                    >
-                      <div className="flex items-start gap-3">
-                        {req.status === "MET" ? (
-                          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                        ) : req.status === "WARNING" ? (
-                          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                        ) : req.status === "UNKNOWN" ? (
-                          <HelpCircle className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                        ) : req.status === "RECOMMENDED_MISSING" ? (
-                          <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-                        ) : (
-                          <XCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-                        )}
-                        <div>
-                          <div className="text-xs font-bold text-white flex items-center gap-2">
-                            {req.name}
-                            {req.isHardRequirement && (
-                              <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                                Hard Cutoff
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-400 mt-0.5">{req.details}</p>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <div className="text-xs font-bold text-slate-200">{req.studentValue}</div>
-                        <div className="text-[10px] text-slate-500">Req: {req.schoolRequirement}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <EvidenceComparisonResult prediction={currentSelected as unknown as EvidencePrediction} />
           ) : (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-12 text-center text-slate-400">
               Select a school from the left to view detailed predictions and recommendations.
