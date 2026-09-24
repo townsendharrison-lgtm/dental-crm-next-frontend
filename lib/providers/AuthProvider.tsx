@@ -18,6 +18,10 @@ import type { AuthUser } from "@/lib/types";
  *  2. Validate the session against the backend (`/api/auth/me`).
  *  3. Capture & persist the device IANA timezone.
  *  4. Re-mirror the access token into the cookie so the proxy stays in sync.
+ *
+ * Critical: if the user signs in while `/me` is still in flight with an expired
+ * token, ignore that late failure so we do not wipe the fresh session (common in
+ * standalone PWAs where users land on /login with a stale token).
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setUser = useAuthStore((s) => s.setUser);
@@ -28,14 +32,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (didInit.current) return;
     didInit.current = true;
 
-    const token = getAccessToken();
-    if (!token) {
+    const tokenAtStart = getAccessToken();
+    if (!tokenAtStart) {
       setStatus("unauthenticated");
       return;
     }
 
-    // Re-sync cookie from localStorage (e.g. after a refresh).
-    persistTokens(token);
+    // Re-sync cookie from localStorage (e.g. after a refresh / PWA cold start).
+    persistTokens(tokenAtStart);
 
     // Optimistic hydrate.
     const cached = localStorage.getItem(USER_KEY);
@@ -47,10 +51,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Validate with backend, then sync exact device timezone.
+    let cancelled = false;
     authApi
       .me()
       .then(async (u) => {
+        if (cancelled) return;
+        // A newer login replaced the token while /me was running — keep it.
+        const current = getAccessToken();
+        if (current && current !== tokenAtStart) return;
+
         const raw = u as AuthUser & { timezone?: string };
         const user: AuthUser = {
           id: raw.id,
@@ -61,13 +70,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           timezone: raw.timezone,
         };
         const synced = await syncUserTimezone(user);
+        if (cancelled) return;
         localStorage.setItem(USER_KEY, JSON.stringify(synced));
         setUser(synced);
       })
       .catch(() => {
+        if (cancelled) return;
+        // Login may have succeeded with a new token while this request failed.
+        const current = getAccessToken();
+        if (current && current !== tokenAtStart) return;
         clearAuthStorage();
         setUser(null);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [setUser, setStatus]);
 
   return <>{children}</>;

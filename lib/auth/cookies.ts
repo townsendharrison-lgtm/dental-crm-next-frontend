@@ -35,6 +35,8 @@ export function readCookie(name: string): string | null {
 export function persistTokens(accessToken: string, refreshToken?: string) {
   if (typeof window === "undefined") return;
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+  // Keep cookie alive at least as long as a typical Supabase access JWT (~1h),
+  // with a little headroom so the edge proxy still sees it during refresh.
   writeCookie(ACCESS_TOKEN_KEY, accessToken, ACCESS_MAX_AGE);
   if (refreshToken) {
     localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);

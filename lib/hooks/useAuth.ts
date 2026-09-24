@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api/auth";
 import { useAuthStore } from "@/lib/stores/authStore";
 import {
@@ -14,7 +13,6 @@ import { syncUserTimezone } from "@/lib/auth/syncTimezone";
 import type { AuthUser, UserRole } from "@/lib/types";
 
 export function useAuth() {
-  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const status = useAuthStore((s) => s.status);
   const setUser = useAuthStore((s) => s.setUser);
@@ -49,10 +47,17 @@ export function useAuth() {
     } catch {
       // ignore
     }
+    try {
+      const { clearAppQueryCache } = await import("@/lib/providers/QueryProvider");
+      clearAppQueryCache();
+    } catch {
+      // ignore
+    }
     clearAuthStorage();
     reset();
-    router.replace("/login");
-  }, [reset, router]);
+    // Hard navigate so proxy + PWA shell pick up cleared cookies immediately.
+    window.location.assign("/login");
+  }, [reset]);
 
   const resetPassword = useCallback(async (email: string) => {
     try {

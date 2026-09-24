@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ACCESS_TOKEN_KEY } from "@/lib/auth/cookies";
-import { decodeToken } from "@/lib/auth/jwt";
+import { decodeToken, isTokenExpired } from "@/lib/auth/jwt";
 import { canAccess, isProtectedPath, isPublicPath } from "@/lib/auth/roles";
 
 /**
@@ -13,20 +13,34 @@ export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const token = request.cookies.get(ACCESS_TOKEN_KEY)?.value;
   const decoded = token ? decodeToken(token) : null;
-  const isExpired = decoded?.exp ? Date.now() >= decoded.exp * 1000 : true;
-  const isAuthed = !!token && !isExpired;
+  const isAuthed = !!token && !!decoded && !isTokenExpired(token);
   const role = decoded?.user_metadata?.role;
+
+  // Authenticated users shouldn't see the login page (or root).
+  // Must run BEFORE the public-path early return — `/login` is public for guests
+  // but would otherwise leave signed-in users stuck on the login screen until a
+  // full wipe / manual navigation (especially in standalone PWA).
+  if (isAuthed && (pathname === "/login" || pathname === "/")) {
+    const next = request.nextUrl.searchParams.get("next");
+    let dest = "/dashboard";
+    if (next) {
+      try {
+        const target = new URL(next, request.url);
+        if (target.origin === new URL(request.url).origin && isProtectedPath(target.pathname)) {
+          dest = target.pathname + target.search + target.hash;
+        }
+      } catch {
+        /* keep dashboard */
+      }
+    }
+    return NextResponse.redirect(new URL(dest, request.url));
+  }
 
   // Guest / public routes (letter upload, invite, reset, etc.) skip auth gates.
   // Important: `/letters/upload` is under the `/letters` prefix, so it must be
   // checked before the protected-prefix redirect or writers get bounced to login.
   if (isPublicPath(pathname)) {
     return NextResponse.next();
-  }
-
-  // Authenticated users shouldn't see the login page.
-  if (isAuthed && (pathname === "/login" || pathname === "/")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // Unauthenticated users hitting a protected route -> login (with return path).

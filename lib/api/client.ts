@@ -30,6 +30,18 @@ export const apiClient = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+function bearerFromConfig(config?: InternalAxiosRequestConfig): string | null {
+  if (!config?.headers) return null;
+  const headers = config.headers as AxiosHeaders;
+  const raw =
+    typeof headers.get === "function"
+      ? headers.get("Authorization")
+      : (config.headers as { Authorization?: string }).Authorization;
+  if (typeof raw !== "string") return null;
+  const match = raw.match(/^Bearer\s+(.+)$/i);
+  return match?.[1] ?? null;
+}
+
 // --- Request interceptor: attach bearer token -------------------------------
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getAccessToken();
@@ -74,11 +86,20 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-function onAuthFailure() {
+/**
+ * Clear session only when the failed request's token is still the active one.
+ * Prevents a stale 401 (e.g. bootstrap `/me` with an expired token) from wiping
+ * a login that completed while that request was in flight — common in PWAs.
+ */
+function onAuthFailure(failedRequestToken: string | null) {
+  const current = getAccessToken();
+  if (failedRequestToken && current && current !== failedRequestToken) {
+    return;
+  }
   clearAuthStorage();
   if (typeof window === "undefined") return;
   const path = window.location.pathname;
-  // Never bounce guests off public letter-writer / invite pages on a 401.
+  // Never bounce guests off public pages (including /login) on a 401.
   if (isPublicPath(path)) return;
   const next = encodeURIComponent(path + window.location.search);
   window.location.href = `/login?next=${next}`;
@@ -92,9 +113,19 @@ apiClient.interceptors.response.use(
       | (InternalAxiosRequestConfig & { _retry?: boolean })
       | undefined;
     const status = error.response?.status;
+    const failedToken = bearerFromConfig(original);
 
     // Attempt one transparent refresh on 401.
     if (status === 401 && original && !original._retry) {
+      // Session already replaced (fresh login) — do not clear or retry with old creds.
+      const current = getAccessToken();
+      if (failedToken && current && current !== failedToken) {
+        const data = error.response?.data as { error?: string } | undefined;
+        return Promise.reject(
+          new ApiRequestError(data?.error || error.message || "Unauthorized", 401, error.response?.data),
+        );
+      }
+
       original._retry = true;
       refreshPromise = refreshPromise ?? refreshAccessToken();
       const newToken = await refreshPromise;
@@ -105,7 +136,7 @@ apiClient.interceptors.response.use(
         (original.headers as AxiosHeaders).set("Authorization", `Bearer ${newToken}`);
         return apiClient(original);
       }
-      onAuthFailure();
+      onAuthFailure(failedToken);
     }
 
     const data = error.response?.data as { error?: string } | undefined;

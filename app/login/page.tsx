@@ -17,6 +17,7 @@ import {
 import { useAuth } from "@/lib/hooks/useAuth";
 import { getInitialRouteForRole } from "@/lib/navigation";
 import { isPublicPath } from "@/lib/auth/roles";
+import type { UserRole } from "@/lib/types";
 
 const LOGO_URL =
   "https://images.squarespace-cdn.com/content/64d0277a0640507c114633ad/b8543df7-ec9e-4d64-912e-e80bb44c8757/Untitled+design-3.png?content-type=image%2Fpng";
@@ -24,7 +25,7 @@ const LOGO_URL =
 type FormMode = "signin" | "forgot";
 
 function LoginForm() {
-  const { login, resetPassword } = useAuth();
+  const { login, resetPassword, isAuthenticated, user } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
 
@@ -37,6 +38,32 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const emailRef = useRef<HTMLInputElement>(null);
+  const didRedirect = useRef(false);
+
+  const resolvePostLoginPath = (role?: UserRole | string | null) => {
+    const next = params.get("next");
+    if (next) {
+      try {
+        const target = new URL(next, window.location.origin);
+        if (
+          target.origin === window.location.origin &&
+          !isPublicPath(target.pathname)
+        ) {
+          return target.pathname + target.search + target.hash;
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    return getInitialRouteForRole((role as UserRole | undefined) || undefined);
+  };
+
+  // Already signed in (e.g. PWA reopen with valid cookie) — leave /login.
+  useEffect(() => {
+    if (!isAuthenticated || !user || didRedirect.current) return;
+    didRedirect.current = true;
+    window.location.replace(resolvePostLoginPath(user.role));
+  }, [isAuthenticated, user, params]);
 
   // Auto-focus email input on mode change
   useEffect(() => {
@@ -137,12 +164,11 @@ function LoginForm() {
         if (!result.success) {
           setError(result.error || "Login failed.");
         } else {
-          const next = params.get("next");
-          if (next) {
-            router.replace(next);
-          } else {
-            router.replace(getInitialRouteForRole(result.user?.role));
-          }
+          // Hard navigation so the edge proxy reads the freshly written cookie.
+          // Soft `router.replace` often left PWA users stuck on /login until refresh/wipe.
+          didRedirect.current = true;
+          window.location.assign(resolvePostLoginPath(result.user?.role));
+          return;
         }
       } else if (mode === "forgot") {
         const result = await resetPassword(email);
