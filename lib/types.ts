@@ -480,6 +480,14 @@ export type MeetingAudience =
   | "STAFF"
   | "GLOBAL";
 
+export type MeetStatus =
+  | "pending"
+  | "provisioned"
+  | "failed"
+  | "ended"
+  | "notes_ready"
+  | "no_artifacts";
+
 export interface Meeting {
   id: string;
   student_id?: string | null;
@@ -498,6 +506,14 @@ export interface Meeting {
   attendees?: string[];
   created_at?: string;
   updated_at?: string;
+  google_space_name?: string | null;
+  google_meeting_code?: string | null;
+  google_calendar_event_id?: string | null;
+  meet_status?: MeetStatus | null;
+  meet_error?: string | null;
+  transcript_doc_url?: string | null;
+  notes_doc_url?: string | null;
+  artifacts_synced_at?: string | null;
   mentor?: AuthUser | null;
   student?: AuthUser | null;
   resolvedAttendees?: AuthUser[];

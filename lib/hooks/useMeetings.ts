@@ -68,6 +68,49 @@ export function useAttendMeeting() {
   });
 }
 
+function invalidateMeeting(qc: ReturnType<typeof useQueryClient>, id: string) {
+  qc.invalidateQueries({ queryKey: queryKeys.meetings.all() });
+  qc.invalidateQueries({ queryKey: queryKeys.meetings.detail(id) });
+  qc.invalidateQueries({ queryKey: ["meetings", "calendar"] });
+}
+
+export function useProvisionGoogleMeet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => meetingsApi.provisionGoogleMeet(id),
+    onSuccess: (updated) => invalidateMeeting(qc, updated.id),
+  });
+}
+
+export function useSyncGoogleMeet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
+      meetingsApi.syncGoogleMeet(id, force),
+    onSuccess: ({ meeting }) => {
+      invalidateMeeting(qc, meeting.id);
+      qc.invalidateQueries({ queryKey: ["actionItems"] });
+    },
+  });
+}
+
+export function useGoogleMeetStatus(enabled = true) {
+  return useQuery({
+    queryKey: ["meetings", "google-meet-status"],
+    queryFn: () => meetingsApi.googleMeetStatus(),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useGoogleMeetDisconnect() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => meetingsApi.googleMeetDisconnect(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["meetings", "google-meet-status"] }),
+  });
+}
+
 export function useMeetingInviteDirectory(enabled = true) {
   return useQuery({
     queryKey: ["meetings", "invite-directory"],

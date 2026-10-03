@@ -39,6 +39,7 @@ import {
 } from "@/lib/utils/dateUtils";
 import { timezoneSelectOptions } from "@/lib/utils/timezoneOptions";
 import { MeetingTimePresetsPicker } from "@/components/mentor/MeetingTimePresetsPicker";
+import { GoogleMeetStatus } from "@/components/schedule/GoogleMeetStatus";
 
 function meetingMentorId(m: Meeting) {
   return m.mentor_id || m.mentorId || "";
@@ -921,6 +922,13 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                           {renderMeetingActions(meeting)}
                         </div>
                       )}
+                      {isMeetingEventType(event.type) && meeting && (
+                        <GoogleMeetStatus
+                          meeting={meeting}
+                          canManage={canManageMeeting(meeting)}
+                          isStudent={role === "STUDENT"}
+                        />
+                      )}
                     </div>
                   );
                 })
@@ -1157,7 +1165,11 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
               type="url"
               value={newMeeting.link}
               onChange={(e) => setNewMeeting({ ...newMeeting, link: e.target.value })}
-              placeholder="https://zoom.us/j/..."
+              placeholder={
+                isBroadcastMeeting({ audience: newMeeting.audience } as Meeting)
+                  ? "https://zoom.us/j/..."
+                  : "Leave empty to auto-create a Google Meet link"
+              }
             />
           </FormField>
 

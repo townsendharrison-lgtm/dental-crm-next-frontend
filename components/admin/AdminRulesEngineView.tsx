@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils/cn";
 import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import AdminBenchmarksPanel from "@/components/admin/AdminBenchmarksPanel";
 import AdminTimelineBookshelfPanel from "@/components/admin/AdminTimelineBookshelfPanel";
+import GoogleMeetIntegrationCard from "@/components/admin/GoogleMeetIntegrationCard";
 
 type RulesTab =
   | "platform"
@@ -441,6 +442,8 @@ export default function AdminRulesEngineView() {
           </div>
         </SectionCard>
       )}
+
+      {tab === "platform" && <GoogleMeetIntegrationCard />}
 
       {tab === "auto-reply" && (
         <div className="grid gap-4 lg:grid-cols-2">
