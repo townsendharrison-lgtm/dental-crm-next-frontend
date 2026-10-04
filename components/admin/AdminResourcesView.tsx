@@ -1,19 +1,38 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { Resource } from "@/lib/types";
-import { Plus, Trash2, Edit2, Save, Search } from "lucide-react";
+import { Plus, Trash2, Edit2, Save, Search, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input, FormField } from "@/components/ui/Form";
 import { BADGE_ICON_NAMES, renderBadgeIcon } from "@/lib/utils/badgeIcons";
 import { cn } from "@/lib/utils/cn";
+import { compareResources } from "@/lib/api/resources";
 
 interface AdminResourcesViewProps {
   resources: Resource[];
   onAddResource: (resource: Partial<Resource>) => void;
   onUpdateResource: (resource: Resource) => void;
   onDeleteResource: (id: string) => void;
+  onReorderResources: (orderedIds: string[]) => void | Promise<void>;
 }
 
 type ResourceForm = {
@@ -32,16 +51,108 @@ function defaultForm(): ResourceForm {
   };
 }
 
+function SortableResourceRow({
+  resource,
+  onEdit,
+  onDelete,
+}: {
+  resource: Resource;
+  onEdit: (resource: Resource) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: resource.id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        "flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 hover:border-indigo-500/30 sm:flex-row sm:items-center sm:justify-between",
+        isDragging && "z-10 border-indigo-500/40 opacity-80 shadow-lg",
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          className="cursor-grab touch-none rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-slate-200 active:cursor-grabbing"
+          aria-label={`Drag ${resource.title}`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-indigo-600/10 text-indigo-400">
+          {renderBadgeIcon(resource.icon || "BookOpen", "w-5 h-5")}
+        </div>
+        <div className="min-w-0">
+          <h4 className="truncate font-semibold text-white">{resource.title}</h4>
+          <p className="truncate text-sm text-slate-500">
+            {resource.category} · <span className="text-indigo-400/70">{resource.url}</span>
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 gap-1 sm:ml-3">
+        <button
+          type="button"
+          onClick={() => onEdit(resource)}
+          className="cursor-pointer rounded-lg p-2 text-slate-500 hover:bg-slate-800 hover:text-indigo-400"
+          aria-label="Edit resource"
+        >
+          <Edit2 className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(resource.id)}
+          className="cursor-pointer rounded-lg p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400"
+          aria-label="Delete resource"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const AdminResourcesView: React.FC<AdminResourcesViewProps> = ({
   resources,
   onAddResource,
   onUpdateResource,
   onDeleteResource,
+  onReorderResources,
 }) => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Resource | null>(null);
   const [form, setForm] = useState<ResourceForm>(defaultForm);
   const [iconQuery, setIconQuery] = useState("");
+  const orderedResources = useMemo(() => [...resources].sort(compareResources), [resources]);
+  const [items, setItems] = useState(orderedResources);
+
+  useEffect(() => {
+    setItems(orderedResources);
+  }, [orderedResources]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((item) => item.id === active.id);
+    const newIndex = items.findIndex((item) => item.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const previous = items;
+    const next = arrayMove(items, oldIndex, newIndex);
+    setItems(next);
+    try {
+      await onReorderResources(next.map((item) => item.id));
+    } catch {
+      setItems(previous);
+    }
+  };
 
   const filteredIcons = useMemo(() => {
     const q = iconQuery.trim().toLowerCase();
@@ -93,53 +204,33 @@ const AdminResourcesView: React.FC<AdminResourcesViewProps> = ({
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-base font-bold text-white">Student Resources</h3>
+        <div>
+          <h3 className="text-base font-bold text-white">Student Resources</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Drag to set the order students see on their resources page.
+          </p>
+        </div>
         <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreate}>
           Add Resource
         </Button>
       </div>
 
-      <div className="grid gap-3">
-        {resources.map((resource) => (
-          <div
-            key={resource.id}
-            className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:border-indigo-500/30 transition-all"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-lg bg-indigo-600/10 flex items-center justify-center text-indigo-400 shrink-0">
-                {renderBadgeIcon(resource.icon || "BookOpen", "w-5 h-5")}
-              </div>
-              <div className="min-w-0">
-                <h4 className="font-semibold text-white truncate">{resource.title}</h4>
-                <p className="text-sm text-slate-500 truncate">
-                  {resource.category} ·{" "}
-                  <span className="text-indigo-400/70">{resource.url}</span>
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => openEdit(resource)}
-                className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-indigo-400 cursor-pointer"
-                aria-label="Edit resource"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onDeleteResource(resource.id)}
-                className="p-2 hover:bg-rose-500/10 rounded-lg text-slate-500 hover:text-rose-400 cursor-pointer"
-                aria-label="Delete resource"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+          <div className="grid gap-3">
+            {items.map((resource) => (
+              <SortableResourceRow
+                key={resource.id}
+                resource={resource}
+                onEdit={openEdit}
+                onDelete={onDeleteResource}
+              />
+            ))}
           </div>
-        ))}
-      </div>
+        </SortableContext>
+      </DndContext>
 
-      {resources.length === 0 && (
+      {items.length === 0 && (
         <div className="py-10 text-center border border-dashed border-slate-800 rounded-xl text-sm text-slate-500">
           No resources yet. Add links and tools for students.
         </div>

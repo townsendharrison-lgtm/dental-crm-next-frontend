@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Settings,
@@ -19,15 +19,19 @@ import {
   Plus,
   Trash2,
   BookOpen,
+  Compass,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   adminSettingsApi,
+  DEFAULT_MENTOR_ONBOARDING,
   DEFAULT_MEETING_TYPES,
+  DEFAULT_STUDENT_ONBOARDING,
   normalizeMeetingTypes,
+  normalizeOnboardingGuide,
   normalizeTimelineCardColors,
 } from "@/lib/api/adminSettings";
-import type { AdminSettings, MeetingTypeConfig, TimelineCardColors } from "@/lib/types";
+import type { AdminSettings, MeetingTypeConfig, OnboardingGuide, TimelineCardColors } from "@/lib/types";
 import { DEFAULT_TIMELINE_CARD_COLORS } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea, FormField } from "@/components/ui/Form";
@@ -36,11 +40,13 @@ import { usePageHeaderAction } from "@/lib/hooks/usePageHeaderAction";
 import AdminBenchmarksPanel from "@/components/admin/AdminBenchmarksPanel";
 import AdminTimelineBookshelfPanel from "@/components/admin/AdminTimelineBookshelfPanel";
 import GoogleMeetIntegrationCard from "@/components/admin/GoogleMeetIntegrationCard";
+import AdminOnboardingPanel from "@/components/admin/AdminOnboardingPanel";
 
 type RulesTab =
   | "platform"
   | "auto-reply"
   | "welcome"
+  | "onboarding"
   | "status"
   | "meetings"
   | "timeline"
@@ -51,6 +57,7 @@ const RULES_TABS: RulesTab[] = [
   "platform",
   "auto-reply",
   "welcome",
+  "onboarding",
   "status",
   "meetings",
   "timeline",
@@ -152,6 +159,10 @@ export default function AdminRulesEngineView() {
   const [timelineCardColors, setTimelineCardColors] = useState<TimelineCardColors>(
     DEFAULT_TIMELINE_CARD_COLORS,
   );
+  const [studentOnboarding, setStudentOnboarding] = useState<OnboardingGuide>(
+    DEFAULT_STUDENT_ONBOARDING,
+  );
+  const [mentorOnboarding, setMentorOnboarding] = useState<OnboardingGuide>(DEFAULT_MENTOR_ONBOARDING);
 
   useEffect(() => {
     const next = searchParams.get("tab");
@@ -177,6 +188,12 @@ export default function AdminRulesEngineView() {
     setWaitlistMessage(data.waitlist_message || "");
     setMeetingTypes(normalizeMeetingTypes(data.meeting_types));
     setTimelineCardColors(normalizeTimelineCardColors(data.timeline_card_colors));
+    setStudentOnboarding(
+      normalizeOnboardingGuide(data.student_onboarding, DEFAULT_STUDENT_ONBOARDING),
+    );
+    setMentorOnboarding(
+      normalizeOnboardingGuide(data.mentor_onboarding, DEFAULT_MENTOR_ONBOARDING),
+    );
   };
 
   useEffect(() => {
@@ -207,6 +224,25 @@ export default function AdminRulesEngineView() {
     () => JSON.stringify(timelineCardColors),
     [timelineCardColors],
   );
+  const savedStudentOnboardingKey = useMemo(
+    () =>
+      JSON.stringify(
+        normalizeOnboardingGuide(settings?.student_onboarding, DEFAULT_STUDENT_ONBOARDING),
+      ),
+    [settings?.student_onboarding],
+  );
+  const studentOnboardingKey = useMemo(
+    () => JSON.stringify(studentOnboarding),
+    [studentOnboarding],
+  );
+  const savedMentorOnboardingKey = useMemo(
+    () =>
+      JSON.stringify(
+        normalizeOnboardingGuide(settings?.mentor_onboarding, DEFAULT_MENTOR_ONBOARDING),
+      ),
+    [settings?.mentor_onboarding],
+  );
+  const mentorOnboardingKey = useMemo(() => JSON.stringify(mentorOnboarding), [mentorOnboarding]);
 
   const isDirty = useMemo(() => {
     if (!settings) return false;
@@ -225,7 +261,9 @@ export default function AdminRulesEngineView() {
       interviewMessage !== (settings.interview_message || "") ||
       waitlistMessage !== (settings.waitlist_message || "") ||
       meetingTypesKey !== savedMeetingTypesKey ||
-      timelineColorsKey !== savedTimelineColorsKey
+      timelineColorsKey !== savedTimelineColorsKey ||
+      studentOnboardingKey !== savedStudentOnboardingKey ||
+      mentorOnboardingKey !== savedMentorOnboardingKey
     );
   }, [
     settings,
@@ -246,6 +284,10 @@ export default function AdminRulesEngineView() {
     savedMeetingTypesKey,
     timelineColorsKey,
     savedTimelineColorsKey,
+    studentOnboardingKey,
+    savedStudentOnboardingKey,
+    mentorOnboardingKey,
+    savedMentorOnboardingKey,
   ]);
 
   const handleSave = async () => {
@@ -255,6 +297,9 @@ export default function AdminRulesEngineView() {
         id: row.id || newMeetingTypeId(),
         label: row.label.trim(),
         summaryTemplate: row.summaryTemplate.trim(),
+        recommendedActionItems: (row.recommendedActionItems || [])
+          .map((item) => item.trim())
+          .filter(Boolean),
       }))
       .filter((row) => row.label);
     if (cleanedTypes.length === 0) {
@@ -279,9 +324,39 @@ export default function AdminRulesEngineView() {
         waitlistMessage,
         meetingTypes: cleanedTypes,
         timelineCardColors,
+        studentOnboarding: {
+          ...studentOnboarding,
+          title: studentOnboarding.title.trim(),
+          intro: studentOnboarding.intro.trim(),
+          steps: studentOnboarding.steps
+            .map((step) => ({
+              ...step,
+              title: step.title.trim(),
+              body: step.body.trim(),
+              linkLabel: step.linkLabel?.trim() || "",
+              linkHref: step.linkHref?.trim() || "",
+            }))
+            .filter((step) => step.title || step.body),
+        },
+        mentorOnboarding: {
+          ...mentorOnboarding,
+          title: mentorOnboarding.title.trim(),
+          intro: mentorOnboarding.intro.trim(),
+          steps: mentorOnboarding.steps
+            .map((step) => ({
+              ...step,
+              title: step.title.trim(),
+              body: step.body.trim(),
+              linkLabel: step.linkLabel?.trim() || "",
+              linkHref: step.linkHref?.trim() || "",
+            }))
+            .filter((step) => step.title || step.body),
+        },
       });
       applySettings(updated);
-      toast.success("Rules saved.");
+      const warning = (updated as AdminSettings & { onboarding_warning?: string }).onboarding_warning;
+      if (warning) toast.error(warning);
+      else toast.success("Rules saved.");
     } catch (err: unknown) {
       console.error("Save rules error:", err);
       toast.error(err instanceof Error ? err.message : "Failed to save rules.");
@@ -322,6 +397,7 @@ export default function AdminRulesEngineView() {
     { id: "platform", label: "Platform", icon: Settings },
     { id: "auto-reply", label: "Auto-Reply", icon: MessageSquare },
     { id: "welcome", label: "Welcome", icon: Sparkles },
+    { id: "onboarding", label: "Onboarding", icon: Compass },
     { id: "status", label: "Status Messages", icon: Megaphone },
     { id: "meetings", label: "Meeting Types", icon: Calendar },
     { id: "timeline", label: "Timeline", icon: BookOpen },
@@ -329,10 +405,58 @@ export default function AdminRulesEngineView() {
     { id: "tools", label: "Dev Tools", icon: Wrench },
   ];
 
+  const templateCaret = useRef<Record<string, { start: number; end: number }>>({});
+
   const updateMeetingType = (id: string, patch: Partial<MeetingTypeConfig>) => {
     setMeetingTypes((prev) =>
       prev.map((row) => (row.id === id ? { ...row, ...patch } : row)),
     );
+  };
+
+  const updateRecommendedItem = (id: string, index: number, value: string) => {
+    setMeetingTypes((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const items = [...(row.recommendedActionItems || [])];
+        items[index] = value;
+        return { ...row, recommendedActionItems: items };
+      }),
+    );
+  };
+
+  const addRecommendedItem = (id: string) => {
+    setMeetingTypes((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? { ...row, recommendedActionItems: [...(row.recommendedActionItems || []), ""] }
+          : row,
+      ),
+    );
+  };
+
+  const removeRecommendedItem = (id: string, index: number) => {
+    setMeetingTypes((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              recommendedActionItems: (row.recommendedActionItems || []).filter((_, i) => i !== index),
+            }
+          : row,
+      ),
+    );
+  };
+
+  const insertTemplateToken = (id: string, current: string, token: string) => {
+    const caret = templateCaret.current[id];
+    const start = caret?.start ?? current.length;
+    const end = caret?.end ?? current.length;
+    const needsSpace = start > 0 && current[start - 1] && !/\s/.test(current[start - 1]);
+    const insert = `${needsSpace ? " " : ""}${token}`;
+    const next = current.slice(0, start) + insert + current.slice(end);
+    const cursor = start + insert.length;
+    templateCaret.current[id] = { start: cursor, end: cursor };
+    updateMeetingType(id, { summaryTemplate: next });
   };
 
   const removeMeetingType = (id: string) => {
@@ -352,6 +476,7 @@ export default function AdminRulesEngineView() {
         id: newMeetingTypeId(),
         label: "New meeting type",
         summaryTemplate: "Hi {name}, thanks for our meeting today.",
+        recommendedActionItems: [],
       },
     ]);
   };
@@ -607,6 +732,22 @@ export default function AdminRulesEngineView() {
         </div>
       )}
 
+      {tab === "onboarding" && (
+        <SectionCard
+          icon={Compass}
+          iconClass="bg-indigo-600/15 text-indigo-400"
+          title="Onboarding guides"
+          subtitle="Setup steps students and mentors see the first time they sign in"
+        >
+          <AdminOnboardingPanel
+            studentGuide={studentOnboarding}
+            mentorGuide={mentorOnboarding}
+            onStudentChange={setStudentOnboarding}
+            onMentorChange={setMentorOnboarding}
+          />
+        </SectionCard>
+      )}
+
       {tab === "status" && (
         <SectionCard
           icon={Megaphone}
@@ -651,11 +792,16 @@ export default function AdminRulesEngineView() {
           <div className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/40 px-3.5 py-3">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
             <p className="text-xs text-slate-400 leading-relaxed">
-              Placeholders: <code className="text-slate-300">{"{name}"}</code> (student first name),{" "}
-              <code className="text-slate-300">{"{notes}"}</code> (meeting notes). Student action
-              items are appended automatically when the mentor completes the meeting. Keep a type
-              labeled <code className="text-slate-300">Other</code> if you want the free-text custom
-              type field.
+              Place these where you want each piece to appear.{" "}
+              <code className="text-slate-300">{"{name}"}</code> is the student&apos;s first name.{" "}
+              <code className="text-slate-300">{"{notes}"}</code> is the meeting notes, and includes
+              the next meeting date and time when the mentor books one.{" "}
+              <code className="text-slate-300">{"{actionItems}"}</code> is the student&apos;s action
+              items, shown in bold. <code className="text-slate-300">{"{nextMeeting}"}</code> is only
+              the next meeting, written in that student&apos;s timezone. If you leave{" "}
+              <code className="text-slate-300">{"{actionItems}"}</code> out, the items are added at
+              the end. Keep a type labeled <code className="text-slate-300">Other</code> for the
+              free-text custom type.
             </p>
           </div>
 
@@ -688,13 +834,85 @@ export default function AdminRulesEngineView() {
                 <FormField label="Summary message preset">
                   <Textarea
                     value={row.summaryTemplate}
+                    onSelect={(e) => {
+                      templateCaret.current[row.id] = {
+                        start: e.currentTarget.selectionStart ?? row.summaryTemplate.length,
+                        end: e.currentTarget.selectionEnd ?? row.summaryTemplate.length,
+                      };
+                    }}
                     onChange={(e) =>
                       updateMeetingType(row.id, { summaryTemplate: e.target.value })
                     }
                     className="min-h-[120px] resize-y"
-                    placeholder="Hi {name}, great work on our session today…"
+                    placeholder="Hi {name}, we discussed {notes}. {actionItems}"
                   />
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        ["{name}", "Name"],
+                        ["{notes}", "Notes"],
+                        ["{actionItems}", "Action items"],
+                        ["{nextMeeting}", "Next meeting"],
+                      ] as const
+                    ).map(([token, label]) => (
+                      <button
+                        key={token}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => insertTemplateToken(row.id, row.summaryTemplate, token)}
+                        className="cursor-pointer rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:border-indigo-500/50 hover:text-white"
+                      >
+                        Insert {label}
+                      </button>
+                    ))}
+                  </div>
                 </FormField>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-white">Recommended action items</p>
+                      <p className="text-xs text-slate-500">
+                        Mentors can add these in one click when they complete this meeting type.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      leftIcon={<Plus className="h-3.5 w-3.5" />}
+                      onClick={() => addRecommendedItem(row.id)}
+                    >
+                      Add item
+                    </Button>
+                  </div>
+                  {(row.recommendedActionItems || []).length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-slate-800 px-3 py-3 text-xs text-slate-500">
+                      No recommended tasks yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(row.recommendedActionItems || []).map((item, itemIndex) => (
+                        <div key={`${row.id}-rec-${itemIndex}`} className="flex gap-2">
+                          <Input
+                            value={item}
+                            onChange={(e) =>
+                              updateRecommendedItem(row.id, itemIndex, e.target.value)
+                            }
+                            placeholder="e.g. Register for the DAT"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeRecommendedItem(row.id, itemIndex)}
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-950/40 hover:text-rose-400 cursor-pointer"
+                            aria-label="Remove recommended action item"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

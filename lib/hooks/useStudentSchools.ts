@@ -39,7 +39,8 @@ export function useAddStudentSchool() {
         studentId,
         schoolId,
         category: category || "Target",
-        status: "Interested",
+        status:
+          (school.selectionStatus as CreateStudentSchoolPayload["status"]) || "Interested",
         notes: typeof school.notes === "string" ? school.notes : undefined,
       });
       return mapStudentSchoolToHubSchool({

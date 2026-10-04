@@ -23,6 +23,11 @@ import {
   ResourceLinksFields,
   resourceLinksSummary,
 } from "@/components/timeline/ResourceLinksFields";
+import {
+  BookshelfPresetFilters,
+  filterBookshelfPresets,
+  type PresetTypeFilter,
+} from "@/components/timeline/BookshelfPresetFilters";
 import { cn } from "@/lib/utils/cn";
 
 const TYPE_KEYS: TimelineCardType[] = ["Meeting", "Milestone", "Task", "Other"];
@@ -55,8 +60,11 @@ export default function AdminTimelineBookshelfPanel({
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<PresetTypeFilter>("All");
 
   const items = (data?.items || []).filter((i) => i.scope === "GLOBAL");
+  const visibleItems = filterBookshelfPresets(items, query, typeFilter);
   const colors = { ...DEFAULT_TIMELINE_CARD_COLORS, ...cardColors };
   const saving = createItem.isPending || updateItem.isPending;
 
@@ -217,13 +225,26 @@ export default function AdminTimelineBookshelfPanel({
           </div>
         )}
 
+        {items.length > 0 && (
+          <BookshelfPresetFilters
+            query={query}
+            onQueryChange={setQuery}
+            type={typeFilter}
+            onTypeChange={setTypeFilter}
+          />
+        )}
+
         {isLoading ? (
           <p className="py-6 text-center text-sm text-slate-500">Loading presets…</p>
         ) : items.length === 0 ? (
           <p className="py-6 text-center text-sm text-slate-500">No platform presets yet.</p>
+        ) : visibleItems.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-500">
+            No presets match that search or filter.
+          </p>
         ) : (
           <div className="space-y-2">
-            {items.map((item) => {
+            {visibleItems.map((item) => {
               const color = colors[item.cardType] || DEFAULT_TIMELINE_CARD_COLORS.Milestone;
               const isEditing = editingId === item.id;
               return (

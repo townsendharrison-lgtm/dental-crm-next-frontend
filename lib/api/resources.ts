@@ -48,6 +48,13 @@ export function normalizeResource(raw: RawResource): Resource {
   };
 }
 
+export function compareResources(a: Resource, b: Resource) {
+  const ao = a.sortOrder ?? a.sort_order ?? 0;
+  const bo = b.sortOrder ?? b.sort_order ?? 0;
+  if (ao !== bo) return ao - bo;
+  return a.title.localeCompare(b.title);
+}
+
 export const resourcesApi = {
   list: async (): Promise<Resource[]> => {
     const response = await apiGet<{ resources: Resource[] }>("/api/resources");
@@ -66,5 +73,12 @@ export const resourcesApi = {
 
   remove: async (id: string): Promise<{ message: string }> => {
     return await apiDelete<{ message: string }>(`/api/resources/${id}`);
+  },
+
+  reorder: async (orderedIds: string[]): Promise<Resource[]> => {
+    const response = await apiPut<{ resources: Resource[] }>("/api/resources/reorder/bulk", {
+      orderedIds,
+    });
+    return (response.resources || []).map((r) => normalizeResource(r as RawResource));
   },
 };

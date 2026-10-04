@@ -11,6 +11,7 @@ import type { PlatformConfig } from "@/lib/types";
 /** Live platform status messages from Rules Engine settings. */
 export function usePlatformConfig() {
   const [config, setConfig] = useState<PlatformConfig>(DEFAULT_PLATFORM_CONFIG);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,11 +22,14 @@ export function usePlatformConfig() {
       })
       .catch(() => {
         /* keep defaults */
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return config;
+  return { ...config, ready };
 }

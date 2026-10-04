@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useResources } from "@/lib/hooks/useResources";
+import { compareResources } from "@/lib/api/resources";
 import type { Resource } from "@/lib/types";
 import { renderBadgeIcon } from "@/lib/utils/badgeIcons";
 import { Badge, Button, EmptyState, Input, SelectMenu, Spinner } from "@/components/ui";
@@ -32,12 +33,7 @@ export default function StudentResourcesPage() {
     () =>
       [...resources]
         .filter(isActiveResource)
-        .sort((a, b) => {
-          const ao = a.sortOrder ?? a.sort_order ?? 0;
-          const bo = b.sortOrder ?? b.sort_order ?? 0;
-          if (ao !== bo) return ao - bo;
-          return a.title.localeCompare(b.title);
-        }),
+        .sort(compareResources),
     [resources],
   );
 

@@ -26,6 +26,11 @@ import {
   ResourceLinksFields,
   resourceLinksSummary,
 } from "@/components/timeline/ResourceLinksFields";
+import {
+  BookshelfPresetFilters,
+  filterBookshelfPresets,
+  type PresetTypeFilter,
+} from "@/components/timeline/BookshelfPresetFilters";
 
 const TYPE_OPTIONS: { value: TimelineCardType; label: string }[] = [
   { value: "Meeting", label: "Meeting" },
@@ -77,11 +82,21 @@ export function TimelineBookshelfDrawer({
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<PresetTypeFilter>("All");
 
   const items = data?.items || [];
   const colors = data?.cardColors || cardColors;
   const globalItems = useMemo(() => items.filter((i) => i.scope === "GLOBAL"), [items]);
   const mineItems = useMemo(() => items.filter((i) => i.scope === "MENTOR"), [items]);
+  const visibleGlobal = useMemo(
+    () => filterBookshelfPresets(globalItems, query, typeFilter),
+    [globalItems, query, typeFilter],
+  );
+  const visibleMine = useMemo(
+    () => filterBookshelfPresets(mineItems, query, typeFilter),
+    [mineItems, query, typeFilter],
+  );
   const saving = createItem.isPending || updateItem.isPending;
 
   const resetForm = () => {
@@ -139,11 +154,15 @@ export function TimelineBookshelfDrawer({
     }
   };
 
-  const renderList = (list: TimelineBookshelfItem[], canManage: boolean) => {
+  const renderList = (
+    list: TimelineBookshelfItem[],
+    canManage: boolean,
+    emptyLabel: string,
+  ) => {
     if (list.length === 0) {
       return (
         <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-10 text-center">
-          <p className="text-sm text-slate-500">No presets yet.</p>
+          <p className="text-sm text-slate-500">{emptyLabel}</p>
         </div>
       );
     }
@@ -265,6 +284,15 @@ export function TimelineBookshelfDrawer({
           </div>
         ) : null}
 
+        {items.length > 0 && (
+          <BookshelfPresetFilters
+            query={query}
+            onQueryChange={setQuery}
+            type={typeFilter}
+            onTypeChange={setTypeFilter}
+          />
+        )}
+
         <Tabs
           defaultValue="platform"
           value={tab}
@@ -279,7 +307,15 @@ export function TimelineBookshelfDrawer({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="platform">{renderList(globalItems, false)}</TabsContent>
+          <TabsContent value="platform">
+            {renderList(
+              visibleGlobal,
+              false,
+              globalItems.length === 0
+                ? "No presets yet."
+                : "No presets match that search or filter.",
+            )}
+          </TabsContent>
 
           <TabsContent value="mine" className="space-y-3">
             {allowPersonalManage && (
@@ -353,7 +389,13 @@ export function TimelineBookshelfDrawer({
               </div>
             )}
 
-            {renderList(mineItems, allowPersonalManage)}
+            {renderList(
+              visibleMine,
+              allowPersonalManage,
+              mineItems.length === 0
+                ? "No presets yet."
+                : "No presets match that search or filter.",
+            )}
           </TabsContent>
         </Tabs>
       </div>

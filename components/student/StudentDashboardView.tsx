@@ -54,6 +54,7 @@ import { useLorRequests } from "@/lib/hooks/useLor";
 import { useStudentCredentials } from "@/lib/hooks/useStudentNotesDexterity";
 import { buildApplicationReadiness } from "@/lib/utils/applicationReadiness";
 import { isNewLeadNotification } from "@/lib/utils/notificationVisibility";
+import { compareResources } from "@/lib/api/resources";
 
 interface StudentDashboardProps {
   student: Student;
@@ -92,6 +93,41 @@ interface StudentDashboardProps {
 
 function itemDueDate(item: ActionItem) {
   return item.due_date || item.dueDate || "";
+}
+
+/** URL saved on the task (resource link, or a linked library resource). */
+function itemResourceUrl(item: ActionItem, resources: Resource[] = []) {
+  const raw = (item.resource_link || item.resourceLink || "").trim();
+  if (raw) return normalizeTaskUrl(raw);
+  const resourceId = item.resource_id || item.resourceId;
+  if (!resourceId) return "";
+  const match = resources.find((resource) => resource.id === resourceId);
+  return normalizeTaskUrl(match?.url || "");
+}
+
+function normalizeTaskUrl(raw: string) {
+  const value = raw.trim();
+  if (!value) return "";
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return "";
+  return `https://${value}`;
+}
+
+function taskLinkLabel(url: string) {
+  if (url.startsWith("/")) return url;
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/$/, "");
+    const label = `${parsed.hostname.replace(/^www\./, "")}${path}`;
+    return label || url;
+  } catch {
+    return url;
+  }
+}
+
+function itemDescription(item: ActionItem) {
+  return (item.description || "").trim();
 }
 
 function itemCreatedAt(item: ActionItem) {
@@ -288,6 +324,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     "";
   const { data: mentor } = useMentor(mentorId);
   const nextTask = studentTasks.find((t) => t.status !== "COMPLETED") || studentTasks[0];
+  const nextTaskUrl = nextTask ? itemResourceUrl(nextTask, resources) : "";
 
   usePageHeaderAction({
     label: "Mentor Assistant",
@@ -646,22 +683,50 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
           {nextTask ? (
             <>
               <h4 className="mb-3 text-2xl font-bold leading-tight md:text-3xl">{nextTask.task}</h4>
-              <p className="mb-5 text-sm leading-relaxed text-indigo-100/80 md:text-base">
-                {nextTask.description?.trim() ||
-                  "This is the most critical step for your application timing. Finishing this today keeps you on track for the priority deadline."}
-              </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const el = document.getElementById("active-checklist");
-                    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
-                  className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+              {itemDescription(nextTask) ? (
+                <p className="mb-5 whitespace-pre-wrap text-sm leading-relaxed text-indigo-100/80 md:text-base">
+                  {itemDescription(nextTask)}
+                </p>
+              ) : !nextTaskUrl ? (
+                <p className="mb-5 text-sm leading-relaxed text-indigo-100/80 md:text-base">
+                  This is the most critical step for your application timing. Finishing this today keeps you on track for the priority deadline.
+                </p>
+              ) : null}
+              {nextTaskUrl && (
+                <a
+                  href={nextTaskUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mb-5 inline-flex max-w-full items-center gap-2 text-sm font-semibold text-white underline decoration-white/40 underline-offset-4 hover:decoration-white"
                 >
-                  Start Task
-                  <ArrowRight className="h-4 w-4" />
-                </button>
+                  <ExternalLink className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{taskLinkLabel(nextTaskUrl)}</span>
+                </a>
+              )}
+              <div className="flex flex-wrap items-center gap-3">
+                {nextTaskUrl ? (
+                  <a
+                    href={nextTaskUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+                  >
+                    Start Task
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById("active-checklist");
+                      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+                  >
+                    Start Task
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                )}
                 {itemDueDate(nextTask) && (
                   <div className="inline-flex items-center gap-2 rounded-lg border border-indigo-400/30 bg-indigo-950/40 px-3.5 py-2 text-xs text-indigo-100">
                     <Clock className="h-3.5 w-3.5" />
@@ -911,10 +976,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
           )}
 
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1 custom-scrollbar">
-            {sortChecklistTasks(studentTasks).map((item) => (
+            {sortChecklistTasks(studentTasks).map((item) => {
+              const taskUrl = itemResourceUrl(item, resources);
+              const description = itemDescription(item);
+              const category = (item.category || "").trim();
+              return (
               <div
                 key={item.id}
-                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
                   item.status === "COMPLETED"
                     ? "bg-slate-950/30 border-slate-800/50 opacity-60"
                     : "bg-slate-800/20 border-slate-700/50 hover:border-indigo-500/30"
@@ -923,7 +992,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => onToggleActionItem(item.id)}
-                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                  className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shrink-0 cursor-pointer ${
                     item.status === "COMPLETED"
                       ? "bg-indigo-600 border-indigo-600 text-white"
                       : "border-slate-700 hover:border-indigo-500"
@@ -933,19 +1002,37 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </button>
                 <div className="flex-1 min-w-0">
                   <p
-                    className={`text-sm font-semibold truncate ${
+                    className={`text-sm font-semibold ${
                       item.status === "COMPLETED" ? "text-slate-500 line-through" : "text-white"
                     }`}
                   >
                     {item.task}
                   </p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      {item.category}
-                    </span>
+                  {description && (
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-400">
+                      {description}
+                    </p>
+                  )}
+                  {taskUrl && (
+                    <a
+                      href={taskUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1.5 inline-flex max-w-full items-center gap-1.5 text-xs font-semibold text-indigo-300 hover:text-indigo-200"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{taskLinkLabel(taskUrl)}</span>
+                    </a>
+                  )}
+                  <div className="flex items-center gap-2 mt-1.5">
+                    {category && (
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        {category}
+                      </span>
+                    )}
                     {itemDueDate(item) && (
                       <>
-                        <span className="w-1 h-1 rounded-full bg-slate-700" />
+                        {category && <span className="w-1 h-1 rounded-full bg-slate-700" />}
                         <span className="text-[10px] font-bold text-indigo-400/60 uppercase tracking-wider">
                           Due {formatDueDateOnly(itemDueDate(item))}
                         </span>
@@ -965,7 +1052,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
             {studentTasks.length === 0 && !isAddingTask && (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-800 text-center">
                 <p className="text-slate-500 text-sm">No active tasks. You&apos;re all caught up!</p>
@@ -1010,7 +1098,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       <section>
         <h3 className="mb-4 text-base font-bold text-white">Resources</h3>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {resources.map((res) => (
+          {[...resources].sort(compareResources).map((res) => (
             <button
               key={res.id}
               type="button"

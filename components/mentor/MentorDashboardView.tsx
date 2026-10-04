@@ -953,7 +953,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                 {latencyLabel}
                   </p>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Avg reply to student messages
+                Avg reply to student questions
               </p>
                 </div>
             <div

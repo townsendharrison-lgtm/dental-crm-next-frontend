@@ -7,6 +7,7 @@ import { Sidebar } from "./Sidebar";
 import { MobileHeader, GlobalHeader } from "./Header";
 import { RoleSwitcher } from "./RoleSwitcher";
 import { PopupOverlay } from "./PopupOverlay";
+import { OnboardingGuide } from "@/components/onboarding/OnboardingGuide";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
@@ -107,6 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen max-w-[100vw] overflow-x-hidden bg-slate-950 text-slate-200">
       <PopupOverlay />
+      <OnboardingGuide />
       <MobileHeader />
       <Sidebar />
       <RoleSwitcher />

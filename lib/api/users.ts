@@ -48,6 +48,7 @@ export const usersApi = {
     name?: string;
     avatar?: string;
     timezone?: string;
+    onboardingCompleted?: boolean;
   }): Promise<RawUser> => {
     return await apiPut<RawUser>("/api/users/profile", updates);
   },

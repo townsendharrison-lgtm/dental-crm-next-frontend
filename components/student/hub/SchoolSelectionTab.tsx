@@ -412,6 +412,36 @@ export default function SchoolSelectionTab({
     }
 
     const school = schools.find((s) => s.id === schoolId);
+    if (!school) return;
+
+    setSchools((prev) =>
+      prev.map((item) =>
+        item.id === schoolId ? { ...item, selectionStatus: status || undefined } : item,
+      ),
+    );
+
+    // The school is still only on the board. Keep the status locally and persist it with Save.
+    if (!school.selectionId) {
+      if (status === ApplicationStatus.ACCEPTED) {
+        triggerConfetti();
+        setShowCelebration({
+          type: 'ACCEPTED',
+          message: platformConfig?.acceptedMessage || "Congratulations on your acceptance! We are so proud of you."
+        });
+      } else if (status === ApplicationStatus.INTERVIEWED) {
+        setShowCelebration({
+          type: 'INTERVIEWED',
+          message: platformConfig?.interviewMessage || "You've secured an interview! This is a huge step forward."
+        });
+      } else if (status === ApplicationStatus.WAITLISTED) {
+        setShowCelebration({
+          type: 'WAITLISTED',
+          message: platformConfig?.waitlistMessage || "You're still in the running! A waitlist is a 'not yet', not a 'no'. Stay positive!"
+        });
+      }
+      return;
+    }
+
     const existing = loadedApplications.find(
       (a) => a.schoolId === schoolId || a.school_id === schoolId,
     );
@@ -421,46 +451,45 @@ export default function SchoolSelectionTab({
         if (existing?.id) {
           await deleteAppMutation.mutateAsync({ id: existing.id, studentId });
         }
-        if (school?.selectionId) {
-          await updateSchoolMutation.mutateAsync({
-            id: school.selectionId,
-            studentId,
-            updates: { status: 'Interested' },
-          });
-        }
+        await updateSchoolMutation.mutateAsync({
+          id: school.selectionId,
+          studentId,
+          updates: { status: 'Interested' },
+        });
       } else if (existing?.id) {
         await updateAppMutation.mutateAsync({
           id: existing.id,
           studentId,
           updates: { status: status as ApplicationStatus },
         });
-        if (school?.selectionId) {
-          await updateSchoolMutation.mutateAsync({
-            id: school.selectionId,
-            studentId,
-            updates: { status: status as any },
-          });
-        }
+        await updateSchoolMutation.mutateAsync({
+          id: school.selectionId,
+          studentId,
+          updates: { status: status as any },
+        });
       } else {
         await createAppMutation.mutateAsync({
           studentId,
           schoolId,
-          schoolName: school?.name || 'Unknown School',
-          school: school || undefined,
+          schoolName: school.name || 'Unknown School',
+          school,
           status: status as ApplicationStatus,
           appliedDate: new Date().toISOString().split('T')[0],
         });
-        if (school?.selectionId) {
-          await updateSchoolMutation.mutateAsync({
-            id: school.selectionId,
-            studentId,
-            updates: { status: status as any },
-          });
-        }
+        await updateSchoolMutation.mutateAsync({
+          id: school.selectionId,
+          studentId,
+          updates: { status: status as any },
+        });
       }
       onUpdateApplications?.(loadedApplications);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update status');
+      setSchools((prev) =>
+        prev.map((item) =>
+          item.id === schoolId ? { ...item, selectionStatus: school.selectionStatus } : item,
+        ),
+      );
       return;
     }
 

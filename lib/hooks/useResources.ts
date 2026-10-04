@@ -43,3 +43,13 @@ export function useDeleteResource() {
     },
   });
 }
+
+export function useReorderResources() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) => resourcesApi.reorder(orderedIds),
+    onSuccess: (resources) => {
+      qc.setQueryData(queryKeys.resources.all(), resources);
+    },
+  });
+}

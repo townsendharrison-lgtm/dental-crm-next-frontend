@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -117,6 +118,7 @@ export function StudentProfileDocumentsView({
   onUpdateStudent,
   strengthScore: strengthScoreProp,
 }: StudentProfileDocumentsViewProps) {
+  const router = useRouter();
   const { user } = useAuth();
   const setAuthUser = useAuthStore((s) => s.setUser);
   const queryClient = useQueryClient();
@@ -1920,15 +1922,28 @@ export function StudentProfileDocumentsView({
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Briefcase className="text-indigo-400" size={20} /> Experience Summary
             </h2>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              leftIcon={<History size={14} />}
-              onClick={handleSyncHours}
-            >
-              Sync from Hour Tracker
-            </Button>
+            <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                leftIcon={<History size={14} />}
+                onClick={handleSyncHours}
+              >
+                Sync from Hour Tracker
+              </Button>
+              {canEditOwnProfile && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Plus size={14} />}
+                  onClick={() => router.push("/student/hub/tracker?add=1")}
+                >
+                  Add Experience
+                </Button>
+              )}
+            </div>
           </div>
           <div className="grid md:grid-cols-2 gap-6">
             {experienceStats.map((stat) => (

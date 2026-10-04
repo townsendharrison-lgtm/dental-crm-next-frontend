@@ -45,6 +45,7 @@ interface AdminEngagementViewProps {
   onAddResource: (resource: Partial<Resource>) => void;
   onUpdateResource: (resource: Resource) => void;
   onDeleteResource: (id: string) => void;
+  onReorderResources: (orderedIds: string[]) => void | Promise<void>;
 }
 
 type EngagementTab = "surveys" | "popups" | "workflows" | "badges" | "resources";
@@ -75,6 +76,7 @@ const AdminEngagementView: React.FC<AdminEngagementViewProps> = ({
   onAddResource,
   onUpdateResource,
   onDeleteResource,
+  onReorderResources,
 }) => {
   const isAdmin = role === "ADMIN";
   const [tab, setTab] = useState<EngagementTab>("surveys");
@@ -168,6 +170,7 @@ const AdminEngagementView: React.FC<AdminEngagementViewProps> = ({
           onAddResource={onAddResource}
           onUpdateResource={onUpdateResource}
           onDeleteResource={onDeleteResource}
+          onReorderResources={onReorderResources}
         />
       )}
     </div>

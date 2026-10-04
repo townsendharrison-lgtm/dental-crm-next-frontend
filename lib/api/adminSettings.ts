@@ -1,5 +1,12 @@
 import { apiGet, apiPut, apiPost } from "./client";
-import type { AdminSettings, MeetingTypeConfig, PlatformConfig, TimelineCardColors } from "@/lib/types";
+import type {
+  AdminSettings,
+  MeetingTypeConfig,
+  OnboardingGuide,
+  OnboardingStep,
+  PlatformConfig,
+  TimelineCardColors,
+} from "@/lib/types";
 import { DEFAULT_TIMELINE_CARD_COLORS } from "@/lib/types";
 
 export interface UpdateSettingsPayload {
@@ -18,6 +25,8 @@ export interface UpdateSettingsPayload {
   waitlistMessage?: string | null;
   meetingTypes?: MeetingTypeConfig[];
   timelineCardColors?: TimelineCardColors;
+  studentOnboarding?: OnboardingGuide;
+  mentorOnboarding?: OnboardingGuide;
 }
 
 export const DEFAULT_ASSIGNMENT_WELCOME = `Hi [Mentee Name],
@@ -79,6 +88,120 @@ export const DEFAULT_MEETING_TYPES: MeetingTypeConfig[] = [
   },
 ];
 
+export const DEFAULT_STUDENT_ONBOARDING: OnboardingGuide = {
+  enabled: true,
+  title: "Welcome — start here",
+  intro: "These are the first things to do on your dashboard.",
+  steps: [
+    {
+      id: "student-momentum",
+      title: "Open Momentum",
+      body: "Momentum is your home page. It shows what to work on right now, your checklist, and upcoming meetings.",
+      linkLabel: "Go to Momentum",
+      linkHref: "/student/momentum",
+    },
+    {
+      id: "student-profile",
+      title: "Complete your profile",
+      body: "Add your details and documents under Profile & Docs so your mentor can see where you are in the process.",
+      linkLabel: "Open Profile & Docs",
+      linkHref: "/student/profile",
+    },
+    {
+      id: "student-hub",
+      title: "Use the Central Hub",
+      body: "Track hours, schools, and essays in the Central Hub. Start with the experiences and schools you already have.",
+      linkLabel: "Open Central Hub",
+      linkHref: "/student/hub",
+    },
+    {
+      id: "student-inbox",
+      title: "Message your mentor",
+      body: "Use Inbox when you have a question. Your mentor sees those messages and can reply from their dashboard.",
+      linkLabel: "Open Inbox",
+      linkHref: "/student/messages",
+    },
+  ],
+};
+
+export const DEFAULT_MENTOR_ONBOARDING: OnboardingGuide = {
+  enabled: true,
+  title: "Welcome — start here",
+  intro: "These are the first things to do after your mentor account is created.",
+  steps: [
+    {
+      id: "mentor-command",
+      title: "Use the Command Center",
+      body: "This is your home page. It shows assigned students, meetings, tasks, and how quickly you reply to students.",
+      linkLabel: "Open Command Center",
+      linkHref: "/mentor/command-center",
+    },
+    {
+      id: "mentor-students",
+      title: "Open a student",
+      body: "My Students is where you review a student's profile, plan, and what they need next.",
+      linkLabel: "Open My Students",
+      linkHref: "/mentor/students",
+    },
+    {
+      id: "mentor-schedule",
+      title: "Schedule the first meeting",
+      body: "Book the first session from Schedule so the student has a time on their calendar.",
+      linkLabel: "Open Schedule",
+      linkHref: "/mentor/schedule",
+    },
+    {
+      id: "mentor-inbox",
+      title: "Reply from Inbox",
+      body: "Student questions land in Inbox. Reply there — that reply time is what your latency score uses.",
+      linkLabel: "Open Inbox",
+      linkHref: "/mentor/messages",
+    },
+  ],
+};
+
+function cleanOnboardingStep(row: unknown, index: number): OnboardingStep | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  const title = String(r.title || "").trim();
+  const body = String(r.body || "").trim();
+  if (!title && !body) return null;
+  const linkLabel = String(r.linkLabel ?? r.link_label ?? "").trim();
+  const linkHref = String(r.linkHref ?? r.link_href ?? "").trim();
+  return {
+    id: String(r.id || `step-${index + 1}`).trim() || `step-${index + 1}`,
+    title: title || "Step",
+    body,
+    linkLabel: linkLabel || undefined,
+    linkHref: linkHref || undefined,
+  };
+}
+
+export function normalizeOnboardingGuide(raw: unknown, fallback: OnboardingGuide): OnboardingGuide {
+  if (raw == null || raw === "") return fallback;
+  let value: unknown = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
+  const guide = value as Record<string, unknown>;
+  const steps = Array.isArray(guide.steps)
+    ? guide.steps
+        .map((step, index) => cleanOnboardingStep(step, index))
+        .filter((step): step is OnboardingStep => !!step)
+    : [];
+  return {
+    enabled: guide.enabled !== false,
+    title: String(guide.title || fallback.title).trim() || fallback.title,
+    intro: String(guide.intro || "").trim(),
+    steps,
+  };
+}
+
 export function normalizeMeetingTypes(raw: unknown): MeetingTypeConfig[] {
   let list: unknown = raw;
   if (typeof list === "string") {
@@ -96,10 +219,15 @@ export function normalizeMeetingTypes(raw: unknown): MeetingTypeConfig[] {
       const r = row as Record<string, unknown>;
       const label = String(r.label || "").trim();
       if (!label) return null;
+      const rawItems = r.recommendedActionItems ?? r.recommended_action_items;
+      const recommendedActionItems = Array.isArray(rawItems)
+        ? rawItems.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
       return {
         id: String(r.id || `type-${index + 1}`).trim() || `type-${index + 1}`,
         label,
         summaryTemplate: String(r.summaryTemplate ?? r.summary_template ?? "").trim(),
+        recommendedActionItems,
       } satisfies MeetingTypeConfig;
     })
     .filter((row): row is MeetingTypeConfig => !!row);
@@ -119,6 +247,8 @@ export const DEFAULT_PLATFORM_CONFIG: PlatformConfig = {
   welcomeTemplateAssignment: DEFAULT_ASSIGNMENT_WELCOME,
   meetingTypes: DEFAULT_MEETING_TYPES,
   timelineCardColors: DEFAULT_TIMELINE_CARD_COLORS,
+  studentOnboarding: DEFAULT_STUDENT_ONBOARDING,
+  mentorOnboarding: DEFAULT_MENTOR_ONBOARDING,
 };
 
 export function normalizeTimelineCardColors(raw: unknown): TimelineCardColors {
@@ -146,6 +276,14 @@ export function platformConfigFromSettings(settings?: AdminSettings | null): Pla
       settings.welcome_template_assignment || DEFAULT_PLATFORM_CONFIG.welcomeTemplateAssignment,
     meetingTypes: normalizeMeetingTypes(settings.meeting_types),
     timelineCardColors: normalizeTimelineCardColors(settings.timeline_card_colors),
+    studentOnboarding: normalizeOnboardingGuide(
+      settings.student_onboarding,
+      DEFAULT_STUDENT_ONBOARDING,
+    ),
+    mentorOnboarding: normalizeOnboardingGuide(
+      settings.mentor_onboarding,
+      DEFAULT_MENTOR_ONBOARDING,
+    ),
   };
 }
 

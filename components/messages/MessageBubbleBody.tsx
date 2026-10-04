@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { MessageLinkPreview } from "@/lib/types";
-import { linkifyText } from "@/lib/messages/linkify";
+import { renderMessageText } from "@/lib/messages/linkify";
 
 interface MessageBubbleBodyProps {
   text?: string | null;
@@ -42,7 +42,7 @@ export function MessageBubbleBody({
       )}
 
       {hasText && (
-        <div className="whitespace-pre-wrap break-words">{linkifyText(text!, isMe)}</div>
+        <div className="whitespace-pre-wrap break-words">{renderMessageText(text!, isMe)}</div>
       )}
 
       {preview && (

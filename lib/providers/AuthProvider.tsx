@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const current = getAccessToken();
         if (current && current !== tokenAtStart) return;
 
-        const raw = u as AuthUser & { timezone?: string };
+        const raw = u as AuthUser & { timezone?: string; onboardingCompletedAt?: string | null };
         const user: AuthUser = {
           id: raw.id,
           email: raw.email,
@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: raw.role,
           avatar: raw.avatar,
           timezone: raw.timezone,
+          onboardingCompletedAt: raw.onboardingCompletedAt || null,
         };
         const synced = await syncUserTimezone(user);
         if (cancelled) return;

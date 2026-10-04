@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -767,11 +767,24 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     });
   }, [messages]);
 
-  useEffect(() => {
-    // Only pin to bottom when the user is already near the latest messages
-    // (or after send / conversation switch). Polling must not yank scroll up.
-    scrollMessagesToBottom();
-  }, [uniqueMessages.length, selectedConversationId]);
+  useLayoutEffect(() => {
+    // Pin to the latest message after the thread paints. The list used to stay
+    // at the top because the scroller grew with the messages instead of scrolling.
+    if (loadingMsgs) return;
+    if (!stickToBottomRef.current) return;
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const pin = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    pin();
+    const raf = requestAnimationFrame(pin);
+    const timer = window.setTimeout(pin, 60);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [uniqueMessages, loadingMsgs, selectedConversationId]);
 
   const activeConversation =
     conversations.find((c) => c.id === selectedConversationId) ||
@@ -847,7 +860,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
 
   return (
     <div className="max-w-7xl mx-auto overflow-hidden h-[calc(100vh-7.5rem)]">
-      <div className="h-full flex bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative">
+      <div className="flex h-full min-h-0 bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative">
         {/* Left: thread list — full width below lg; side-by-side only on lg+ */}
         <div
           className={`${
@@ -1090,7 +1103,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
               <div
                 ref={messagesContainerRef}
                 onScroll={handleMessagesScroll}
-                className="flex-1 px-5 max-sm:px-3 py-5 overflow-y-auto custom-scrollbar flex flex-col gap-2.5"
+                className="min-h-0 flex-1 overflow-y-auto px-5 max-sm:px-3 py-5 custom-scrollbar flex flex-col gap-2.5"
               >
                 {loadingMsgs ? (
                   <div className="flex-1 flex items-center justify-center">

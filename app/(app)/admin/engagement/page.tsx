@@ -26,10 +26,12 @@ import {
   useCreateResource,
   useUpdateResource,
   useDeleteResource,
+  useReorderResources,
 } from "@/lib/hooks/useResources";
 import AdminEngagementView from "@/components/admin/AdminEngagementView";
 import type { Workflow, Badge, SystemNotification, Survey, PopupAdvertisement, Resource } from "@/lib/types";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { toastAction, withToastLoading } from "@/lib/utils/toastAction";
 
 export default function AdminEngagementPage() {
@@ -59,6 +61,7 @@ export default function AdminEngagementPage() {
   const createResourceMutation = useCreateResource();
   const updateResourceMutation = useUpdateResource();
   const deleteResourceMutation = useDeleteResource();
+  const reorderResourceMutation = useReorderResources();
 
   if (!user || surveysLoading || broadcastsLoading || resourcesLoading) {
     return (
@@ -402,6 +405,19 @@ export default function AdminEngagementPage() {
     });
   };
 
+  const handleReorderResources = async (orderedIds: string[]) => {
+    try {
+      await reorderResourceMutation.mutateAsync(orderedIds);
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message?: unknown }).message || "")
+          : "";
+      toast.error(message || "Couldn't save resource order");
+      throw err;
+    }
+  };
+
   return (
     <div className="pt-2">
       <AdminEngagementView
@@ -430,6 +446,7 @@ export default function AdminEngagementPage() {
         onAddResource={handleAddResource}
         onUpdateResource={handleUpdateResource}
         onDeleteResource={handleDeleteResource}
+        onReorderResources={handleReorderResources}
       />
     </div>
   );

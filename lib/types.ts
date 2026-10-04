@@ -39,6 +39,8 @@ export interface AuthUser {
   /** IANA timezone captured from the device (e.g. America/New_York). */
   timezone?: string;
   createdAt?: string;
+  /** Set when the user finishes the role onboarding guide. */
+  onboardingCompletedAt?: string | null;
 }
 
 export interface SignInResponse {
@@ -1025,11 +1027,30 @@ export interface OptimizationPlan {
   expertTips?: string[];
 }
 
+/** First-login setup step written by an admin for students or mentors. */
+export interface OnboardingStep {
+  id: string;
+  title: string;
+  body: string;
+  linkLabel?: string;
+  linkHref?: string;
+}
+
+/** Ordered guide shown after a student or mentor account is created. */
+export interface OnboardingGuide {
+  enabled: boolean;
+  title: string;
+  intro: string;
+  steps: OnboardingStep[];
+}
+
 /** Mentor complete-meeting session type + summary DM preset (Rules Engine). */
 export interface MeetingTypeConfig {
   id: string;
   label: string;
   summaryTemplate: string;
+  /** Tasks mentors can add in one click when completing this meeting type. */
+  recommendedActionItems?: string[];
 }
 
 export interface AdminSettings {
@@ -1052,6 +1073,8 @@ export interface AdminSettings {
   meeting_types?: MeetingTypeConfig[] | null;
   /** Timeline card type accent colors */
   timeline_card_colors?: TimelineCardColors | null;
+  student_onboarding?: OnboardingGuide | null;
+  mentor_onboarding?: OnboardingGuide | null;
   created_at: string;
   updated_at: string;
 }
@@ -1255,6 +1278,8 @@ export interface PlatformConfig {
   meetingTypes: MeetingTypeConfig[];
   /** Timeline card type accent colors */
   timelineCardColors: TimelineCardColors;
+  studentOnboarding: OnboardingGuide;
+  mentorOnboarding: OnboardingGuide;
 }
 
 export interface AutoReplySettings {

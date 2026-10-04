@@ -1,6 +1,6 @@
 
 import { Student, Mentor, SetterUser, ReadinessStatus, ActionItem, Resource, Message, Badge, Experience, ManualDexterity, StudentDocument, StudentNote, School, LetterOfRecommendationRequest, LOREmailConfig, Meeting, StaffTask, Survey, SystemNotification, SurveyResponse, OptimizationPlan, StudentAssignment, AutoReplySettings, ApplicationStatus, PlatformConfig, Lead, LeadEmailTemplate, SchoolSelectionProfile, ResearchCase } from './types';
-import { DEFAULT_MEETING_TYPES } from './api/adminSettings';
+import { DEFAULT_MEETING_TYPES, DEFAULT_MENTOR_ONBOARDING, DEFAULT_STUDENT_ONBOARDING } from './api/adminSettings';
 import { DEFAULT_TIMELINE_CARD_COLORS } from './types';
 
 export const MOCK_SCHOOL_SELECTIONS: SchoolSelectionProfile[] = [
@@ -144,6 +144,8 @@ Feel free to reach out if you have any questions—we are here to support you ev
 Looking forward to your progress!`,
   meetingTypes: DEFAULT_MEETING_TYPES,
   timelineCardColors: DEFAULT_TIMELINE_CARD_COLORS,
+  studentOnboarding: DEFAULT_STUDENT_ONBOARDING,
+  mentorOnboarding: DEFAULT_MENTOR_ONBOARDING,
 };
 
 export const MOCK_AUTO_REPLY_SETTINGS: AutoReplySettings = {

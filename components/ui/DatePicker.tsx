@@ -37,6 +37,110 @@ function formatDisplay(ymd: string) {
   });
 }
 
+function formatEditable(ymd: string) {
+  if (!ymd) return "";
+  const d = parseLocalDate(ymd);
+  if (Number.isNaN(d.getTime())) return ymd;
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${month}/${day}/${d.getFullYear()}`;
+}
+
+const MONTH_NAMES = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+
+function monthFromName(token: string) {
+  const name = token.toLowerCase().replace(/\./g, "");
+  if (name.length < 3) return null;
+  const index = MONTH_NAMES.findIndex((month) => month.startsWith(name));
+  return index >= 0 ? index + 1 : null;
+}
+
+function safeDate(year: number, month: number, day: number) {
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+  return date;
+}
+
+function monthStart(year: number, month: number) {
+  return new Date(year, month - 1, 1);
+}
+
+/** Read a typed date. A full date commits; a year or month only moves the calendar. */
+function interpretTypedDate(
+  raw: string,
+  preferredMonth = 1,
+): { ymd: string | null; view: Date | null } {
+  const text = raw.trim().replace(/,/g, " ").replace(/\s+/g, " ");
+  if (!text) return { ymd: null, view: null };
+
+  const isoFull = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoFull) {
+    const date = safeDate(+isoFull[1], +isoFull[2], +isoFull[3]);
+    if (!date) return { ymd: null, view: null };
+    return { ymd: toYmd(date), view: monthStart(date.getFullYear(), date.getMonth() + 1) };
+  }
+
+  const usFull = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (usFull) {
+    let month = +usFull[1];
+    let day = +usFull[2];
+    const year = +usFull[3];
+    if (month > 12 && day <= 12) [month, day] = [day, month];
+    const date = safeDate(year, month, day);
+    if (date) return { ymd: toYmd(date), view: monthStart(date.getFullYear(), date.getMonth() + 1) };
+    if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12) {
+      return { ymd: null, view: monthStart(year, month) };
+    }
+    return { ymd: null, view: null };
+  }
+
+  const yearMonth = text.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (yearMonth && +yearMonth[2] >= 1 && +yearMonth[2] <= 12 && +yearMonth[1] >= 1900) {
+    return { ymd: null, view: monthStart(+yearMonth[1], +yearMonth[2]) };
+  }
+
+  const monthYear = text.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (monthYear && +monthYear[1] >= 1 && +monthYear[1] <= 12 && +monthYear[2] >= 1900) {
+    return { ymd: null, view: monthStart(+monthYear[2], +monthYear[1]) };
+  }
+
+  const yearOnly = text.match(/^(\d{4})$/);
+  if (yearOnly && +yearOnly[1] >= 1900 && +yearOnly[1] <= 2100) {
+    return { ymd: null, view: monthStart(+yearOnly[1], 1) };
+  }
+
+  const named = text.match(/^([a-zA-Z]+)\s+(?:(\d{1,2})\s+)?(\d{4})$/);
+  if (named) {
+    const month = monthFromName(named[1]);
+    const year = +named[3];
+    if (month && year >= 1900 && year <= 2100) {
+      if (named[2]) {
+        const date = safeDate(year, month, +named[2]);
+        if (date) return { ymd: toYmd(date), view: monthStart(year, month) };
+      }
+      return { ymd: null, view: monthStart(year, month) };
+    }
+  }
+
+  return { ymd: null, view: null };
+}
+
 export function DatePicker({
   value,
   onChange,
@@ -47,8 +151,12 @@ export function DatePicker({
   max,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [focused, setFocused] = useState(false);
+  const [draft, setDraft] = useState(() => (value ? formatEditable(value) : ""));
+  const [yearText, setYearText] = useState("");
+  const triggerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const yearInputRef = useRef<HTMLInputElement>(null);
   /** null until measured — avoids mounting at (0,0) and sliding into place */
   const [pos, setPos] = useState<PanelPos | null>(null);
 
@@ -58,6 +166,16 @@ export function DatePicker({
   useEffect(() => {
     if (selected) setView(new Date(selected.getFullYear(), selected.getMonth(), 1));
   }, [value]);
+
+  useEffect(() => {
+    if (focused) return;
+    setDraft(value ? formatEditable(value) : "");
+  }, [value, focused]);
+
+  useEffect(() => {
+    if (document.activeElement === yearInputRef.current) return;
+    setYearText(String(view.getFullYear()));
+  }, [view]);
 
   const monthDays = useMemo(() => {
     const year = view.getFullYear();
@@ -135,28 +253,79 @@ export function DatePicker({
   const year = view.getFullYear();
   const todayYmd = toYmd(new Date());
 
+  const applyTyped = (nextDraft: string) => {
+    setDraft(nextDraft);
+    if (!nextDraft.trim()) {
+      if (value) onChange("");
+      return;
+    }
+    const parsed = interpretTypedDate(nextDraft);
+    if (parsed.view) setView(parsed.view);
+    if (parsed.ymd && !isDisabledDay(parseLocalDate(parsed.ymd))) onChange(parsed.ymd);
+    if (!open) openPanel();
+  };
+
+  const applyYearText = (raw: string) => {
+    if (!/^\d{4}$/.test(raw)) {
+      setYearText(String(view.getFullYear()));
+      return;
+    }
+    const nextYear = Number(raw);
+    if (nextYear < 1900 || nextYear > 2100) {
+      setYearText(String(view.getFullYear()));
+      return;
+    }
+    setView(new Date(nextYear, view.getMonth(), 1));
+  };
+
   return (
     <>
-      <button
+      <div
         ref={triggerRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => (open ? closePanel() : openPanel())}
         className={cn(
-          "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-surface px-3 text-sm text-foreground shadow-sm transition-colors",
-          "hover:bg-surface-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          "disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-10 w-full items-center gap-2 rounded-lg border border-input bg-surface px-3 text-sm text-foreground shadow-sm transition-colors",
+          "focus-within:ring-2 focus-within:ring-ring",
+          disabled && "cursor-not-allowed opacity-50",
           open && "ring-2 ring-ring",
           className,
         )}
       >
-        <span className="flex min-w-0 items-center gap-2">
-          <CalendarIcon className="h-4 w-4 shrink-0 text-indigo-400" />
-          <span className={cn("truncate", !value && "text-muted-foreground")}>
-            {value ? formatDisplay(value) : placeholder}
-          </span>
-        </span>
-      </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => (open ? closePanel() : openPanel())}
+          className="shrink-0 text-indigo-400 disabled:cursor-not-allowed"
+          aria-label={open ? "Close calendar" : "Open calendar"}
+        >
+          <CalendarIcon className="h-4 w-4" />
+        </button>
+        <input
+          type="text"
+          inputMode="numeric"
+          disabled={disabled}
+          value={focused ? draft : value ? formatDisplay(value) : ""}
+          placeholder={focused ? "MM/DD/YYYY" : placeholder}
+          aria-label={placeholder}
+          onFocus={() => {
+            setFocused(true);
+            setDraft(value ? formatEditable(value) : "");
+            openPanel();
+          }}
+          onBlur={() => setFocused(false)}
+          onChange={(e) => applyTyped(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              const parsed = interpretTypedDate(draft);
+              if (parsed.ymd && !isDisabledDay(parseLocalDate(parsed.ymd))) {
+                onChange(parsed.ymd);
+                closePanel();
+              }
+            }
+          }}
+          className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+        />
+      </div>
 
       {open &&
         pos &&
@@ -186,9 +355,29 @@ export function DatePicker({
                   <ChevronLeft className="h-4 w-4" />
                 </button>
               </div>
-              <p className="text-sm font-bold text-white">
-                {monthName} {year}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-bold text-white">{monthName}</p>
+                <input
+                  ref={yearInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  aria-label="Year"
+                  value={yearText}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
+                    setYearText(digits);
+                    if (digits.length === 4) applyYearText(digits);
+                  }}
+                  onBlur={() => applyYearText(yearText)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      applyYearText(yearText);
+                    }
+                  }}
+                  className="w-14 rounded-md border border-slate-700 bg-slate-950 px-1 py-0.5 text-center text-sm font-bold text-white outline-none focus:border-indigo-500"
+                />
+              </div>
               <div className="flex gap-0.5">
                 <button
                   type="button"

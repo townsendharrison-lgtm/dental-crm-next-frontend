@@ -13,6 +13,37 @@ function sanitizeHref(raw: string): string | null {
   }
 }
 
+const BOLD_RE = /\*\*([^*]+)\*\*/g;
+
+/** Render **bold** markers and clickable links. */
+export function renderMessageText(text: string, isOwnMessage = false): React.ReactNode[] {
+  if (!text) return [];
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const re = new RegExp(BOLD_RE.source, BOLD_RE.flags);
+  let boldIndex = 0;
+
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(...linkifyText(text.slice(lastIndex, match.index), isOwnMessage));
+    }
+    nodes.push(
+      <strong key={`bold-${match.index}-${boldIndex}`} className="font-bold">
+        {linkifyText(match[1], isOwnMessage)}
+      </strong>,
+    );
+    boldIndex += 1;
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(...linkifyText(text.slice(lastIndex), isOwnMessage));
+  }
+
+  return nodes.length > 0 ? nodes : [text];
+}
+
 /** Split text into plain spans and clickable http(s) links. */
 export function linkifyText(text: string, isOwnMessage = false): React.ReactNode[] {
   if (!text) return [];

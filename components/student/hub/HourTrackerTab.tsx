@@ -139,6 +139,16 @@ export default function HourTrackerTab({
   const [experienceSearch, setExperienceSearch] = useState("");
   const [experienceFilter, setExperienceFilter] = useState<string>("All");
   const [isAddExperienceOpen, setIsAddExperienceOpen] = useState(false);
+
+  useEffect(() => {
+    if (readOnly || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("add") !== "1") return;
+    setIsAddExperienceOpen(true);
+    params.delete("add");
+    const next = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
+  }, [readOnly]);
   const [editingExperience, setEditingExperience] = useState<Experience | null>(null);
   const [isAddSessionOpen, setIsAddSessionOpen] = useState<string | null>(null);
   const [editingSession, setEditingSession] = useState<{ expId: string; session: any } | null>(

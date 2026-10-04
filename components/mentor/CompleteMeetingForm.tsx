@@ -29,6 +29,10 @@ import {
   resolveStudentTimezone,
   zonedDateTimeToUtcIso,
 } from "@/lib/utils/dateUtils";
+import {
+  fillMeetingSummaryTemplate,
+  formatNextMeetingForTimezone,
+} from "@/lib/utils/meetingSummary";
 import { usePlatformConfig } from "@/lib/hooks/usePlatformConfig";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
@@ -77,7 +81,7 @@ const PRIORITY_OPTIONS = [
 
 const FALLBACK_OTHER_TEMPLATE =
   DEFAULT_MEETING_TYPES.find((t) => t.label === "Other")?.summaryTemplate ||
-  "Hi {name}, thanks for our meeting today. We discussed {notes}. I've updated your action items accordingly.";
+  "Hi {name}, thanks for our meeting today. We discussed {notes}.\n\n{actionItems}";
 
 function parseMentorActionItems(raw?: string): string[] {
   if (!raw) return [];
@@ -127,6 +131,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
             id: "other",
             label: "Other",
             summaryTemplate: FALLBACK_OTHER_TEMPLATE,
+            recommendedActionItems: [],
           },
         ];
   }, [platformConfig.meetingTypes]);
@@ -203,33 +208,83 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   }, [meetingTypeLabels, meetingType, nextMeetingType, defaultType]);
 
   useEffect(() => {
-    let template =
+    const template =
       summaryByLabel[meetingType] ||
       summaryByLabel.Other ||
       FALLBACK_OTHER_TEMPLATE;
-    template = template.replace(/\{name\}/g, student.name.split(" ")[0]);
-    template = template.replace(/\{notes\}/g, notes || "our discussion");
 
-    const validItems = studentActionItems.filter((item) => item.task.trim() !== "");
-    if (validItems.length > 0) {
-      const itemsList = validItems
-        .map((item) => `• ${item.task} (Due: ${item.dueDate})`)
-        .join("\n");
-      template += `\n\nYour Action Items:\n${itemsList}`;
+    let nextMeetingLabel = "";
+    if (nextStep === "SCHEDULE" && nextMeetingDateOnly && nextMeetingTime) {
+      let [hours, minutes] = nextMeetingTime.split(":").map(Number);
+      if (nextMeetingAmpm === "PM" && hours < 12) hours += 12;
+      if (nextMeetingAmpm === "AM" && hours === 12) hours = 0;
+      const time24 = `${String(hours || 0).padStart(2, "0")}:${String(minutes || 0).padStart(2, "0")}`;
+      const iso = zonedDateTimeToUtcIso(
+        nextMeetingDateOnly,
+        time24,
+        nextMeetingTimezone || studentTz,
+      );
+      nextMeetingLabel = formatNextMeetingForTimezone(iso, studentTz);
     }
 
-    setSummaryMessage(template);
-  }, [meetingType, otherType, student.name, notes, studentActionItems, summaryByLabel]);
+    setSummaryMessage(
+      fillMeetingSummaryTemplate({
+        template,
+        studentFirstName: student.name.split(" ")[0],
+        notes,
+        actionItems: studentActionItems,
+        nextMeetingLabel,
+      }),
+    );
+  }, [
+    meetingType,
+    otherType,
+    student.name,
+    notes,
+    studentActionItems,
+    summaryByLabel,
+    nextStep,
+    nextMeetingDateOnly,
+    nextMeetingTime,
+    nextMeetingAmpm,
+    nextMeetingTimezone,
+    studentTz,
+  ]);
 
-  const addStudentAction = () => {
-    setStudentActionItems([
-      ...studentActionItems,
+  const defaultDueDate = () =>
+    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  const recommendedForType = useMemo(() => {
+    const match = meetingTypes.find((type) => type.label === meetingType);
+    return (match?.recommendedActionItems || []).map((item) => item.trim()).filter(Boolean);
+  }, [meetingTypes, meetingType]);
+
+  const addStudentAction = (task = "") => {
+    setStudentActionItems((prev) => [
+      ...prev,
       {
-        task: "",
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        task,
+        dueDate: defaultDueDate(),
         priority: "MEDIUM",
       },
     ]);
+  };
+
+  const addRecommendedAction = (task: string) => {
+    setStudentActionItems((prev) => {
+      const alreadyAdded = prev.some(
+        (item) => item.task.trim().toLowerCase() === task.trim().toLowerCase(),
+      );
+      if (alreadyAdded) return prev;
+      return [
+        ...prev,
+        {
+          task,
+          dueDate: defaultDueDate(),
+          priority: "MEDIUM",
+        },
+      ];
+    });
   };
 
   const removeStudentAction = (index: number) => {
@@ -577,11 +632,47 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                   variant="ghost"
                   size="sm"
                   leftIcon={<Plus size={14} />}
-                  onClick={addStudentAction}
+                  onClick={() => addStudentAction()}
                 >
                   Add
                 </Button>
               </div>
+
+              {recommendedForType.length > 0 && (
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
+                  <p className="text-xs font-medium text-emerald-300">
+                    Recommended for {meetingType}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {recommendedForType.map((task) => {
+                      const added = studentActionItems.some(
+                        (item) => item.task.trim().toLowerCase() === task.trim().toLowerCase(),
+                      );
+                      return (
+                        <button
+                          key={task}
+                          type="button"
+                          disabled={added}
+                          onClick={() => addRecommendedAction(task)}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
+                            added
+                              ? "cursor-default border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                              : "cursor-pointer border-slate-700 bg-slate-900 text-slate-200 hover:border-emerald-500/50 hover:text-white",
+                          )}
+                        >
+                          {added ? (
+                            <CheckSquare className="h-3 w-3" />
+                          ) : (
+                            <Plus className="h-3 w-3" />
+                          )}
+                          {task}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 {studentActionItems.map((item, index) => (
