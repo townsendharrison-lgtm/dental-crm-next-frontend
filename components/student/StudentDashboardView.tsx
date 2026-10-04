@@ -37,7 +37,7 @@ import {
   Globe,
   Trash2,
 } from "lucide-react";
-import { formatMeetingLocal, parseLocalDate } from "@/lib/utils/dateUtils";
+import { canJoinScheduledMeeting, formatMeetingLocal, isScheduledMeetingOpen, parseLocalDate } from "@/lib/utils/dateUtils";
 import { MeetingTimeWithHint } from "@/components/ui/TimezoneHint";
 import { useMentor } from "@/lib/hooks/useMentors";
 import ApplicationTracker from "./ApplicationTracker";
@@ -368,7 +368,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return t >= now - 60 * 60 * 1000 && t <= now + 24 * 60 * 60 * 1000;
   };
   const attentionMeeting =
-    nextMeeting && isWithinNext24Hours(nextMeeting.date) ? nextMeeting : undefined;
+    nextMeeting && isWithinNext24Hours(nextMeeting.date) && isScheduledMeetingOpen(nextMeeting)
+      ? nextMeeting
+      : undefined;
   const attentionWebinar =
     upcomingWebinar && isWithinNext24Hours(upcomingWebinar.date)
       ? upcomingWebinar
@@ -384,6 +386,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   const handleJoinMeeting = () => {
+    if (!nextMeeting || !canJoinScheduledMeeting(nextMeeting)) return;
     openMeetingLink(nextMeeting);
   };
 
@@ -894,7 +897,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <button
               type="button"
               onClick={handleJoinMeeting}
-              disabled={!nextMeeting}
+              disabled={!nextMeeting || !canJoinScheduledMeeting(nextMeeting)}
               className="mb-2.5 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3.5 font-black text-indigo-900 shadow-lg shadow-white/10 transition-all hover:bg-indigo-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Video className="h-5 w-5" /> Join Meeting

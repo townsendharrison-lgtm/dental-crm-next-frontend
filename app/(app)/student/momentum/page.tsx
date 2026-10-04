@@ -22,6 +22,7 @@ import type { Survey } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import { withToastLoading } from "@/lib/utils/toastAction";
 import { messagesApi } from "@/lib/api/messages";
+import { isScheduledMeetingOpen } from "@/lib/utils/dateUtils";
 
 function meetingStudentId(m: { student_id?: string | null; studentId?: string | null }) {
   return m.student_id ?? m.studentId ?? "";
@@ -125,11 +126,7 @@ export default function StudentMomentumPage() {
     );
   }
 
-  const now = Date.now();
-  const isUpcoming = (m: (typeof meetings)[number]) => {
-    if (m.completed) return false;
-    return new Date(m.date).getTime() >= now - 60 * 60 * 1000;
-  };
+  const isUpcoming = (m: (typeof meetings)[number]) => isScheduledMeetingOpen(m);
   const isWebinar = (m: (typeof meetings)[number]) =>
     m.audience === "GLOBAL" || m.isGlobal === true;
   const isMentorMeeting = (m: (typeof meetings)[number]) =>

@@ -31,6 +31,8 @@ import { DatePicker } from "@/components/ui/DatePicker";
 import { TimePicker } from "@/components/ui/TimePicker";
 import { TimezoneHint } from "@/components/ui/TimezoneHint";
 import {
+  canJoinScheduledMeeting,
+  isScheduledMeetingOpen,
   formatMeetingLocal,
   formatMeetingLocalTime,
   getBrowserTimezone,
@@ -221,6 +223,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
   const focusMeetingId = searchParams.get("meetingId");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [now, setNow] = useState(() => new Date());
   const [highlightedMeetingId, setHighlightedMeetingId] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
@@ -264,6 +267,11 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
         }
       : null,
   );
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useLayoutEffect(() => {
     const el = calendarRef.current;
@@ -898,7 +906,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
 
                       {isMeetingEventType(event.type) && meeting && (
                         <div className="flex flex-wrap items-center gap-2 pt-1">
-                          {meeting.link && (
+                          {canJoinScheduledMeeting(meeting, now) && (
                             <Button
                               size="sm"
                               className="shrink-0 whitespace-nowrap"
@@ -908,7 +916,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({
                               Join video
                             </Button>
                           )}
-                          {canJoinAsAttendee(meeting) && (
+                          {isScheduledMeetingOpen(meeting, now) && canJoinAsAttendee(meeting) && (
                             <Button
                               size="sm"
                               variant="secondary"

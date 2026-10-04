@@ -30,7 +30,7 @@ import {
   FolderOpen,
   Award,
 } from 'lucide-react';
-import { formatMeetingLocal, parseLocalDate } from '@/lib/utils/dateUtils';
+import { canJoinScheduledMeeting, formatMeetingLocal, parseLocalDate } from '@/lib/utils/dateUtils';
 import { MeetingTimeWithHint } from '@/components/ui/TimezoneHint';
 import { applicantTypeLabel, preferredDatScore } from '@/lib/utils/studentMetrics';
 import {
@@ -1217,7 +1217,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                             )}
                           </div>
                           <div className="flex shrink-0 flex-wrap items-center gap-2">
-                            {meeting.link && (
+                            {canJoinScheduledMeeting(meeting) && (
                               <Button
                                 variant="outline"
                                 size="sm"

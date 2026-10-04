@@ -51,6 +51,7 @@ import { ReadinessStatus as RS } from "@/lib/types";
 import { filterNotificationsForRole } from "@/lib/utils/notificationVisibility";
 import {
   parseLocalDate,
+  isScheduledMeetingOpen,
   isUpcomingMeetingDate,
   formatMeetingLocal,
   formatMeetingLocalTime,
@@ -679,7 +680,7 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
   });
 
   const upcomingMeetings = [...mentorMeetings]
-    .filter((m) => !m.completed && isUpcomingMeetingDate(m.date))
+    .filter((m) => isScheduledMeetingOpen(m))
     .sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime())
     .slice(0, 6);
 

@@ -105,6 +105,43 @@ export function isUpcomingMeetingDate(dateStr?: string | null, now = new Date())
   return d.getTime() >= now.getTime();
 }
 
+/** End of a scheduled meeting. Date-only values last through that local day. */
+export function meetingEndsAt(meeting: {
+  date?: string | null;
+  duration?: number | null;
+}): Date | null {
+  if (!meeting.date) return null;
+  const start = parseLocalDate(meeting.date);
+  if (Number.isNaN(start.getTime())) return null;
+  if (!meeting.date.includes("T")) {
+    const endOfDay = new Date(start);
+    endOfDay.setHours(23, 59, 59, 999);
+    return endOfDay;
+  }
+  const minutes = Number(meeting.duration);
+  const durationMin = Number.isFinite(minutes) && minutes > 0 ? minutes : 30;
+  return new Date(start.getTime() + durationMin * 60_000);
+}
+
+/** True until the scheduled end. Completed meetings are closed. */
+export function isScheduledMeetingOpen(
+  meeting: { date?: string | null; duration?: number | null; completed?: boolean | null },
+  now = new Date(),
+): boolean {
+  if (meeting.completed) return false;
+  const end = meetingEndsAt(meeting);
+  return !!end && now.getTime() < end.getTime();
+}
+
+/** Video join stays available until the scheduled end. */
+export function canJoinScheduledMeeting(
+  meeting: { date?: string | null; duration?: number | null; completed?: boolean | null; link?: string | null },
+  now = new Date(),
+): boolean {
+  if (!meeting.link?.trim()) return false;
+  return isScheduledMeetingOpen(meeting, now);
+}
+
 /** Resolve a student's preferred IANA timezone (profile → browser fallback). */
 export function resolveStudentTimezone(student?: {
   timezone?: string | null;
