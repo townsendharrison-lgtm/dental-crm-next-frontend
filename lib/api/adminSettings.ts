@@ -223,12 +223,13 @@ export function normalizeMeetingTypes(raw: unknown): MeetingTypeConfig[] {
       const recommendedActionItems = Array.isArray(rawItems)
         ? rawItems.map((item) => String(item || "").trim()).filter(Boolean)
         : [];
-      return {
+      const item: MeetingTypeConfig = {
         id: String(r.id || `type-${index + 1}`).trim() || `type-${index + 1}`,
         label,
         summaryTemplate: String(r.summaryTemplate ?? r.summary_template ?? "").trim(),
         recommendedActionItems,
-      } satisfies MeetingTypeConfig;
+      };
+      return item;
     })
     .filter((row): row is MeetingTypeConfig => !!row);
 
