@@ -10,6 +10,14 @@ export interface CreateConversationPayload {
 export interface SendMessagePayload {
   text?: string;
   file?: File;
+  /** Admin preview: post the message as this user. */
+  asUserId?: string;
+}
+
+function withUserId(path: string, userId?: string) {
+  if (!userId) return path;
+  const join = path.includes("?") ? "&" : "?";
+  return `${path}${join}userId=${encodeURIComponent(userId)}`;
 }
 
 export type SentMonthlyPoint = { month: string; count: number };
@@ -18,8 +26,10 @@ export const messagesApi = {
   /**
    * List conversations/threads for the current authenticated user.
    */
-  list: async (): Promise<Conversation[]> => {
-    const response = await apiGet<{ conversations: Conversation[] }>("/api/conversations");
+  list: async (userId?: string): Promise<Conversation[]> => {
+    const response = await apiGet<{ conversations: Conversation[] }>(
+      withUserId("/api/conversations", userId),
+    );
     return response.conversations || [];
   },
 
@@ -39,8 +49,8 @@ export const messagesApi = {
   /**
    * Fetch thread metadata.
    */
-  get: async (id: string): Promise<Conversation> => {
-    return await apiGet<Conversation>(`/api/conversations/${id}`);
+  get: async (id: string, userId?: string): Promise<Conversation> => {
+    return await apiGet<Conversation>(withUserId(`/api/conversations/${id}`, userId));
   },
 
   /**
@@ -59,10 +69,12 @@ export const messagesApi = {
     conversationId: string,
     limit?: number,
     before?: string,
+    userId?: string,
   ): Promise<Message[]> => {
     const query = new URLSearchParams();
     if (limit) query.append("limit", limit.toString());
     if (before) query.append("before", before);
+    if (userId) query.append("userId", userId);
 
     const queryString = query.toString();
     const endpoint = `/api/conversations/${conversationId}/messages${queryString ? `?${queryString}` : ""}`;
@@ -86,6 +98,7 @@ export const messagesApi = {
     if (payload.file) {
       const formData = new FormData();
       if (payload.text?.trim()) formData.append("text", payload.text.trim());
+      if (payload.asUserId) formData.append("asUserId", payload.asUserId);
       formData.append("file", payload.file);
       const { data } = await apiClient.post<Message>(
         `/api/conversations/${conversationId}/messages`,
@@ -96,6 +109,7 @@ export const messagesApi = {
 
     return await apiPost<Message>(`/api/conversations/${conversationId}/messages`, {
       text: payload.text ?? "",
+      asUserId: payload.asUserId,
     });
   },
 

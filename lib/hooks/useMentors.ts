@@ -43,10 +43,10 @@ export function useMentorAssignments(enabled = true) {
   });
 }
 
-export function useMyPendingAssignments(enabled = true) {
+export function useMyPendingAssignments(enabled = true, mentorId?: string) {
   return useQuery<StudentAssignment[]>({
-    queryKey: ["mentors", "assignments", "pending"],
-    queryFn: async () => normalizeAssignments(await mentorsApi.listPendingAssignments()),
+    queryKey: ["mentors", "assignments", "pending", mentorId || "self"],
+    queryFn: async () => normalizeAssignments(await mentorsApi.listPendingAssignments(mentorId)),
     enabled,
   });
 }

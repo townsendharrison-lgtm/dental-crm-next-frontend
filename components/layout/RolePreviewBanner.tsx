@@ -17,12 +17,28 @@ export function RolePreviewBanner() {
 
   const studentPreview = usePreviewSubject("STUDENT");
   const mentorPreview = usePreviewSubject("MENTOR");
+  const managerPreview = usePreviewSubject("MENTOR_MANAGER");
 
   if (!isAdmin || !isPreviewing || !previewRole) return null;
 
   const kind =
-    role === "STUDENT" ? "STUDENT" : role === "MENTOR" ? "MENTOR" : null;
-  const subject = kind === "STUDENT" ? studentPreview : kind === "MENTOR" ? mentorPreview : null;
+    role === "STUDENT"
+      ? "STUDENT"
+      : role === "MENTOR"
+        ? "MENTOR"
+        : role === "MENTOR_MANAGER"
+          ? "MENTOR_MANAGER"
+          : null;
+  const subject =
+    kind === "STUDENT"
+      ? studentPreview
+      : kind === "MENTOR"
+        ? mentorPreview
+        : kind === "MENTOR_MANAGER"
+          ? managerPreview
+          : null;
+  const subjectLabel =
+    kind === "STUDENT" ? "student" : kind === "MENTOR" ? "mentor" : "mentor manager";
   const roleLabel = ROLE_LABELS[previewRole as UserRole] || previewRole;
 
   return (
@@ -38,7 +54,7 @@ export function RolePreviewBanner() {
           <select
             value={subject.subjectId}
             onChange={(e) => subject.setSubjectId(e.target.value)}
-            aria-label={`Select ${kind === "STUDENT" ? "student" : "mentor"}`}
+            aria-label={`Select ${subjectLabel}`}
             className={cn(
               "max-w-[7.5rem] truncate rounded-md border border-amber-500/25 bg-slate-950/50 px-1.5 py-1",
               "text-[10px] font-medium text-amber-50 focus:outline-none focus:ring-1 focus:ring-amber-500/40",

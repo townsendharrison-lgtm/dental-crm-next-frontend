@@ -93,22 +93,29 @@ function SortableResourceRow({
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 gap-1 sm:ml-3">
+      <div className="relative z-10 flex shrink-0 gap-1 sm:ml-3">
         <button
           type="button"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onEdit(resource)}
-          className="cursor-pointer rounded-lg p-2 text-slate-500 hover:bg-slate-800 hover:text-indigo-400"
-          aria-label="Edit resource"
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-indigo-300"
+          aria-label={`Edit ${resource.title}`}
         >
-          <Edit2 className="h-4 w-4" />
+          <Edit2 className="h-3.5 w-3.5" />
+          Edit
         </button>
         <button
           type="button"
-          onClick={() => onDelete(resource.id)}
-          className="cursor-pointer rounded-lg p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400"
-          aria-label="Delete resource"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => {
+            if (!window.confirm(`Delete "${resource.title}"?`)) return;
+            onDelete(resource.id);
+          }}
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-rose-500/10 hover:text-rose-400"
+          aria-label={`Delete ${resource.title}`}
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
         </button>
       </div>
     </div>

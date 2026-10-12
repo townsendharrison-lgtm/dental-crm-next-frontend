@@ -25,6 +25,8 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { useRole } from "@/lib/hooks/useRole";
+import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import { useStudent } from "@/lib/hooks/useStudentProfile";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { messagesApi } from "@/lib/api/messages";
@@ -269,17 +271,38 @@ function StudentDetailsPane({
 
 export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   const { user: currentUser } = useAuth();
+  const { isAdmin, isPreviewing, role: effectiveRole } = useRole();
+  const studentPreview = usePreviewSubject("STUDENT");
+  const mentorPreview = usePreviewSubject("MENTOR");
+  const managerPreview = usePreviewSubject("MENTOR_MANAGER");
+  const previewSubject =
+    isAdmin && isPreviewing
+      ? effectiveRole === "STUDENT"
+        ? studentPreview
+        : effectiveRole === "MENTOR"
+          ? mentorPreview
+          : effectiveRole === "MENTOR_MANAGER"
+            ? managerPreview
+            : null
+      : null;
+  const inboxUserId = previewSubject?.isProxyPreview ? previewSubject.subjectId : undefined;
+  const inboxUserName = previewSubject?.isProxyPreview ? previewSubject.subjectName : "";
+  const monitoring = Boolean(inboxUserId);
+  const inboxUserIdRef = useRef<string | undefined>(undefined);
+  inboxUserIdRef.current = inboxUserId;
   const queryClient = useQueryClient();
   const currentUserId = currentUser?.id;
+  const viewAsUserId = inboxUserId || currentUserId;
   const router = useRouter();
   const pathname = usePathname();
   const basePath = messagesBasePathFromPathname(pathname);
   const selectedConversationId = conversationId || null;
   const copy = VARIANT_COPY[variant];
   const isStudent = variant === "student" || currentUser?.role === "STUDENT";
-  const canStartConversation = !isStudent;
-  const canDeleteConversation = !isStudent;
-  const canRenameGroup = !isStudent;
+  const canStartConversation = !isStudent && !monitoring;
+  const canDeleteConversation = !isStudent && !monitoring;
+  const canRenameGroup = !isStudent && !monitoring;
+  const canPinConversation = !monitoring;
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [hydratedConversation, setHydratedConversation] = useState<Conversation | null>(null);
@@ -339,10 +362,17 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     router.push(basePath);
   };
 
+  const previousInboxUserId = useRef(inboxUserId);
+  useEffect(() => {
+    if (previousInboxUserId.current === inboxUserId) return;
+    previousInboxUserId.current = inboxUserId;
+    if (selectedConversationId) clearConversation();
+  }, [inboxUserId, selectedConversationId]);
+
   const loadConversations = async (silent = false) => {
     if (!silent) setLoadingConv(true);
     try {
-      const list = await messagesApi.list();
+      const list = await messagesApi.list(inboxUserIdRef.current);
       setConversations(list);
       queryClient.setQueryData(queryKeys.messages.conversations(), list);
       return list;
@@ -359,7 +389,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     loadConversations();
     const interval = setInterval(() => loadConversations(true), 6000);
     return () => clearInterval(interval);
-  }, []);
+  }, [inboxUserId]);
 
   // Hydrate thread metadata when URL points at a conversation not yet in the list
   useEffect(() => {
@@ -378,7 +408,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     let cancelled = false;
     (async () => {
       try {
-        const conv = await messagesApi.get(selectedConversationId);
+        const conv = await messagesApi.get(selectedConversationId, inboxUserIdRef.current);
         if (cancelled) return;
         setHydratedConversation(conv);
       } catch (err) {
@@ -513,9 +543,11 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   const loadMessages = async (convId: string, silent = false) => {
     if (!silent) setLoadingMsgs(true);
     try {
-      const list = await messagesApi.listMessages(convId);
+      const list = await messagesApi.listMessages(convId, undefined, undefined, inboxUserIdRef.current);
       setMessages(list);
-      await messagesApi.markAsRead(convId).catch(() => {});
+      if (!inboxUserIdRef.current) {
+        await messagesApi.markAsRead(convId).catch(() => {});
+      }
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     } catch (err) {
       console.error("Failed to load messages:", err);
@@ -546,7 +578,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     setIsDetailsOpen(false);
     setDetailsStudentId(null);
     setIsAddMembersOpen(false);
-  }, [selectedConversationId]);
+  }, [selectedConversationId, inboxUserId]);
 
   const { data: detailsStudent, isLoading: detailsStudentLoading } = useStudent(
     detailsStudentId || "",
@@ -676,6 +708,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
       const response = await messagesApi.sendMessage(selectedConversationId, {
         text: textToSend,
         file: imageToSend || undefined,
+        asUserId: inboxUserIdRef.current,
       });
       // Polling may already have pulled this message in (esp. slow image uploads).
       setMessages((prev) => {
@@ -740,13 +773,13 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
       );
       if (!(matchName || matchParticipants)) return false;
 
-      const isPinned = !!currentUserId && (c.pinned_by || []).includes(currentUserId);
+      const isPinned = !!viewAsUserId && (c.pinned_by || []).includes(viewAsUserId);
       if (threadFilter === "unread") return (c.unreadCount || 0) > 0;
       if (threadFilter === "pinned") return isPinned;
       if (threadFilter === "group") return !!c.is_group;
       return true;
     });
-  }, [conversations, threadSearchQuery, threadFilter, currentUserId]);
+  }, [conversations, threadSearchQuery, threadFilter, viewAsUserId]);
 
   const filteredDirectoryUsers = useMemo(() => {
     return directoryUsers.filter(
@@ -814,8 +847,8 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
 
   const displayParticipants = useMemo(() => {
     if (!activeConversation) return [];
-    return (activeConversation.participants || []).filter((p) => p.id !== currentUserId);
-  }, [activeConversation, currentUserId]);
+    return (activeConversation.participants || []).filter((p) => p.id !== viewAsUserId);
+  }, [activeConversation, viewAsUserId]);
 
   const chatHeaderTitle = useMemo(() => {
     if (!activeConversation) return "";
@@ -824,7 +857,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   }, [activeConversation, displayParticipants, copy.headerFallback]);
 
   const isActivePinned =
-    !!currentUserId && !!activeConversation?.pinned_by?.includes(currentUserId);
+    !!viewAsUserId && !!activeConversation?.pinned_by?.includes(viewAsUserId);
 
   const addableMembers = useMemo(() => {
     if (!activeConversation?.is_group) return [];
@@ -869,7 +902,14 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
         >
           <div className="px-4 max-sm:px-3 pt-4 pb-3 border-b border-slate-800/80 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-white tracking-tight">Inbox</h2>
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-white tracking-tight">Inbox</h2>
+                {monitoring && (
+                  <p className="text-[11px] text-amber-300/90 truncate">
+                    {inboxUserName ? `${inboxUserName}'s messages` : "This user's messages"}
+                  </p>
+                )}
+              </div>
               {canStartConversation && (
                 <button
                   type="button"
@@ -926,8 +966,8 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
               filteredConversations.map((c) => {
                 const isSelected = c.id === selectedConversationId;
                 const isGroupChat = c.is_group;
-                const isPinned = !!currentUserId && (c.pinned_by || []).includes(currentUserId);
-                const otherParticipant = (c.participants || []).find((p) => p.id !== currentUserId);
+                const isPinned = !!viewAsUserId && (c.pinned_by || []).includes(viewAsUserId);
+                const otherParticipant = (c.participants || []).find((p) => p.id !== viewAsUserId);
                 const initials = isGroupChat
                   ? "G"
                   : otherParticipant?.name
@@ -1007,6 +1047,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                       </p>
                     </div>
 
+                    {canPinConversation && (
                     <Tooltip content={isPinned ? "Unpin" : "Pin"}>
                       <button
                         type="button"
@@ -1025,6 +1066,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                         <Pin className={`w-3.5 h-3.5 ${isPinned ? "fill-current" : ""}`} />
                       </button>
                     </Tooltip>
+                    )}
                   </div>
                 );
               })
@@ -1115,7 +1157,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                   </div>
                 ) : (
                   uniqueMessages.map((msg, idx) => {
-                    const isMe = msg.sender_id === currentUserId;
+                    const isMe = msg.sender_id === viewAsUserId;
                     const sender = (activeConversation.participants || []).find(
                       (p) => p.id === msg.sender_id
                     );
@@ -1454,7 +1496,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                         </p>
                         <div className="space-y-0.5">
                           {(activeConversation.participants || []).map((p) => {
-                            const isSelf = p.id === currentUserId;
+                            const isSelf = p.id === viewAsUserId;
                             const isStudentMember = p.role === "STUDENT";
                             const clickable = canViewStudentProfiles && isStudentMember;
                             return (
@@ -1547,7 +1589,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                     </button>
                   ) : (
                     <>
-                      {activeConversation.is_group && (
+                      {activeConversation.is_group && !monitoring && (
                         <button
                           type="button"
                           onClick={() => {
@@ -1560,6 +1602,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                           Add members
                         </button>
                       )}
+                      {canPinConversation && (
                       <button
                         type="button"
                         onClick={async () => {
@@ -1577,6 +1620,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                         />
                         {isActivePinned ? "Unpin" : "Pin"}
                       </button>
+                      )}
                       {canDeleteConversation && (
                         <button
                           type="button"

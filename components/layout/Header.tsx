@@ -1083,7 +1083,7 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
   },
   "/admin/resources": {
     title: "Resources",
-    description: "Explore dental school admissions guidelines and preparation files.",
+    description: "Add, edit, and delete the resources students see.",
   },
   "/mentor/resources": {
     title: "Resources",

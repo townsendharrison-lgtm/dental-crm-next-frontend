@@ -199,7 +199,8 @@ export default function MentorOpsPage({
         assignMentorMutation.mutate(
           { studentId, mentorId },
           {
-            onSuccess: () => toast.success("Assignment sent — waiting for mentor to accept"),
+            onSuccess: (res) =>
+              toast.success(res?.message || "Assignment sent — waiting for mentor to accept"),
             onError: (err: any) => toast.error(err?.message || "Failed to assign student"),
           },
         );
@@ -208,7 +209,8 @@ export default function MentorOpsPage({
         transferMentorMutation.mutate(
           { studentId, newMentorId: mentorId },
           {
-            onSuccess: () => toast.success("Transfer sent — waiting for mentor to accept"),
+            onSuccess: (res) =>
+              toast.success(res?.message || "Transfer sent — waiting for mentor to accept"),
             onError: (err: any) => toast.error(err?.message || "Failed to transfer student"),
           },
         );

@@ -31,9 +31,10 @@ export const mentorsApi = {
     return response.assignments || [];
   },
 
-  listPendingAssignments: async (): Promise<StudentAssignment[]> => {
+  listPendingAssignments: async (mentorId?: string): Promise<StudentAssignment[]> => {
+    const query = mentorId ? `?mentorId=${encodeURIComponent(mentorId)}` : "";
     const response = await apiGet<{ assignments: StudentAssignment[] }>(
-      "/api/mentors/assignments/pending",
+      `/api/mentors/assignments/pending${query}`,
     );
     return response.assignments || [];
   },

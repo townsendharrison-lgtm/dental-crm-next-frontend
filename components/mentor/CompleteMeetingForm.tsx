@@ -256,7 +256,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
 
   const recommendedForType = useMemo(() => {
     const match = meetingTypes.find((type) => type.label === meetingType);
-    return (match?.recommendedActionItems || []).map((item) => item.trim()).filter(Boolean);
+    return (match?.recommendedActionItems || []).filter((item) => item.task.trim());
   }, [meetingTypes, meetingType]);
 
   const addStudentAction = (task = "") => {
@@ -270,7 +270,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     ]);
   };
 
-  const addRecommendedAction = (task: string) => {
+  const addRecommendedAction = (task: string, resourceLink?: string) => {
     setStudentActionItems((prev) => {
       const alreadyAdded = prev.some(
         (item) => item.task.trim().toLowerCase() === task.trim().toLowerCase(),
@@ -282,6 +282,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
           task,
           dueDate: defaultDueDate(),
           priority: "MEDIUM",
+          ...(resourceLink?.trim() ? { resourceLink: resourceLink.trim() } : {}),
         },
       ];
     });
@@ -644,16 +645,19 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                     Recommended for {meetingType}
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {recommendedForType.map((task) => {
+                    {recommendedForType.map((recommended) => {
                       const added = studentActionItems.some(
-                        (item) => item.task.trim().toLowerCase() === task.trim().toLowerCase(),
+                        (item) =>
+                          item.task.trim().toLowerCase() === recommended.task.trim().toLowerCase(),
                       );
                       return (
                         <button
-                          key={task}
+                          key={recommended.task}
                           type="button"
                           disabled={added}
-                          onClick={() => addRecommendedAction(task)}
+                          onClick={() =>
+                            addRecommendedAction(recommended.task, recommended.resourceLink)
+                          }
                           className={cn(
                             "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
                             added
@@ -666,7 +670,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                           ) : (
                             <Plus className="h-3 w-3" />
                           )}
-                          {task}
+                          {recommended.task}
                         </button>
                       );
                     })}

@@ -77,6 +77,7 @@ import {
   useDeleteStudentCredential,
 } from "@/lib/hooks/useStudentNotesDexterity";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { useRole } from "@/lib/hooks/useRole";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { USER_KEY } from "@/lib/auth/cookies";
 import { queryKeys } from "@/lib/api/queryKeys";
@@ -120,6 +121,7 @@ export function StudentProfileDocumentsView({
 }: StudentProfileDocumentsViewProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { role: effectiveRole, isPreviewing } = useRole();
   const setAuthUser = useAuthStore((s) => s.setUser);
   const queryClient = useQueryClient();
   const canWriteNotes =
@@ -1932,7 +1934,7 @@ export function StudentProfileDocumentsView({
               >
                 Sync from Hour Tracker
               </Button>
-              {canEditOwnProfile && (
+              {(canEditOwnProfile || (isPreviewing && effectiveRole === "STUDENT")) && (
                 <Button
                   type="button"
                   variant="secondary"

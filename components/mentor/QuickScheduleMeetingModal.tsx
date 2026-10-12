@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Globe } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -36,6 +36,10 @@ export interface QuickScheduleMeetingModalProps {
   onSavePresets?: (presets: string[]) => void | Promise<void>;
 }
 
+const EMPTY_STUDENTS: Student[] = [];
+const EMPTY_MENTORS: Mentor[] = [];
+const EMPTY_PRESETS: string[] = [];
+
 function isShellStudent(s: Student) {
   return !!s.email?.toLowerCase().endsWith("@school-selection.local");
 }
@@ -43,11 +47,11 @@ function isShellStudent(s: Student) {
 export function QuickScheduleMeetingModal({
   open,
   student: preselectedStudent = null,
-  students = [],
+  students = EMPTY_STUDENTS,
   mentorId: fixedMentorId,
-  mentors = [],
+  mentors = EMPTY_MENTORS,
   defaultDate,
-  defaultAvailability = [],
+  defaultAvailability = EMPTY_PRESETS,
   isSubmitting = false,
   isSavingPresets = false,
   onClose,
@@ -90,23 +94,41 @@ export function QuickScheduleMeetingModal({
     preselectedStudent ||
     null;
 
+  const formSeed = useRef({
+    preselectedStudent,
+    studentChoices,
+    fixedMentorId,
+    mentorChoices,
+    defaultDate,
+  });
+  formSeed.current = {
+    preselectedStudent,
+    studentChoices,
+    fixedMentorId,
+    mentorChoices,
+    defaultDate,
+  };
+
+  // Reset only when the dialog opens. The command center does not pass a mentor
+  // list, and a fresh array each render was wiping the time back to 12:00 PM.
   useEffect(() => {
     if (!open) return;
+    const seed = formSeed.current;
     const initialStudent =
-      preselectedStudent ||
-      (studentChoices.length === 1 ? studentChoices[0] : null);
+      seed.preselectedStudent ||
+      (seed.studentChoices.length === 1 ? seed.studentChoices[0] : null);
     setStudentId(initialStudent?.id || "");
-    setMentorId(fixedMentorId || mentorChoices[0]?.id || "");
+    setMentorId(seed.fixedMentorId || seed.mentorChoices[0]?.id || "");
     const first = initialStudent?.name?.trim().split(/\s+/)[0] || "Student";
     setTitle(initialStudent ? `Mentoring session with ${first}` : "Mentoring session");
-    setDate(defaultDate || new Date().toISOString().split("T")[0]);
+    setDate(seed.defaultDate || new Date().toISOString().split("T")[0]);
     setTime("12:00");
     setAmpm("PM");
     setTimezone(getBrowserTimezone());
     setDuration(30);
     setLink("");
     setNotes("");
-  }, [open, preselectedStudent, studentChoices, fixedMentorId, mentorChoices, defaultDate]);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !selectedStudent || preselectedStudent) return;

@@ -65,6 +65,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { AcceptAssignmentModal } from "@/components/mentor/AcceptAssignmentModal";
+import CompleteMeetingForm, {
+  type CompleteMeetingData,
+} from "@/components/mentor/CompleteMeetingForm";
+import { Modal } from "@/components/ui/Modal";
+import { meetingsApi } from "@/lib/api/meetings";
 import { QuickScheduleMeetingModal } from "@/components/mentor/QuickScheduleMeetingModal";
 import { SuggestMeetingTimesModal } from "@/components/mentor/SuggestMeetingTimesModal";
 import type { CreateMeetingPayload } from "@/lib/api/meetings";
@@ -112,6 +117,13 @@ interface MentorDashboardProps {
   /** Open the standard Accept modal for this assignment (e.g. from push CTA). */
   autoOpenAcceptAssignmentId?: string | null;
   onAutoOpenAcceptConsumed?: () => void;
+  /** True when the signed-in user is this mentor, not an admin preview. */
+  isOwnDashboard?: boolean;
+  /** Open the complete-meeting prompt for this id (push deep link). */
+  autoOpenCompleteMeetingId?: string | null;
+  onAutoOpenCompleteConsumed?: () => void;
+  meetingsLoaded?: boolean;
+  onCompleteMeeting?: (meetingId: string, data: CompleteMeetingData) => void | Promise<void>;
 }
 
 function studentIdOf(a: { studentId?: string | null; student_id?: string | null }) {
@@ -210,8 +222,13 @@ type SmartAlert = {
   tab: string;
   icon: React.ElementType;
   color: "rose" | "amber" | "indigo";
-  kind: "no-meeting" | "task" | "action";
+  kind: "no-meeting" | "task" | "action" | "complete-meeting";
+  meetingId?: string;
 };
+
+function completePromptDismissKey(meetingId: string) {
+  return `crm-meeting-complete-dismissed:${meetingId}`;
+}
 
 const MentorDashboard: React.FC<MentorDashboardProps> = ({ 
   onSelectStudent, 
@@ -243,6 +260,11 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
   onSavePresets,
   autoOpenAcceptAssignmentId = null,
   onAutoOpenAcceptConsumed,
+  isOwnDashboard = false,
+  autoOpenCompleteMeetingId = null,
+  onAutoOpenCompleteConsumed,
+  meetingsLoaded = true,
+  onCompleteMeeting,
 }) => {
   const [studentSearch, setStudentSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState<"GREEN" | "YELLOW" | "RED" | null>(null);
@@ -252,6 +274,8 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
   const [scheduleStudent, setScheduleStudent] = useState<Student | null>(null);
   const [suggestStudent, setSuggestStudent] = useState<Student | null>(null);
   const [quickScheduleBusy, setQuickScheduleBusy] = useState(false);
+  const [promptMeeting, setPromptMeeting] = useState<Meeting | null>(null);
+  const [promptBusy, setPromptBusy] = useState(false);
 
   const openScheduleMeeting = (student?: Student | null) => {
     setScheduleStudent(student || null);
@@ -409,6 +433,68 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
     [meetings, mentor.id, assignedStudentIds],
   );
 
+  const notesReadyMeetings = useMemo(
+    () =>
+      mentorMeetings.filter(
+        (m) =>
+          !m.completed &&
+          m.meet_status === "notes_ready" &&
+          mentorIdOf(m) === mentor.id &&
+          !!studentIdOf(m),
+      ),
+    [mentorMeetings, mentor.id],
+  );
+
+  const promptStudent = promptMeeting
+    ? students.find((s) => s.id === studentIdOf(promptMeeting)) ||
+      allStudents.find((s) => s.id === studentIdOf(promptMeeting)) ||
+      null
+    : null;
+
+  useEffect(() => {
+    if (!isOwnDashboard || !meetingsLoaded || promptMeeting) return;
+    if (autoOpenCompleteMeetingId) {
+      const match = notesReadyMeetings.find((m) => m.id === autoOpenCompleteMeetingId);
+      onAutoOpenCompleteConsumed?.();
+      if (!match) {
+        toast.error("That meeting no longer needs to be completed");
+        return;
+      }
+      sessionStorage.removeItem(completePromptDismissKey(match.id));
+      setPromptMeeting(match);
+      return;
+    }
+    const next = notesReadyMeetings.find(
+      (m) => sessionStorage.getItem(completePromptDismissKey(m.id)) !== "1",
+    );
+    if (next) setPromptMeeting(next);
+  }, [
+    isOwnDashboard,
+    meetingsLoaded,
+    notesReadyMeetings,
+    autoOpenCompleteMeetingId,
+    onAutoOpenCompleteConsumed,
+    promptMeeting,
+  ]);
+
+  const dismissCompletePrompt = async (meeting: Meeting) => {
+    if (!isOwnDashboard) {
+      setPromptMeeting(null);
+      return;
+    }
+    setPromptBusy(true);
+    try {
+      await meetingsApi.dismissCompletePrompt(meeting.id);
+      sessionStorage.setItem(completePromptDismissKey(meeting.id), "1");
+      setPromptMeeting(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Couldn't save that you closed this";
+      toast.error(message);
+    } finally {
+      setPromptBusy(false);
+    }
+  };
+
   const totalMeetings = mentorMeetings.length;
   const completedMeetings = mentorMeetings.filter((m) => m.completed).length;
 
@@ -527,6 +613,22 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
     const now = new Date();
     const activeStudents = students.filter((s) => !pendingIds.has(s.id));
 
+    notesReadyMeetings.forEach((meeting) => {
+      const student = students.find((s) => s.id === studentIdOf(meeting));
+      const first = student?.name?.split(" ")[0] || "student";
+      alerts.push({
+        id: `complete-meeting-${meeting.id}`,
+        title: `Complete meeting with ${first}`,
+        message: "Gemini notes are ready. Finish the meeting summary and action items.",
+        studentId: studentIdOf(meeting) || null,
+        tab: "overview",
+        icon: CheckCircle2,
+        color: "amber",
+        kind: "complete-meeting",
+        meetingId: meeting.id,
+      });
+    });
+
     activeStudents.forEach((student) => {
       const upcoming = mentorMeetings.find(
         (m) =>
@@ -597,10 +699,12 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
       });
 
       const priority = { rose: 0, amber: 1, indigo: 2 };
-    return alerts.sort(
-      (a, b) => (priority[a.color] ?? 3) - (priority[b.color] ?? 3),
-    );
-  }, [students, pendingIds, mentorMeetings, mentorTasks, actionItems]);
+    return alerts.sort((a, b) => {
+      const aRank = a.kind === "complete-meeting" ? -1 : (priority[a.color] ?? 3);
+      const bRank = b.kind === "complete-meeting" ? -1 : (priority[b.color] ?? 3);
+      return aRank - bRank;
+    });
+  }, [students, pendingIds, mentorMeetings, mentorTasks, actionItems, notesReadyMeetings]);
 
   const getNextMeeting = (sid: string) => {
     const now = new Date();
@@ -1193,9 +1297,13 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
           <SectionTitle icon={Zap} tone="amber" title="Priority Intelligence" />
               {smartAlerts.length > 0 ? (
             <div className="grid gap-5 sm:grid-cols-2">
-              {smartAlerts.slice(0, 4).map((alert) => {
+              {[
+                ...smartAlerts.filter((alert) => alert.kind === "complete-meeting"),
+                ...smartAlerts.filter((alert) => alert.kind !== "complete-meeting").slice(0, 4),
+              ].map((alert) => {
                 const Icon = alert.icon;
                 const isNoMeeting = alert.kind === "no-meeting" && !!alert.studentId;
+                const isCompleteMeeting = alert.kind === "complete-meeting" && !!alert.meetingId;
                 return (
                   <div
                     key={alert.id}
@@ -1211,6 +1319,11 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        if (isCompleteMeeting && alert.meetingId) {
+                          const meeting = notesReadyMeetings.find((m) => m.id === alert.meetingId);
+                          if (meeting) setPromptMeeting(meeting);
+                          return;
+                        }
                         if (alert.studentId) onSelectStudent(alert.studentId, alert.tab);
                         else onNavigate(alert.tab);
                       }}
@@ -1231,7 +1344,11 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                       <div className="min-w-0 flex-1">
                         <div className="mb-1 flex items-center justify-between gap-2">
                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                            {isNoMeeting ? "Needs scheduling" : "System alert"}
+                            {isCompleteMeeting
+                              ? "Needs completion"
+                              : isNoMeeting
+                                ? "Needs scheduling"
+                                : "System alert"}
                           </span>
                           <span className="rounded-full border border-slate-700/80 bg-slate-800/40 px-2 py-0.5 text-[9px] font-bold text-slate-500">
                             Priority
@@ -1245,6 +1362,22 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                         </p>
                       </div>
                     </button>
+
+                    {isCompleteMeeting && (
+                      <div className="flex items-center gap-2 border-t border-slate-800/80 bg-slate-950/40 px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const meeting = notesReadyMeetings.find((m) => m.id === alert.meetingId);
+                            if (meeting) setPromptMeeting(meeting);
+                          }}
+                          className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-2 text-xs font-semibold text-slate-950 transition-colors hover:bg-amber-400"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                          Complete
+                        </button>
+                      </div>
+                    )}
 
                     {isNoMeeting && (
                       <div className="flex items-center gap-2 border-t border-slate-800/80 bg-slate-950/40 px-3 py-2.5">
@@ -2283,6 +2416,45 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
           </table>
         </div>
       </section>
+
+      <Modal
+        open={!!promptMeeting && !!promptStudent}
+        onClose={() => {
+          if (promptMeeting && !promptBusy) void dismissCompletePrompt(promptMeeting);
+        }}
+        title="Complete meeting"
+        description={
+          promptStudent
+            ? `Gemini notes for ${promptStudent.name} are ready.`
+            : "Gemini notes are ready."
+        }
+        size="2xl"
+        fullHeight
+        closeOnBackdrop={!promptBusy}
+        closeOnEscape={!promptBusy}
+      >
+        {promptMeeting && promptStudent && (
+          <CompleteMeetingForm
+            student={promptStudent}
+            meeting={promptMeeting}
+            embedded
+            onClose={() => {
+              if (!promptBusy) void dismissCompletePrompt(promptMeeting);
+            }}
+            onSubmit={async (data) => {
+              if (!onCompleteMeeting) return;
+              setPromptBusy(true);
+              try {
+                await onCompleteMeeting(promptMeeting.id, data);
+                sessionStorage.removeItem(completePromptDismissKey(promptMeeting.id));
+                setPromptMeeting(null);
+              } finally {
+                setPromptBusy(false);
+              }
+            }}
+          />
+        )}
+      </Modal>
 
       <AcceptAssignmentModal
         open={!!acceptingAssignment}

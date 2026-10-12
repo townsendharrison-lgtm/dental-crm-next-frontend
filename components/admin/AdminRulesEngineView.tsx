@@ -41,6 +41,7 @@ import AdminBenchmarksPanel from "@/components/admin/AdminBenchmarksPanel";
 import AdminTimelineBookshelfPanel from "@/components/admin/AdminTimelineBookshelfPanel";
 import GoogleMeetIntegrationCard from "@/components/admin/GoogleMeetIntegrationCard";
 import AdminOnboardingPanel from "@/components/admin/AdminOnboardingPanel";
+import { AdminWorkflowsPanel } from "@/components/admin/AdminWorkflowsView";
 
 type RulesTab =
   | "platform"
@@ -298,8 +299,11 @@ export default function AdminRulesEngineView() {
         label: row.label.trim(),
         summaryTemplate: row.summaryTemplate.trim(),
         recommendedActionItems: (row.recommendedActionItems || [])
-          .map((item) => item.trim())
-          .filter(Boolean),
+          .map((item) => ({
+            task: item.task.trim(),
+            ...(item.resourceLink?.trim() ? { resourceLink: item.resourceLink.trim() } : {}),
+          }))
+          .filter((item) => item.task),
       }))
       .filter((row) => row.label);
     if (cleanedTypes.length === 0) {
@@ -413,12 +417,16 @@ export default function AdminRulesEngineView() {
     );
   };
 
-  const updateRecommendedItem = (id: string, index: number, value: string) => {
+  const updateRecommendedItem = (
+    id: string,
+    index: number,
+    patch: { task?: string; resourceLink?: string },
+  ) => {
     setMeetingTypes((prev) =>
       prev.map((row) => {
         if (row.id !== id) return row;
         const items = [...(row.recommendedActionItems || [])];
-        items[index] = value;
+        items[index] = { ...items[index], ...patch };
         return { ...row, recommendedActionItems: items };
       }),
     );
@@ -428,7 +436,13 @@ export default function AdminRulesEngineView() {
     setMeetingTypes((prev) =>
       prev.map((row) =>
         row.id === id
-          ? { ...row, recommendedActionItems: [...(row.recommendedActionItems || []), ""] }
+          ? {
+              ...row,
+              recommendedActionItems: [
+                ...(row.recommendedActionItems || []),
+                { task: "", resourceLink: "" },
+              ],
+            }
           : row,
       ),
     );
@@ -753,8 +767,13 @@ export default function AdminRulesEngineView() {
           icon={Megaphone}
           iconClass="bg-emerald-600/15 text-emerald-400"
           title="Application status messages"
-          subtitle="Shown to students when application status changes"
+          subtitle="The celebration popup is here. The inbox message is in the automation list below."
         >
+          <p className="text-sm text-slate-400">
+            These three boxes are the on-screen celebration the student sees. The inbox message
+            that arrives when someone is marked Accepted is edited in the automation list below.
+            That message, and any later follow-up, is sent from the Admin account.
+          </p>
           <FormField label="Accepted status message">
             <Textarea
               value={acceptedMessage}
@@ -779,6 +798,9 @@ export default function AdminRulesEngineView() {
               placeholder="You're still in the running…"
             />
           </FormField>
+          <div className="pt-4 border-t border-slate-800">
+            <AdminWorkflowsPanel />
+          </div>
         </SectionCard>
       )}
 
@@ -873,6 +895,7 @@ export default function AdminRulesEngineView() {
                       <p className="text-sm font-medium text-white">Recommended action items</p>
                       <p className="text-xs text-slate-500">
                         Mentors can add these in one click when they complete this meeting type.
+                        Add a resource link when the student needs a page or file to finish the task.
                       </p>
                     </div>
                     <Button
@@ -892,14 +915,29 @@ export default function AdminRulesEngineView() {
                   ) : (
                     <div className="space-y-2">
                       {(row.recommendedActionItems || []).map((item, itemIndex) => (
-                        <div key={`${row.id}-rec-${itemIndex}`} className="flex gap-2">
-                          <Input
-                            value={item}
-                            onChange={(e) =>
-                              updateRecommendedItem(row.id, itemIndex, e.target.value)
-                            }
-                            placeholder="e.g. Register for the DAT"
-                          />
+                        <div
+                          key={`${row.id}-rec-${itemIndex}`}
+                          className="flex gap-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3"
+                        >
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <Input
+                              value={item.task}
+                              onChange={(e) =>
+                                updateRecommendedItem(row.id, itemIndex, { task: e.target.value })
+                              }
+                              placeholder="e.g. Register for the DAT"
+                            />
+                            <Input
+                              type="url"
+                              value={item.resourceLink || ""}
+                              onChange={(e) =>
+                                updateRecommendedItem(row.id, itemIndex, {
+                                  resourceLink: e.target.value,
+                                })
+                              }
+                              placeholder="Resource link (optional) https://..."
+                            />
+                          </div>
                           <button
                             type="button"
                             onClick={() => removeRecommendedItem(row.id, itemIndex)}

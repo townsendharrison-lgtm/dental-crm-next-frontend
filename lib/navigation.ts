@@ -41,6 +41,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { label: "Schedule", href: "/admin/schedule", icon: CalendarIcon },
     { label: "Tasks", href: "/admin/tasks", icon: CheckSquare },
     { label: "Engagement & Comms", href: "/admin/engagement", icon: Megaphone },
+    { label: "Resources", href: "/admin/resources", icon: BookOpen },
     { label: "Mentor Ops", href: "/admin/mentors", icon: UserCog },
     { label: "School Selection", href: "/admin/school-selection", icon: GraduationCap },
     { label: "Admission Research", href: "/admin/admission-research", icon: FlaskConical },

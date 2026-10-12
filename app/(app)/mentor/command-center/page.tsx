@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { useRole } from "@/lib/hooks/useRole";
 import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
 import {
   useMentor,
@@ -15,6 +16,9 @@ import {
 import { useStudents } from "@/lib/hooks/useStudentProfile";
 import { useTasks, useUpdateTask, useCreateTask, useDeleteTask } from "@/lib/hooks/useTasks";
 import { useMeetings, useCreateMeeting } from "@/lib/hooks/useMeetings";
+import { useQueryClient } from "@tanstack/react-query";
+import { persistMeetingCompletion } from "@/lib/utils/completeMeeting";
+import { queryKeys } from "@/lib/api/queryKeys";
 import { useActionItems } from "@/lib/hooks/useActionItems";
 import {
   useNotifications,
@@ -36,6 +40,7 @@ export default function MentorCommandCenterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { isAdmin } = useRole();
   const platformConfig = usePlatformConfig();
   const { subjectId: mentorId, isLoadingSubjects } = usePreviewSubject("MENTOR");
   const { data: mentor, isLoading: isMentorLoading } = useMentor(mentorId);
@@ -47,12 +52,17 @@ export default function MentorCommandCenterPage() {
   );
   const { data: allStudentsRaw = [] } = useStudents();
   const { data: staffTasks = [] } = useTasks();
-  const { data: meetingsRaw = [] } = useMeetings();
+  const { data: meetingsRaw = [], isLoading: meetingsLoading } = useMeetings();
+  const queryClient = useQueryClient();
   const { data: actionItems = [] } = useActionItems();
   const { data: notifications = [] } = useNotifications();
   const { data: surveys = [] } = useSurveys();
+  const viewingOtherMentor = !!user && !!mentorId && mentorId !== user.id;
   const { data: pendingAssignments = [], isLoading: isPendingLoading } =
-    useMyPendingAssignments(!!user?.id && mentorId === user.id);
+    useMyPendingAssignments(
+      !!mentorId && (!viewingOtherMentor || isAdmin),
+      viewingOtherMentor ? mentorId : undefined,
+    );
 
   const updateTaskMutation = useUpdateTask();
   const createTaskMutation = useCreateTask();
@@ -66,6 +76,7 @@ export default function MentorCommandCenterPage() {
 
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
   const [pushAcceptAssignmentId, setPushAcceptAssignmentId] = useState<string | null>(null);
+  const [pushCompleteMeetingId, setPushCompleteMeetingId] = useState<string | null>(null);
 
   // Handle Accept / Decline CTAs from push notifications (and bare assignment deep links)
   useEffect(() => {
@@ -111,6 +122,15 @@ export default function MentorCommandCenterPage() {
       setPushAcceptAssignmentId(null);
     }
   }, [pushAcceptAssignmentId, pendingAssignments, isPendingLoading]);
+
+  useEffect(() => {
+    const meetingId = searchParams.get("completeMeeting");
+    if (!meetingId || !user) return;
+    if (pushActionHandled.current === `complete:${meetingId}`) return;
+    pushActionHandled.current = `complete:${meetingId}`;
+    setPushCompleteMeetingId(meetingId);
+    router.replace("/mentor/command-center", { scroll: false });
+  }, [searchParams, user, router]);
 
   const mentorStudents = useMemo(
     () => normalizeStudents(mentorStudentsRaw),
@@ -178,6 +198,22 @@ export default function MentorCommandCenterPage() {
         }
         autoOpenAcceptAssignmentId={pushAcceptAssignmentId}
         onAutoOpenAcceptConsumed={() => setPushAcceptAssignmentId(null)}
+        isOwnDashboard={!viewingOtherMentor}
+        meetingsLoaded={!meetingsLoading}
+        autoOpenCompleteMeetingId={pushCompleteMeetingId}
+        onAutoOpenCompleteConsumed={() => setPushCompleteMeetingId(null)}
+        onCompleteMeeting={async (meetingId, data) => {
+          const meeting = meetings.find((m) => m.id === meetingId);
+          const studentId = meeting?.studentId || meeting?.student_id;
+          if (!studentId) throw new Error("This meeting has no student");
+          await persistMeetingCompletion(studentId, meetingId, data);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: queryKeys.meetings.all() }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.actionItems.all(studentId) }),
+            queryClient.invalidateQueries({ queryKey: ["meetings", "calendar"] }),
+          ]);
+          toast.success("Meeting completed");
+        }}
         acceptBusy={acceptAssignmentMutation.isPending}
         isSavingPresets={updateMentorMutation.isPending}
         onSavePresets={async (presets) => {

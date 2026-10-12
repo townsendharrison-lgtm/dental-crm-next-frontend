@@ -16,6 +16,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea, FormField } from "@/components/ui/Form";
+import { toast } from "sonner";
+import { withToastLoading } from "@/lib/utils/toastAction";
+import {
+  useWorkflows,
+  useCreateWorkflow,
+  useUpdateWorkflow,
+  useDeleteWorkflow,
+} from "@/lib/hooks/useWorkflows";
 
 interface AdminWorkflowsViewProps {
   workflows: Workflow[];
@@ -116,7 +124,14 @@ const AdminWorkflowsView: React.FC<AdminWorkflowsViewProps> = ({
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-base font-bold text-white">Automation Workflows</h3>
+        <div>
+          <h3 className="text-base font-bold text-white">Inbox automations</h3>
+          <p className="text-xs text-slate-500">
+            These messages are sent from the Admin account, not the mentor. The first step can
+            go out right away. A later step, such as one hour after, is a follow-up in the same
+            workflow.
+          </p>
+        </div>
         {!editingWorkflow && (
           <Button size="sm" leftIcon={<Plus className="w-4 h-4" />} onClick={openCreate}>
             Create Workflow
@@ -252,7 +267,7 @@ const AdminWorkflowsView: React.FC<AdminWorkflowsViewProps> = ({
                                 step.delayHours === 0 ? "text-emerald-400" : "text-slate-500"
                               }`}
                             >
-                              {step.delayHours === 0 ? "Immediate" : "Hours"}
+                              {step.delayHours === 0 ? "Sends now" : "Hours later"}
                             </span>
                           </div>
                           {step.isFollowUp && (
@@ -274,7 +289,7 @@ const AdminWorkflowsView: React.FC<AdminWorkflowsViewProps> = ({
                         </button>
                       </div>
 
-                      <FormField label="Message Template">
+                      <FormField label="Message the student receives">
                         <Textarea
                           value={step.messageTemplate}
                           onChange={(e) =>
@@ -408,3 +423,52 @@ const AdminWorkflowsView: React.FC<AdminWorkflowsViewProps> = ({
 };
 
 export default AdminWorkflowsView;
+
+/** Loads and saves inbox automations. Used on Rules Engine → Status Messages. */
+export function AdminWorkflowsPanel() {
+  const { data: workflows = [], isLoading } = useWorkflows();
+  const createWorkflow = useCreateWorkflow();
+  const updateWorkflow = useUpdateWorkflow();
+  const deleteWorkflow = useDeleteWorkflow();
+  const [local, setLocal] = useState<Workflow[] | null>(null);
+
+  const list = local ?? workflows;
+
+  const handleUpdate = async (updated: Workflow[]) => {
+    setLocal(updated);
+    const t = withToastLoading("Saving workflows…");
+    try {
+      const previous = workflows;
+      const previousIds = new Set(previous.map((w) => w.id));
+      const updatedIds = new Set(updated.map((w) => w.id));
+
+      for (const id of previousIds) {
+        if (!updatedIds.has(id)) await deleteWorkflow.mutateAsync(id);
+      }
+      for (const wf of updated) {
+        const payload = {
+          name: wf.name,
+          trigger: wf.trigger,
+          steps: wf.steps,
+          isActive: wf.isActive ?? wf.is_active,
+        };
+        if (previousIds.has(wf.id)) {
+          await updateWorkflow.mutateAsync({ id: wf.id, updates: payload });
+        } else {
+          await createWorkflow.mutateAsync(payload);
+        }
+      }
+      setLocal(null);
+      t.success("Automation messages saved");
+    } catch (err) {
+      console.error(err);
+      t.error("Could not save the automation messages");
+    }
+  };
+
+  if (isLoading && !local) {
+    return <p className="text-sm text-slate-500">Loading automation messages…</p>;
+  }
+
+  return <AdminWorkflowsView workflows={list} onUpdateWorkflows={handleUpdate} />;
+}

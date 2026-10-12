@@ -51,6 +51,7 @@ export function filterNotificationsForRole(
   const now = Date.now();
 
   return notifications.filter((n) => {
+    if (String(n.category || "").toUpperCase() === "MEETING_COMPLETE_SNOOZE") return false;
     if (!canSeeNewLeadNotifications(r) && isNewLeadNotification(n)) return false;
     if (r === "MENTOR" && !isWithinMentorNotificationTtl(n, now)) return false;
     return true;

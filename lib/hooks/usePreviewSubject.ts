@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
 import { useUIStore } from "@/lib/stores/uiStore";
 import { useStudents } from "@/lib/hooks/useStudentProfile";
 import { useMentors } from "@/lib/hooks/useMentors";
+import { adminApi } from "@/lib/api/admin";
 
-export type PreviewSubjectKind = "STUDENT" | "MENTOR";
+export type PreviewSubjectKind = "STUDENT" | "MENTOR" | "MENTOR_MANAGER";
 
 /**
  * Resolves which user id to load dashboard data for.
@@ -32,10 +34,19 @@ export function usePreviewSubject(kind: PreviewSubjectKind) {
   const { data: mentors = [], isLoading: mentorsLoading } = useMentors(
     needsProxy && kind === "MENTOR",
   );
+  const { data: managers = [], isLoading: managersLoading } = useQuery({
+    queryKey: ["admin", "users", "mentor-managers"],
+    queryFn: async () => {
+      const users = await adminApi.listUsers();
+      return users.filter((user) => user.role === "MENTOR_MANAGER");
+    },
+    enabled: needsProxy && kind === "MENTOR_MANAGER",
+  });
 
   const options = useMemo(() => {
     if (!needsProxy) return [] as Array<{ id: string; name: string; subtitle?: string }>;
-    const raw = kind === "STUDENT" ? students : mentors;
+    const raw =
+      kind === "STUDENT" ? students : kind === "MENTOR" ? mentors : managers;
     return raw
       .map((row) => {
         const email = ("email" in row ? row.email : undefined) || "";
@@ -49,7 +60,7 @@ export function usePreviewSubject(kind: PreviewSubjectKind) {
       })
       .filter((row) => !!row.id)
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [needsProxy, kind, students, mentors]);
+  }, [needsProxy, kind, students, mentors, managers]);
 
   useEffect(() => {
     if (!needsProxy) return;
@@ -68,7 +79,12 @@ export function usePreviewSubject(kind: PreviewSubjectKind) {
     (needsProxy ? "…" : user?.name || "");
 
   const isLoadingSubjects =
-    needsProxy && (kind === "STUDENT" ? studentsLoading : mentorsLoading);
+    needsProxy &&
+    (kind === "STUDENT"
+      ? studentsLoading
+      : kind === "MENTOR"
+        ? mentorsLoading
+        : managersLoading);
 
   return {
     subjectId,

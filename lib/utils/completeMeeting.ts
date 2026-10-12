@@ -1,6 +1,5 @@
 import { meetingsApi } from "@/lib/api/meetings";
 import { actionItemsApi } from "@/lib/api/actionItems";
-import { messagesApi } from "@/lib/api/messages";
 import type { CompleteMeetingData } from "@/components/mentor/CompleteMeetingForm";
 
 function toDateIso(dateOnly: string): string {
@@ -18,13 +17,6 @@ function buildMentorNotes(data: CompleteMeetingData): string {
     parts.push(`Mentor action items:\n${mentorItems.map((item) => `• ${item}`).join("\n")}`);
   }
   return parts.join("\n\n");
-}
-
-async function sendSummaryToStudent(studentId: string, summaryMessage: string) {
-  const text = summaryMessage.trim();
-  if (!text) return;
-  const conv = await messagesApi.create({ participantIds: [studentId] });
-  await messagesApi.sendMessage(conv.id, text);
 }
 
 /** Persist a completed mentorship meeting + student action items + optional follow-up. */
@@ -85,12 +77,6 @@ export async function persistMeetingCompletion(
       timezone: data.nextMeetingTimezone,
       type: "STUDENT_MEETING",
     });
-  }
-
-  try {
-    await sendSummaryToStudent(studentId, data.summaryMessage);
-  } catch (err) {
-    console.error("Failed to send meeting summary message to student:", err);
   }
 
   return id;

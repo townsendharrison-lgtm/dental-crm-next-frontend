@@ -72,6 +72,10 @@ export const meetingsApi = {
     return await apiDelete<{ message: string }>(`/api/meetings/${id}`);
   },
 
+  dismissCompletePrompt: async (id: string): Promise<{ ok: boolean }> => {
+    return await apiPost<{ ok: boolean }>(`/api/meetings/${id}/complete-prompt/dismiss`, {});
+  },
+
   calendar: async (start?: string, end?: string): Promise<CalendarEvent[]> => {
     const params = new URLSearchParams();
     if (start) params.append("start", start);

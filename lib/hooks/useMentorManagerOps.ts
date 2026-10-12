@@ -200,7 +200,7 @@ export function useMentorManagerOps(options?: {
       assignMentorMutation.mutate(
         { studentId, mentorId },
         {
-          onSuccess: () => toast.success("Assignment requested"),
+          onSuccess: (res) => toast.success(res?.message || "Assignment requested"),
           onError: (err: any) => toast.error(err?.message || "Failed to assign"),
         },
       );
@@ -209,7 +209,7 @@ export function useMentorManagerOps(options?: {
       transferMentorMutation.mutate(
         { studentId, newMentorId: mentorId },
         {
-          onSuccess: () => toast.success("Transfer requested"),
+          onSuccess: (res) => toast.success(res?.message || "Transfer requested"),
           onError: (err: any) => toast.error(err?.message || "Failed to transfer"),
         },
       );

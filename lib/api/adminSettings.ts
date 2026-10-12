@@ -221,7 +221,20 @@ export function normalizeMeetingTypes(raw: unknown): MeetingTypeConfig[] {
       if (!label) return null;
       const rawItems = r.recommendedActionItems ?? r.recommended_action_items;
       const recommendedActionItems = Array.isArray(rawItems)
-        ? rawItems.map((item) => String(item || "").trim()).filter(Boolean)
+        ? rawItems
+            .map((item) => {
+              if (typeof item === "string") {
+                const task = item.trim();
+                return task ? { task } : null;
+              }
+              if (!item || typeof item !== "object") return null;
+              const row = item as Record<string, unknown>;
+              const task = String(row.task ?? "").trim();
+              if (!task) return null;
+              const resourceLink = String(row.resourceLink ?? row.resource_link ?? "").trim();
+              return resourceLink ? { task, resourceLink } : { task };
+            })
+            .filter((item): item is NonNullable<typeof item> => !!item)
         : [];
       const item: MeetingTypeConfig = {
         id: String(r.id || `type-${index + 1}`).trim() || `type-${index + 1}`,

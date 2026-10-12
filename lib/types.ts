@@ -1044,13 +1044,20 @@ export interface OnboardingGuide {
   steps: OnboardingStep[];
 }
 
+/** One-click task a mentor can add when completing a meeting of this type. */
+export interface RecommendedActionItem {
+  task: string;
+  /** Optional page or file the student uses to finish the task. */
+  resourceLink?: string;
+}
+
 /** Mentor complete-meeting session type + summary DM preset (Rules Engine). */
 export interface MeetingTypeConfig {
   id: string;
   label: string;
   summaryTemplate: string;
   /** Tasks mentors can add in one click when completing this meeting type. */
-  recommendedActionItems?: string[];
+  recommendedActionItems?: RecommendedActionItem[];
 }
 
 export interface AdminSettings {

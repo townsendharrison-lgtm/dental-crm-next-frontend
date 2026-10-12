@@ -69,6 +69,17 @@ import {
 
 type PrimaryTab = "overview" | "profile" | "records" | "plan" | "activity";
 
+function toDateInput(value?: string | null) {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${parsed.getFullYear()}-${month}-${day}`;
+}
+
 function StrengthProgressTooltip({
   active,
   payload,
@@ -426,6 +437,24 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
     }
   };
 
+  const openStudentActionEditor = (task: ActionItem) => {
+    setEditingAction({
+      ...task,
+      dueDate: toDateInput(task.dueDate || task.due_date),
+      resourceLink: task.resourceLink || task.resource_link || "",
+      description: task.description || "",
+    });
+    setEditAssignee("STUDENT");
+  };
+
+  const openMentorTaskEditor = (task: StaffTask) => {
+    setEditingStaffTask({
+      ...task,
+      dueDate: toDateInput(task.dueDate || task.due_date),
+    });
+    setEditAssignee("MENTOR");
+  };
+
   const handleUpdateAction = () => {
     if (editingAction && editingAction.task.trim()) {
       if (editAssignee === 'MENTOR') {
@@ -444,7 +473,10 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
         });
         onDeleteActionItem?.(editingAction.id);
       } else {
-        onUpdateActionItem?.(editingAction);
+        onUpdateActionItem?.({
+          ...editingAction,
+          dueDate: toDateInput(editingAction.dueDate || editingAction.due_date),
+        });
       }
       setEditingAction(null);
     }
@@ -886,11 +918,42 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                             </p>
                           </div>
                         </div>
-                        {item.hasResource && (
-                          <span className="shrink-0 rounded-lg bg-slate-800 px-2 py-1 text-[10px] text-slate-400">
-                            Resource
-                          </span>
-                        )}
+                        <div className="flex shrink-0 items-center gap-1">
+                          {item.hasResource && (
+                            <span className="rounded-lg bg-slate-800 px-2 py-1 text-[10px] text-slate-400">
+                              Resource
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            title="Edit action item"
+                            onClick={() => {
+                              if (item.assignee === "MENTOR") {
+                                const task = studentStaffTasks.find((row) => row.id === item.id);
+                                if (task) openMentorTaskEditor(task);
+                                return;
+                              }
+                              const action = studentActions.find((row) => row.id === item.id);
+                              if (action) openStudentActionEditor(action);
+                            }}
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete action item"
+                            onClick={() => {
+                              const label = item.task || "this action item";
+                              if (!window.confirm(`Delete "${label}"?`)) return;
+                              if (item.assignee === "MENTOR") onDeleteStaffTask?.(item.id);
+                              else onDeleteActionItem?.(item.id);
+                            }}
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -1317,10 +1380,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                             </div>
                             <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                               <button
-                                onClick={() => {
-                                  setEditingAction(task);
-                                  setEditAssignee("STUDENT");
-                                }}
+                                onClick={() => openStudentActionEditor(task)}
                                 className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-white"
                               >
                                 <Edit2 size={16} />
@@ -1439,10 +1499,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                           )}
                           <div className="mt-3 flex items-center justify-end gap-2 border-t border-slate-800/50 pt-3 opacity-0 transition-opacity group-hover:opacity-100">
                             <button
-                              onClick={() => {
-                                setEditingStaffTask(task);
-                                setEditAssignee("MENTOR");
-                              }}
+                              onClick={() => openMentorTaskEditor(task)}
                               className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-white"
                             >
                               <Edit2 size={16} />
@@ -1976,7 +2033,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                         <input 
                           type="date" 
                           value={(editingStaffTask.dueDate || '').split('T')[0]}
-                          onChange={e => setEditingStaffTask({...editingStaffTask, dueDate: new Date(e.target.value).toISOString()})}
+                          onChange={e => setEditingStaffTask({...editingStaffTask, dueDate: e.target.value})}
                           className="w-full min-w-0 bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all"
                         />
                         <Calendar className="w-4 h-4 text-slate-600 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
