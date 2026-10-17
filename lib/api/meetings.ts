@@ -59,7 +59,17 @@ export const meetingsApi = {
 
   update: async (
     id: string,
-    updates: Partial<CreateMeetingPayload & { completed?: boolean }>,
+    updates: Partial<
+      CreateMeetingPayload & {
+        completed?: boolean;
+        officialSummary?: string;
+        commitmentsCompleted?: "ALL" | "SOME" | "NONE" | null;
+        incompleteReason?: string | null;
+        incompleteReasonDetail?: string | null;
+        verifiedSummary?: boolean;
+        verifiedSchoolTimeline?: boolean;
+      }
+    >,
   ): Promise<Meeting> => {
     return await apiPut<Meeting>(`/api/meetings/${id}`, updates);
   },

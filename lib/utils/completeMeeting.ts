@@ -8,10 +8,32 @@ function toDateIso(dateOnly: string): string {
   return `${dateOnly}T12:00:00.000Z`;
 }
 
+const REASON_LABELS: Record<string, string> = {
+  UNCLEAR_INSTRUCTIONS: "Unclear instructions",
+  TIME_MANAGEMENT: "Time management",
+  AVOIDANCE: "Avoidance/lack of follow-through",
+  ACADEMIC: "Academic issue",
+  PERSONAL: "Personal issue",
+  MENTOR_DELAY: "Mentor delay",
+  OTHER: "Other",
+};
+
 function buildMentorNotes(data: CompleteMeetingData): string {
   const parts: string[] = [];
   parts.push(`Session type: ${data.meetingType}`);
-  parts.push(`Followed up on past action items: ${data.followedUpOnActionItems}`);
+  parts.push(`Previous commitments: ${data.commitmentsCompleted}`);
+  if (data.commitmentsCompleted !== "ALL" && data.incompleteReason) {
+    const reason = REASON_LABELS[data.incompleteReason] || data.incompleteReason;
+    parts.push(
+      `Reason for incomplete commitments: ${reason}${
+        data.incompleteReason === "OTHER" && data.incompleteReasonDetail
+          ? ` — ${data.incompleteReasonDetail}`
+          : ""
+      }`,
+    );
+  }
+  parts.push("Verified summary and action items: yes");
+  parts.push("Updated school selection and timeline if needed: yes");
   const mentorItems = data.mentorActionItems.filter((item) => item.trim());
   if (mentorItems.length > 0) {
     parts.push(`Mentor action items:\n${mentorItems.map((item) => `• ${item}`).join("\n")}`);
@@ -28,17 +50,28 @@ export async function persistMeetingCompletion(
   const mentorNotes = buildMentorNotes(data);
   const dateIso = toDateIso(data.meetingDate);
   const title = data.meetingType || "Mentorship Meeting";
+  const review = {
+    officialSummary: data.officialSummary,
+    commitmentsCompleted: data.commitmentsCompleted,
+    incompleteReason: data.commitmentsCompleted === "ALL" ? null : data.incompleteReason || null,
+    incompleteReasonDetail:
+      data.commitmentsCompleted !== "ALL" && data.incompleteReason === "OTHER"
+        ? data.incompleteReasonDetail || null
+        : null,
+    verifiedSummary: true,
+    verifiedSchoolTimeline: true,
+  };
 
   let id = meetingId;
   if (id) {
     await meetingsApi.update(id, {
       completed: true,
-      notes: data.notes,
       summary: data.summaryMessage,
       duration: data.duration,
       title,
       mentorNotes,
       date: dateIso,
+      ...review,
     });
   } else {
     const created = await meetingsApi.create({
@@ -46,13 +79,12 @@ export async function persistMeetingCompletion(
       title,
       date: dateIso,
       duration: data.duration,
-      notes: data.notes,
       summary: data.summaryMessage,
       mentorNotes,
       type: "STUDENT_MEETING",
     });
     id = created.id;
-    await meetingsApi.update(id, { completed: true });
+    await meetingsApi.update(id, { completed: true, ...review });
   }
 
   await Promise.all(

@@ -484,6 +484,22 @@ export type MeetingAudience =
   | "STAFF"
   | "GLOBAL";
 
+export interface MeetingAiDraft {
+  summary?: string;
+  studentActionItems?: Array<{
+    task: string;
+    dueInDays?: number;
+    priority?: "HIGH" | "MEDIUM" | "LOW";
+  }>;
+  mentorActionItems?: string[];
+  nextMeeting?: {
+    mentioned?: boolean;
+    typeName?: string;
+    date?: string;
+    time?: string;
+  } | null;
+}
+
 export type MeetStatus =
   | "pending"
   | "provisioned"
@@ -518,6 +534,11 @@ export interface Meeting {
   transcript_doc_url?: string | null;
   notes_doc_url?: string | null;
   artifacts_synced_at?: string | null;
+  ai_draft?: MeetingAiDraft | null;
+  official_summary?: string | null;
+  commitments_completed?: "ALL" | "SOME" | "NONE" | null;
+  incomplete_reason?: string | null;
+  incomplete_reason_detail?: string | null;
   mentor?: AuthUser | null;
   student?: AuthUser | null;
   resolvedAttendees?: AuthUser[];

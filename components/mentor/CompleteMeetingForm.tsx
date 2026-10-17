@@ -12,6 +12,8 @@ import {
   AlertCircle,
   Globe,
   Library,
+  ExternalLink,
+  Check,
 } from "lucide-react";
 import { Student, Meeting } from "@/lib/types";
 import {
@@ -44,6 +46,12 @@ import { DEFAULT_MEETING_TYPES } from "@/lib/api/adminSettings";
 import { timezoneSelectOptions } from "@/lib/utils/timezoneOptions";
 import { MeetingTimePresetsPicker } from "@/components/mentor/MeetingTimePresetsPicker";
 import {
+  clockFrom24,
+  dueDateFromDays,
+  matchSessionType,
+  readMeetingAiDraft,
+} from "@/lib/utils/meetingAiDraft";
+import {
   ActionItemBookshelfModal,
   SaveToBookshelfButton,
 } from "@/components/action-items/ActionItemBookshelfModal";
@@ -59,8 +67,20 @@ interface CompleteMeetingFormProps {
   embedded?: boolean;
 }
 
+export type CommitmentStatus = "ALL" | "SOME" | "NONE";
+
+export const INCOMPLETE_REASONS = [
+  { value: "UNCLEAR_INSTRUCTIONS", label: "Unclear instructions" },
+  { value: "TIME_MANAGEMENT", label: "Time management" },
+  { value: "AVOIDANCE", label: "Avoidance/lack of follow-through" },
+  { value: "ACADEMIC", label: "Academic issue" },
+  { value: "PERSONAL", label: "Personal issue" },
+  { value: "MENTOR_DELAY", label: "Mentor delay" },
+  { value: "OTHER", label: "Other" },
+] as const;
+
 export interface CompleteMeetingData {
-  notes: string;
+  officialSummary: string;
   meetingType: string;
   meetingDate: string;
   studentActionItems: Array<{
@@ -76,7 +96,11 @@ export interface CompleteMeetingData {
   nextMeetingDate?: string;
   nextMeetingTimezone?: string;
   summaryMessage: string;
-  followedUpOnActionItems: "YES" | "NO";
+  commitmentsCompleted: CommitmentStatus;
+  incompleteReason?: string;
+  incompleteReasonDetail?: string;
+  verifiedSummary: boolean;
+  verifiedSchoolTimeline: boolean;
   duration: number;
 }
 
@@ -158,8 +182,24 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   }, [meetingTypes]);
 
   const defaultType = meetingTypeLabels[0] || "Other";
+  const aiDraft = readMeetingAiDraft(meeting?.ai_draft);
+  const draftedNext = aiDraft?.nextMeeting?.mentioned ? aiDraft.nextMeeting : null;
+  const draftedNextType = matchSessionType(draftedNext?.typeName, meetingTypeLabels);
+  const draftedClock = clockFrom24(draftedNext?.time);
+  const notesDocUrl = (meeting?.notes_doc_url || meeting?.transcript_doc_url || "").trim();
 
-  const [notes, setNotes] = useState(meeting?.notes || "");
+  const [officialSummary, setOfficialSummary] = useState(
+    aiDraft?.summary?.trim() || meeting?.official_summary || "",
+  );
+  const [commitmentsCompleted, setCommitmentsCompleted] = useState<CommitmentStatus | "">(
+    meeting?.commitments_completed || "",
+  );
+  const [incompleteReason, setIncompleteReason] = useState(meeting?.incomplete_reason || "");
+  const [incompleteReasonDetail, setIncompleteReasonDetail] = useState(
+    meeting?.incomplete_reason_detail || "",
+  );
+  const [verifiedSummary, setVerifiedSummary] = useState(false);
+  const [verifiedSchoolTimeline, setVerifiedSchoolTimeline] = useState(false);
   const [meetingType, setMeetingType] = useState(
     meeting?.meetingType && meetingTypeLabels.includes(meeting.meetingType)
       ? meeting.meetingType
@@ -177,28 +217,32 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   );
   const [studentActionItems, setStudentActionItems] = useState<
     CompleteMeetingData["studentActionItems"]
-  >([]);
-  const [mentorActionItems, setMentorActionItems] = useState<string[]>(
-    parseMentorActionItems(meeting?.mentorActionItems),
+  >(() =>
+    (aiDraft?.studentActionItems || [])
+      .filter((item) => item.task?.trim())
+      .map((item) => ({
+        task: item.task.trim(),
+        dueDate: dueDateFromDays(item.dueInDays || 7),
+        priority: item.priority || "MEDIUM",
+      })),
   );
-  const [nextStep, setNextStep] = useState<"SCHEDULE" | "DEFER">(
-    meeting?.nextMeetingScheduled ? "SCHEDULE" : "DEFER",
+  const [mentorActionItems, setMentorActionItems] = useState<string[]>(() => {
+    const drafted = (aiDraft?.mentorActionItems || []).map((item) => item.trim()).filter(Boolean);
+    if (drafted.length) return drafted;
+    return parseMentorActionItems(meeting?.mentorActionItems);
+  });
+  const [nextStep, setNextStep] = useState<"SCHEDULE" | "DEFER">("SCHEDULE");
+  const [nextMeetingType, setNextMeetingType] = useState(draftedNextType.type || defaultType);
+  const [nextOtherType, setNextOtherType] = useState(draftedNextType.custom);
+  const [nextMeetingDateOnly, setNextMeetingDateOnly] = useState(
+    draftedNext?.date && /^\d{4}-\d{2}-\d{2}$/.test(draftedNext.date) ? draftedNext.date : "",
   );
-  const [nextMeetingType, setNextMeetingType] = useState(
-    meeting?.nextMeetingType && meetingTypeLabels.includes(meeting.nextMeetingType)
-      ? meeting.nextMeetingType
-      : defaultType,
-  );
-  const [nextMeetingDateOnly, setNextMeetingDateOnly] = useState("");
-  const [nextMeetingTime, setNextMeetingTime] = useState("12:00");
-  const [nextMeetingAmpm, setNextMeetingAmpm] = useState<"AM" | "PM">("PM");
+  const [nextMeetingTime, setNextMeetingTime] = useState(draftedClock?.time || "12:00");
+  const [nextMeetingAmpm, setNextMeetingAmpm] = useState<"AM" | "PM">(draftedClock?.ampm || "PM");
   const [nextMeetingTimezone, setNextMeetingTimezone] = useState(
     meeting?.nextMeetingTimezone || meeting?.timezone || studentTz,
   );
   const [summaryMessage, setSummaryMessage] = useState(meeting?.summary || "");
-  const [followedUpOnActionItems, setFollowedUpOnActionItems] = useState<"YES" | "NO">(
-    meeting?.followedUpOnActionItems ? "YES" : "NO",
-  );
   const [duration, setDuration] = useState(meeting?.duration || 30);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -239,7 +283,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
       fillMeetingSummaryTemplate({
         template,
         studentFirstName: student.name.split(" ")[0],
-        notes,
+        notes: officialSummary,
         actionItems: studentActionItems,
         nextMeetingLabel,
       }),
@@ -248,7 +292,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     meetingType,
     otherType,
     student.name,
-    notes,
+    officialSummary,
     studentActionItems,
     summaryByLabel,
     nextStep,
@@ -341,24 +385,50 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     e?.preventDefault();
     setError(null);
 
-    if (!notes.trim()) {
-      setError("Meeting notes are required.");
+    if (!commitmentsCompleted) {
+      setError("Say whether previous commitments were completed.");
+      return;
+    }
+    if (commitmentsCompleted !== "ALL" && !incompleteReason) {
+      setError("Choose a reason for the incomplete commitments.");
+      return;
+    }
+    if (commitmentsCompleted !== "ALL" && incompleteReason === "OTHER" && !incompleteReasonDetail.trim()) {
+      setError("Describe the other reason for the incomplete commitments.");
+      return;
+    }
+    if (meetingType === "Other" && !otherType.trim()) {
+      setError("Name this meeting type.");
+      return;
+    }
+    if (!officialSummary.trim()) {
+      setError("The meeting summary is required. Review and edit it before submitting.");
       return;
     }
 
     const validStudentItems = studentActionItems.filter((item) => item.task.trim() !== "");
     if (validStudentItems.length === 0) {
-      setError("At least one action item for the student is required.");
+      setError("At least one student action item is required.");
+      return;
+    }
+    if (!verifiedSummary || !verifiedSchoolTimeline) {
+      setError("Check both verify boxes before submitting.");
       return;
     }
 
     let finalNextMeetingDate: string | undefined;
+    let resolvedNextType = nextMeetingType;
     if (nextStep === "SCHEDULE") {
+      if (nextMeetingType === "Other" && !nextOtherType.trim()) {
+        setError("Name the next meeting type.");
+        return;
+      }
+      resolvedNextType = nextMeetingType === "Other" ? nextOtherType.trim() : nextMeetingType;
       if (!nextMeetingDateOnly || !nextMeetingTime) {
         setError("Please select a date and time for the next meeting.");
         return;
       }
-      if (!nextMeetingType) {
+      if (!resolvedNextType) {
         setError("Please select a type for the next meeting.");
         return;
       }
@@ -378,18 +448,25 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     setSubmitting(true);
     try {
       await onSubmit({
-        notes,
-        meetingType: meetingType === "Other" ? otherType : meetingType,
+        officialSummary: officialSummary.trim(),
+        meetingType: meetingType === "Other" ? otherType.trim() : meetingType,
         meetingDate,
         duration,
         studentActionItems: validStudentItems,
         mentorActionItems: mentorActionItems.filter((item) => item.trim() !== ""),
         nextStep,
-        nextMeetingType: nextStep === "SCHEDULE" ? nextMeetingType : undefined,
+        nextMeetingType: nextStep === "SCHEDULE" ? resolvedNextType : undefined,
         nextMeetingDate: finalNextMeetingDate,
         nextMeetingTimezone: nextStep === "SCHEDULE" ? nextMeetingTimezone : undefined,
         summaryMessage,
-        followedUpOnActionItems,
+        commitmentsCompleted,
+        incompleteReason: commitmentsCompleted === "ALL" ? undefined : incompleteReason,
+        incompleteReasonDetail:
+          commitmentsCompleted !== "ALL" && incompleteReason === "OTHER"
+            ? incompleteReasonDetail.trim()
+            : undefined,
+        verifiedSummary,
+        verifiedSchoolTimeline,
       });
     } catch (err: any) {
       setError(err?.message || "Failed to complete meeting.");
@@ -469,18 +546,57 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                     onChange={(e) => setDuration(parseInt(e.target.value, 10) || 0)}
                   />
                 </FormField>
-                <FormField label="Followed up on past tasks?" htmlFor="followed-up">
+                <FormField label="Previous commitments completed" htmlFor="commitments" required>
                   <SelectMenu
-                    value={followedUpOnActionItems}
-                    onChange={(v) => setFollowedUpOnActionItems(v as "YES" | "NO")}
+                    value={commitmentsCompleted}
+                    onChange={(value) => {
+                      setCommitmentsCompleted(value as CommitmentStatus);
+                      if (value === "ALL") {
+                        setIncompleteReason("");
+                        setIncompleteReasonDetail("");
+                      }
+                    }}
                     options={[
-                      { value: "YES", label: "Yes" },
-                      { value: "NO", label: "No" },
+                      { value: "ALL", label: "All" },
+                      { value: "SOME", label: "Some" },
+                      { value: "NONE", label: "None" },
                     ]}
+                    placeholder="Select"
                     className="w-full"
                   />
                 </FormField>
               </div>
+
+              {commitmentsCompleted === "SOME" || commitmentsCompleted === "NONE" ? (
+                <div className="space-y-3">
+                  <FormField
+                    label="Reason for incomplete commitments"
+                    htmlFor="incomplete-reason"
+                    required
+                  >
+                    <SelectMenu
+                      value={incompleteReason}
+                      onChange={setIncompleteReason}
+                      options={INCOMPLETE_REASONS.map((reason) => ({
+                        value: reason.value,
+                        label: reason.label,
+                      }))}
+                      placeholder="Select a reason"
+                      className="w-full"
+                    />
+                  </FormField>
+                  {incompleteReason === "OTHER" && (
+                    <FormField label="Other reason" htmlFor="incomplete-other" required>
+                      <Input
+                        id="incomplete-other"
+                        value={incompleteReasonDetail}
+                        onChange={(e) => setIncompleteReasonDetail(e.target.value)}
+                        placeholder="Describe the reason"
+                      />
+                    </FormField>
+                  )}
+                </div>
+              ) : null}
 
               {meetingType === "Other" && (
                 <FormField label="Specify type" htmlFor="other-type" required>
@@ -495,17 +611,40 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
               )}
 
               <FormField
-                label="Meeting notes"
-                htmlFor="meeting-notes"
+                label="Complete notes"
+                htmlFor="notes-doc"
+                hint="Google Doc from this meeting. Shared automatically with anyone who has the link."
+              >
+                {notesDocUrl ? (
+                  <a
+                    id="notes-doc"
+                    href={notesDocUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-medium text-indigo-300 hover:border-indigo-500/40 hover:text-white"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Open notes document
+                  </a>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-slate-800 px-4 py-3 text-sm text-slate-500">
+                    No notes document is attached to this meeting yet.
+                  </p>
+                )}
+              </FormField>
+
+              <FormField
+                label="Meeting summary"
+                htmlFor="official-summary"
                 required
-                hint="Internal notes for mentors / history"
+                hint="Review and edit before submitting. This becomes the official meeting record."
               >
                 <Textarea
-                  id="meeting-notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="min-h-[140px] resize-y"
-                  placeholder="What did you discuss? Key takeaways..."
+                  id="official-summary"
+                  value={officialSummary}
+                  onChange={(e) => setOfficialSummary(e.target.value)}
+                  className="min-h-[160px] resize-y"
+                  placeholder="Summary from the meeting notes. Edit, delete, or add anything that is missing."
                   required
                 />
               </FormField>
@@ -547,7 +686,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
 
               {nextStep === "SCHEDULE" ? (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField label="Type" htmlFor="next-meeting-type" className="sm:col-span-2">
+                  <FormField label="Type" htmlFor="next-meeting-type" className="sm:col-span-2" required>
                     <SelectMenu
                       value={nextMeetingType}
                       onChange={setNextMeetingType}
@@ -555,6 +694,21 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                       className="w-full"
                     />
                   </FormField>
+                  {nextMeetingType === "Other" && (
+                    <FormField
+                      label="Name this meeting type"
+                      htmlFor="next-other-type"
+                      className="sm:col-span-2"
+                      required
+                    >
+                      <Input
+                        id="next-other-type"
+                        value={nextOtherType}
+                        onChange={(e) => setNextOtherType(e.target.value)}
+                        placeholder="Enter meeting type..."
+                      />
+                    </FormField>
+                  )}
                   {!!mentorId && (
                     <div className="sm:col-span-2">
                       <MeetingTimePresetsPicker
@@ -654,7 +808,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
             <section className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                  <Plus className="h-4 w-4" /> Student action items
+                  <Plus className="h-4 w-4" /> Student next steps / action items
                 </h4>
                 <div className="flex items-center gap-1">
                   <Button
@@ -677,6 +831,10 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                   </Button>
                 </div>
               </div>
+              <p className="text-xs text-slate-500">
+                Required. Filled from the meeting notes when Gemini found next steps. Use the
+                recommended tasks or add your own.
+              </p>
 
               {recommendedForType.length > 0 && (
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
@@ -811,7 +969,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
             <section className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-amber-400">
-                  <Clock className="h-4 w-4" /> Your follow-ups (mentor)
+                  <Clock className="h-4 w-4" /> Mentor next steps / action items
                 </h4>
                 <Button
                   type="button"
@@ -861,6 +1019,16 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
           </div>
         </div>
 
+        <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Verify</p>
+          <VerifyCheck checked={verifiedSummary} onChange={setVerifiedSummary}>
+            Did you verify the summary and action items are correct and add what needed to be added?
+          </VerifyCheck>
+          <VerifyCheck checked={verifiedSchoolTimeline} onChange={setVerifiedSchoolTimeline}>
+            Did you update the school selection and timeline if needed?
+          </VerifyCheck>
+        </div>
+
         <div
           className={cn(
             "flex shrink-0 items-center justify-end gap-2 border-t border-slate-800",
@@ -892,5 +1060,35 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     </div>
   );
 };
+
+function VerifyCheck({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-start gap-3 text-left"
+    >
+      <span
+        className={cn(
+          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+          checked
+            ? "border-emerald-500 bg-emerald-500 text-white"
+            : "border-slate-600 bg-slate-950 text-transparent",
+        )}
+      >
+        <Check className="h-3.5 w-3.5" />
+      </span>
+      <span className="text-sm leading-snug text-slate-200">{children}</span>
+    </button>
+  );
+}
 
 export default CompleteMeetingForm;
