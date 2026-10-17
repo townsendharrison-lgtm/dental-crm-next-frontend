@@ -19,6 +19,7 @@ export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { Tooltip, type TooltipProps } from "./Tooltip";
 export { RefreshButton, type RefreshButtonProps } from "./RefreshButton";
 export { SelectMenu, type SelectMenuProps, type SelectMenuOption } from "./SelectMenu";
+export { ResourcePicker } from "./ResourcePicker";
 export { DatePicker, type DatePickerProps } from "./DatePicker";
 export { MonthPicker, type MonthPickerProps } from "./MonthPicker";
 export { TimePicker, type TimePickerProps } from "./TimePicker";

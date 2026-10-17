@@ -1085,6 +1085,10 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
     title: "Resources",
     description: "Add, edit, and delete the resources students see.",
   },
+  "/admin/action-bookshelf": {
+    title: "Action Bookshelf",
+    description: "Preset student action items mentors can search and assign.",
+  },
   "/mentor/resources": {
     title: "Resources",
     description: "Explore dental school admissions guidelines and preparation files.",

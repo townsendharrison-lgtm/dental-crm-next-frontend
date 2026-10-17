@@ -105,6 +105,9 @@ export const queryKeys = {
   timelineBookshelf: {
     all: () => ["timelineBookshelf"] as const,
   },
+  actionItemBookshelf: {
+    all: () => ["actionItemBookshelf"] as const,
+  },
   researchCases: {
     all: (filters?: any) => ["researchCases", { filters }] as const,
   },

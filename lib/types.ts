@@ -1372,6 +1372,22 @@ export interface TimelineBookshelfItem {
   updatedAt?: string;
 }
 
+export type ActionItemPriority = "HIGH" | "MEDIUM" | "LOW";
+
+/** Preset a mentor can assign to a student. GLOBAL items are the admin list. */
+export interface ActionItemBookshelfItem {
+  id: string;
+  scope: "GLOBAL" | "MENTOR";
+  ownerId?: string | null;
+  title: string;
+  description?: string;
+  priority: ActionItemPriority;
+  resourceLink?: string;
+  sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type TimelineCardColors = Record<TimelineCardType, string>;
 
 export const DEFAULT_TIMELINE_CARD_COLORS: TimelineCardColors = {

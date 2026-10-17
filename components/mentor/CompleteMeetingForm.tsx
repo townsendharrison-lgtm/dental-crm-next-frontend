@@ -11,6 +11,7 @@ import {
   CheckSquare,
   AlertCircle,
   Globe,
+  Library,
 } from "lucide-react";
 import { Student, Meeting } from "@/lib/types";
 import {
@@ -22,6 +23,7 @@ import {
   TimePicker,
   SelectMenu,
   TimezoneHint,
+  ResourcePicker,
 } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import {
@@ -41,6 +43,11 @@ import { useMentor, useUpdateMentor } from "@/lib/hooks/useMentors";
 import { DEFAULT_MEETING_TYPES } from "@/lib/api/adminSettings";
 import { timezoneSelectOptions } from "@/lib/utils/timezoneOptions";
 import { MeetingTimePresetsPicker } from "@/components/mentor/MeetingTimePresetsPicker";
+import {
+  ActionItemBookshelfModal,
+  SaveToBookshelfButton,
+} from "@/components/action-items/ActionItemBookshelfModal";
+import type { ActionItemBookshelfItem } from "@/lib/types";
 import { toast } from "sonner";
 
 interface CompleteMeetingFormProps {
@@ -195,6 +202,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   const [duration, setDuration] = useState(meeting?.duration || 30);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [bookshelfOpen, setBookshelfOpen] = useState(false);
 
   const timezoneOptions = timezoneSelectOptions(nextMeetingTimezone);
 
@@ -268,6 +276,26 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
         priority: "MEDIUM",
       },
     ]);
+  };
+
+  const addFromBookshelf = (item: ActionItemBookshelfItem) => {
+    const preset = {
+      task: item.title,
+      description: item.description || "",
+      dueDate: defaultDueDate(),
+      priority: item.priority || ("MEDIUM" as const),
+      ...(item.resourceLink?.trim() ? { resourceLink: item.resourceLink.trim() } : {}),
+    };
+    setStudentActionItems((prev) => {
+      const emptyIndex = prev.findIndex((row) => !row.task.trim());
+      if (emptyIndex >= 0) {
+        return prev.map((row, index) =>
+          index === emptyIndex ? { ...row, ...preset, dueDate: row.dueDate || preset.dueDate } : row,
+        );
+      }
+      return [...prev, preset];
+    });
+    setBookshelfOpen(false);
   };
 
   const addRecommendedAction = (task: string, resourceLink?: string) => {
@@ -628,15 +656,26 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                 <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
                   <Plus className="h-4 w-4" /> Student action items
                 </h4>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={<Plus size={14} />}
-                  onClick={() => addStudentAction()}
-                >
-                  Add
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<Library size={14} />}
+                    onClick={() => setBookshelfOpen(true)}
+                  >
+                    Bookshelf
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<Plus size={14} />}
+                    onClick={() => addStudentAction()}
+                  >
+                    Add
+                  </Button>
+                </div>
               </div>
 
               {recommendedForType.length > 0 && (
@@ -704,6 +743,23 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                         required
                       />
                     </FormField>
+                    <FormField label="Details" htmlFor={`details-${index}`} hint="Optional">
+                      <Textarea
+                        id={`details-${index}`}
+                        value={item.description || ""}
+                        onChange={(e) => updateStudentAction(index, { description: e.target.value })}
+                        placeholder="Steps that come with this task"
+                        className="min-h-[68px]"
+                      />
+                    </FormField>
+                    <div className="flex justify-end">
+                      <SaveToBookshelfButton
+                        title={item.task}
+                        description={item.description}
+                        priority={item.priority}
+                        resourceLink={item.resourceLink}
+                      />
+                    </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <FormField label="Due date" htmlFor={`due-${index}`} required>
                         <DatePicker
@@ -724,16 +780,23 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                         />
                       </FormField>
                     </div>
-                    <FormField label="Resource link" htmlFor={`resource-${index}`} hint="Optional">
-                      <Input
-                        id={`resource-${index}`}
-                        type="url"
-                        value={item.resourceLink || ""}
-                        onChange={(e) =>
-                          updateStudentAction(index, { resourceLink: e.target.value })
-                        }
-                        placeholder="https://..."
-                      />
+                    <FormField label="Resource link" htmlFor={`resource-${index}`} hint="Optional. Pick from the student resources list, or paste a link.">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id={`resource-${index}`}
+                          type="url"
+                          value={item.resourceLink || ""}
+                          onChange={(e) =>
+                            updateStudentAction(index, { resourceLink: e.target.value })
+                          }
+                          placeholder="https://..."
+                          className="min-w-0 flex-1"
+                        />
+                        <ResourcePicker
+                          value={item.resourceLink || ""}
+                          onPick={(link) => updateStudentAction(index, { resourceLink: link })}
+                        />
+                      </div>
                     </FormField>
                   </div>
                 ))}
@@ -821,6 +884,11 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
           </Button>
         </div>
       </form>
+      <ActionItemBookshelfModal
+        open={bookshelfOpen}
+        onClose={() => setBookshelfOpen(false)}
+        onPick={addFromBookshelf}
+      />
     </div>
   );
 };

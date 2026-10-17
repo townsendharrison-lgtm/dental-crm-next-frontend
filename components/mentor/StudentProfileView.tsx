@@ -29,6 +29,7 @@ import {
   MessageSquare,
   FolderOpen,
   Award,
+  Library,
 } from 'lucide-react';
 import { canJoinScheduledMeeting, formatMeetingLocal, parseLocalDate } from '@/lib/utils/dateUtils';
 import { MeetingTimeWithHint } from '@/components/ui/TimezoneHint';
@@ -52,8 +53,14 @@ import {
   Textarea,
   SelectMenu,
   DatePicker,
+  ResourcePicker,
 } from '@/components/ui';
 import { useCreateActionItem } from '@/lib/hooks/useActionItems';
+import {
+  ActionItemBookshelfModal,
+  SaveToBookshelfButton,
+} from '@/components/action-items/ActionItemBookshelfModal';
+import type { ActionItemBookshelfItem } from '@/lib/types';
 import { useCreateTask } from '@/lib/hooks/useTasks';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner';
@@ -225,9 +232,37 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
     priority: 'MEDIUM' as 'HIGH' | 'MEDIUM' | 'LOW',
     description: '',
     resourceLink: '',
+    resourceId: '' as string,
     assignee: 'STUDENT' as 'STUDENT' | 'MENTOR'
   });
   const [editingAction, setEditingAction] = useState<ActionItem | null>(null);
+  const [bookshelfTarget, setBookshelfTarget] = useState<null | "new" | "edit">(null);
+
+  const applyBookshelfItem = (item: ActionItemBookshelfItem) => {
+    if (bookshelfTarget === "edit" && editingAction) {
+      setEditingAction({
+        ...editingAction,
+        task: item.title,
+        description: item.description || "",
+        priority: item.priority,
+        resourceLink: item.resourceLink || "",
+        resource_link: item.resourceLink || "",
+        resourceId: null,
+        resource_id: null,
+      });
+      return;
+    }
+    setNewAction((prev) => ({
+      ...prev,
+      assignee: "STUDENT",
+      task: item.title,
+      description: item.description || "",
+      priority: item.priority,
+      resourceLink: item.resourceLink || "",
+      resourceId: "",
+    }));
+    setIsAddingAction(true);
+  };
   const [editingStaffTask, setEditingStaffTask] = useState<StaffTask | null>(null);
   const [editAssignee, setEditAssignee] = useState<'STUDENT' | 'MENTOR'>('STUDENT');
 
@@ -381,6 +416,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
       priority: 'MEDIUM',
       description: '',
       resourceLink: '',
+      resourceId: '',
       assignee: 'STUDENT',
     });
   };
@@ -404,6 +440,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           priority: newAction.priority,
           description: newAction.description.trim() || undefined,
           resourceLink: newAction.resourceLink.trim() || undefined,
+          resourceId: newAction.resourceId || undefined,
         });
       } else {
         const mentorId =
@@ -1798,6 +1835,25 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
               }
             />
           </FormField>
+          {newAction.assignee === "STUDENT" && (
+            <div className="flex flex-wrap justify-end gap-1">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                leftIcon={<Library size={14} />}
+                onClick={() => setBookshelfTarget("new")}
+              >
+                Bookshelf
+              </Button>
+              <SaveToBookshelfButton
+                title={newAction.task}
+                description={newAction.description}
+                priority={newAction.priority}
+                resourceLink={newAction.resourceLink}
+              />
+            </div>
+          )}
 
           <FormField label="Details" htmlFor="action-details" hint="Optional">
             <Textarea
@@ -1808,14 +1864,25 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
             />
           </FormField>
 
-          <FormField label="Resource link" htmlFor="action-resource" hint="Optional">
-            <Input
-              id="action-resource"
-              type="url"
-              value={newAction.resourceLink}
-              onChange={(e) => setNewAction({ ...newAction, resourceLink: e.target.value })}
-              placeholder="https://example.com/resource"
-            />
+          <FormField label="Resource link" htmlFor="action-resource" hint="Optional. Pick from the student resources list, or paste a link.">
+            <div className="flex items-center gap-2">
+              <Input
+                id="action-resource"
+                type="url"
+                value={newAction.resourceLink}
+                onChange={(e) =>
+                  setNewAction({ ...newAction, resourceLink: e.target.value, resourceId: "" })
+                }
+                placeholder="https://example.com/resource"
+                className="min-w-0 flex-1"
+              />
+              <ResourcePicker
+                value={newAction.resourceLink}
+                onPick={(link, resourceId) =>
+                  setNewAction({ ...newAction, resourceLink: link, resourceId: resourceId || "" })
+                }
+              />
+            </div>
           </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1894,13 +1961,34 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Task Title</label>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Task Title</label>
+                      {editAssignee === "STUDENT" && (
+                        <button
+                          type="button"
+                          onClick={() => setBookshelfTarget("edit")}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-indigo-300 hover:bg-slate-800"
+                        >
+                          <Library size={12} /> Bookshelf
+                        </button>
+                      )}
+                    </div>
                     <input 
                       type="text" 
                       value={editingAction.task}
                       onChange={e => setEditingAction({...editingAction, task: e.target.value})}
                       className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all"
                     />
+                    {editAssignee === "STUDENT" && (
+                      <div className="mt-2 flex justify-end">
+                        <SaveToBookshelfButton
+                          title={editingAction.task}
+                          description={editingAction.description || ""}
+                          priority={editingAction.priority}
+                          resourceLink={editingAction.resourceLink || editingAction.resource_link || ""}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Details (Optional)</label>
@@ -1912,14 +2000,36 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Resource Link (Optional)</label>
-                    <div className="relative">
-                      <input 
-                        type="url" 
-                        value={editingAction.resourceLink || ''}
-                        onChange={e => setEditingAction({...editingAction, resourceLink: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all"
+                    <div className="flex items-center gap-2">
+                      <div className="relative min-w-0 flex-1">
+                        <input 
+                          type="url" 
+                          value={editingAction.resourceLink || ''}
+                          onChange={e => setEditingAction({
+                            ...editingAction,
+                            resourceLink: e.target.value,
+                            resource_link: e.target.value,
+                            resourceId: null,
+                            resource_id: null,
+                          })}
+                          placeholder="https://example.com/resource"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all"
+                        />
+                        <ExternalLink className="w-4 h-4 text-slate-600 absolute left-4 top-1/2 -translate-y-1/2" />
+                      </div>
+                      <ResourcePicker
+                        value={editingAction.resourceLink || editingAction.resource_link || ""}
+                        onPick={(link, resourceId) =>
+                          setEditingAction({
+                            ...editingAction,
+                            resourceLink: link,
+                            resource_link: link,
+                            resourceId,
+                            resource_id: resourceId,
+                          })
+                        }
+                        className="h-12 w-36 shrink-0 rounded-2xl"
                       />
-                      <ExternalLink className="w-4 h-4 text-slate-600 absolute left-4 top-1/2 -translate-y-1/2" />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -2206,6 +2316,15 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      <ActionItemBookshelfModal
+        open={bookshelfTarget !== null}
+        onClose={() => setBookshelfTarget(null)}
+        onPick={(item) => {
+          applyBookshelfItem(item);
+          setBookshelfTarget(null);
+        }}
+      />
     </div>
   );
 };
