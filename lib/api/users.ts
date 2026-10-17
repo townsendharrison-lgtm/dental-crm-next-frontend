@@ -49,8 +49,14 @@ export const usersApi = {
     avatar?: string;
     timezone?: string;
     onboardingCompleted?: boolean;
-  }): Promise<RawUser> => {
-    return await apiPut<RawUser>("/api/users/profile", updates);
+    onboardingStepId?: string;
+  }): Promise<
+    RawUser & {
+      onboarding_step_ids?: string[] | null;
+      onboarding_completed_at?: string | null;
+    }
+  > => {
+    return await apiPut("/api/users/profile", updates);
   },
 
   /** Update a setter's lead goals. Admins edit any setter; others edit self. */

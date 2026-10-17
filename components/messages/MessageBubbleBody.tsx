@@ -104,7 +104,7 @@ export function conversationPreviewText(msg: {
   attachment_url?: string | null;
 } | null | undefined): string {
   if (!msg) return "No messages yet";
-  if (msg.text?.trim()) return msg.text;
+  if (msg.text?.trim()) return msg.text.replace(/\s+/g, " ").trim();
   if (msg.attachment_url) return "Sent an image";
   return "No messages yet";
 }

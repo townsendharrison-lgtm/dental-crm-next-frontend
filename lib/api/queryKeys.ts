@@ -114,6 +114,9 @@ export const queryKeys = {
     submissions: (status?: string) => ["courses", "submissions", { status }] as const,
   },
   messages: {
-    conversations: () => ["messages", "conversations"] as const,
+    conversations: (userId?: string) =>
+      userId
+        ? (["messages", "conversations", userId] as const)
+        : (["messages", "conversations"] as const),
   },
 } as const;

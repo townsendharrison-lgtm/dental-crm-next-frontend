@@ -67,6 +67,7 @@ import { useCreateTask } from "@/lib/hooks/useTasks";
 import {
   useStudentNotes,
   useCreateStudentNote,
+  useUpdateStudentNote,
   useDeleteStudentNote,
   useStudentDexterity,
   useCreateStudentDexterity,
@@ -245,6 +246,7 @@ export function StudentProfileDocumentsView({
   const deleteDocMutation = useDeleteDocument();
   const createTaskMutation = useCreateTask();
   const createNoteMutation = useCreateStudentNote(student.id);
+  const updateNoteMutation = useUpdateStudentNote(student.id);
   const deleteNoteMutation = useDeleteStudentNote(student.id);
   const createDexterityMutation = useCreateStudentDexterity(student.id);
   const deleteDexterityMutation = useDeleteStudentDexterity(student.id);
@@ -399,6 +401,7 @@ export function StudentProfileDocumentsView({
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [newNoteContent, setNewNoteContent] = useState("");
   const [dexActivity, setDexActivity] = useState("");
   const [dexDescription, setDexDescription] = useState("");
@@ -593,15 +596,40 @@ export function StudentProfileDocumentsView({
     });
   }, [documents, docSearch, docTypeFilter]);
 
-  const handleAddNote = async () => {
+  const closeNoteEditor = () => {
+    setIsNoteEditorOpen(false);
+    setEditingNoteId(null);
+    setNewNoteContent("");
+  };
+
+  const openAddNote = () => {
+    setEditingNoteId(null);
+    setNewNoteContent("");
+    setIsNoteEditorOpen(true);
+  };
+
+  const openEditNote = (noteId: string, content: string) => {
+    setEditingNoteId(noteId);
+    setNewNoteContent(content);
+    setIsNoteEditorOpen(true);
+  };
+
+  const handleSaveNote = async () => {
     if (!newNoteContent.trim() || !canWriteNotes) return;
+    const noteId = editingNoteId;
     try {
-      await createNoteMutation.mutateAsync({
-        content: newNoteContent.trim(),
-      });
-      setNewNoteContent("");
-      setIsNoteEditorOpen(false);
-      toast.success("Saved");
+      if (noteId) {
+        await updateNoteMutation.mutateAsync({
+          noteId,
+          updates: { content: newNoteContent.trim() },
+        });
+      } else {
+        await createNoteMutation.mutateAsync({
+          content: newNoteContent.trim(),
+        });
+      }
+      closeNoteEditor();
+      toast.success(noteId ? "Updated" : "Saved");
     } catch (err: any) {
       toast.error(err?.message || "Failed to save");
     }
@@ -2015,7 +2043,7 @@ export function StudentProfileDocumentsView({
                               ) : null}
                             </div>
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                              <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5">
+                              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5 text-center">
                                 <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
                                   Total Hours
                                 </p>
@@ -2023,7 +2051,7 @@ export function StudentProfileDocumentsView({
                                   {Number(entry.totalHours.toFixed(1))}
                                 </p>
                               </div>
-                              <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5">
+                              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5 text-center">
                                 <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
                                   Avg Hrs/Wk
                                 </p>
@@ -2031,7 +2059,7 @@ export function StudentProfileDocumentsView({
                                   {entry.avgHoursPerWeek.toFixed(1)}
                                 </p>
                               </div>
-                              <div className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5">
+                              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-800/60 bg-slate-950/40 p-2.5 text-center">
                                 <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
                                   Weeks
                                 </p>
@@ -2080,7 +2108,7 @@ export function StudentProfileDocumentsView({
                 type="button"
                 size="sm"
                 leftIcon={<Plus size={14} />}
-                onClick={() => setIsNoteEditorOpen(true)}
+                onClick={openAddNote}
               >
                 Add info
               </Button>
@@ -2127,16 +2155,28 @@ export function StudentProfileDocumentsView({
                         </Badge>
                       ))}
                       {canWriteNotes ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-slate-500 hover:text-rose-400"
-                          onClick={() => handleDeleteNote(note.id)}
-                          aria-label="Delete entry"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-500 hover:text-indigo-300"
+                            onClick={() => openEditNote(note.id, note.content)}
+                            aria-label="Edit entry"
+                          >
+                            <Pencil size={14} />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-500 hover:text-rose-400"
+                            onClick={() => handleDeleteNote(note.id)}
+                            aria-label="Delete entry"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </>
                       ) : null}
                     </div>
                   </div>
@@ -2233,28 +2273,21 @@ export function StudentProfileDocumentsView({
 
       <Modal
         open={isNoteEditorOpen}
-        onClose={() => {
-          setIsNoteEditorOpen(false);
-          setNewNoteContent("");
-        }}
-        title="Add additional information"
+        onClose={closeNoteEditor}
+        title={editingNoteId ? "Edit additional information" : "Add additional information"}
         description="Visible to you and your mentoring team."
         size="lg"
         footer={
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setIsNoteEditorOpen(false)}
-            >
+            <Button type="button" variant="secondary" onClick={closeNoteEditor}>
               Cancel
             </Button>
             <Button
               type="button"
-              onClick={handleAddNote}
-              isLoading={createNoteMutation.isPending}
+              onClick={handleSaveNote}
+              isLoading={createNoteMutation.isPending || updateNoteMutation.isPending}
             >
-              Save
+              {editingNoteId ? "Save changes" : "Save"}
             </Button>
           </div>
         }

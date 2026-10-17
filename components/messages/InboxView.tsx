@@ -311,6 +311,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const replyBoxRef = useRef<HTMLTextAreaElement | null>(null);
   const [loadingConv, setLoadingConv] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
@@ -696,6 +697,16 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
     setPendingImage(file);
     setPendingImagePreview(URL.createObjectURL(file));
   };
+
+  const fitReplyBox = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  };
+
+  useEffect(() => {
+    fitReplyBox(replyBoxRef.current);
+  }, [replyText]);
 
   const handleSendMessage = async () => {
     if ((!replyText.trim() && !pendingImage) || !selectedConversationId || sending) return;
@@ -1259,7 +1270,7 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                     </p>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
+                <div className="flex items-end gap-2">
                   <input
                     ref={imageInputRef}
                     type="file"
@@ -1277,18 +1288,13 @@ export function InboxView({ variant, conversationId = null }: InboxViewProps) {
                   >
                     <ImagePlus className="w-4 h-4" />
                   </button>
-                  <input
-                    type="text"
+                  <textarea
+                    ref={replyBoxRef}
+                    rows={1}
                     placeholder="Write a message…"
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    className="flex-1 bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-slate-600 transition-colors text-white placeholder:text-slate-500"
+                    className="max-h-40 min-h-10 flex-1 resize-none overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5 text-sm leading-5 text-white transition-colors placeholder:text-slate-500 focus:border-slate-600 focus:outline-none"
                   />
                   <button
                     type="button"

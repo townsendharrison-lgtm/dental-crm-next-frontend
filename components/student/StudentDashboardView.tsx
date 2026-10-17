@@ -12,6 +12,7 @@ import type {
   Meeting,
   Application,
   PlatformConfig,
+  Conversation,
 } from "@/lib/types";
 import {
   Rocket,
@@ -55,6 +56,8 @@ import { useStudentCredentials } from "@/lib/hooks/useStudentNotesDexterity";
 import { buildApplicationReadiness } from "@/lib/utils/applicationReadiness";
 import { isNewLeadNotification } from "@/lib/utils/notificationVisibility";
 import { compareResources } from "@/lib/api/resources";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { useUnreadMessageCount } from "@/lib/hooks/useUnreadMessageCount";
 
 interface StudentDashboardProps {
   student: Student;
@@ -112,6 +115,16 @@ function normalizeTaskUrl(raw: string) {
   if (/^https?:\/\//i.test(value)) return value;
   if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return "";
   return `https://${value}`;
+}
+
+function unreadThreadPreview(conversation: Conversation, studentId: string) {
+  const other = (conversation.participants || []).find((person) => person.id !== studentId);
+  const from = conversation.is_group
+    ? conversation.name?.trim() || "Group"
+    : other?.name?.trim() || "New message";
+  const raw = (conversation.lastMessage?.text || "").replace(/\s+/g, " ").trim();
+  const snippet = raw.length > 90 ? `${raw.slice(0, 87)}…` : raw;
+  return { from, snippet };
 }
 
 function taskLinkLabel(url: string) {
@@ -316,6 +329,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     resetAddTaskForm();
   };
 
+  const { user } = useAuth();
+  const inboxForUserId = user && user.id !== student.id ? student.id : undefined;
+  const { unreadCount, data: inboxConversations = [] } = useUnreadMessageCount(inboxForUserId);
+  const unreadThread = inboxConversations.find((conversation) => (conversation.unreadCount || 0) > 0);
+  const unreadPreview = unreadThread ? unreadThreadPreview(unreadThread, student.id) : null;
+
   const mentorId =
     student.mentorId ||
     student.profile?.mentor_id ||
@@ -489,7 +508,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </Button>
       </div>
 
-      {(attentionMeeting || attentionWebinar || surveys.length > 0) && (
+      {(attentionMeeting || attentionWebinar || surveys.length > 0 || unreadCount > 0) && (
         <section className="space-y-4">
           <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
             Needs attention
@@ -549,6 +568,39 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <Play className="h-4 w-4 fill-current" />
                 </button>
               </div>
+            )}
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => onNavigate("messages")}
+                className="flex items-center justify-between gap-4 rounded-2xl border border-sky-500/40 bg-sky-950/40 p-4 text-left shadow-lg shadow-sky-950/20 transition-colors hover:border-sky-400/60 hover:bg-sky-950/60"
+              >
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/15 text-sky-200">
+                    <MessageCircle className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/70">
+                      Inbox
+                    </p>
+                    <h4 className="truncate text-sm font-bold text-white">
+                      {unreadCount === 1
+                        ? "You have an unread message"
+                        : `You have ${unreadCount} unread messages`}
+                    </h4>
+                    {unreadPreview && (
+                      <p className="truncate text-xs text-sky-100/80">
+                        {unreadPreview.snippet
+                          ? `${unreadPreview.from}: ${unreadPreview.snippet}`
+                          : unreadPreview.from}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/20 text-sky-100">
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </button>
             )}
             {surveys.map((survey) => (
               <div

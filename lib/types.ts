@@ -41,6 +41,8 @@ export interface AuthUser {
   createdAt?: string;
   /** Set when the user finishes the role onboarding guide. */
   onboardingCompletedAt?: string | null;
+  /** Student onboarding step ids already marked done. */
+  onboardingStepIds?: string[];
 }
 
 export interface SignInResponse {

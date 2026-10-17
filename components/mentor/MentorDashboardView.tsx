@@ -222,7 +222,7 @@ type SmartAlert = {
   tab: string;
   icon: React.ElementType;
   color: "rose" | "amber" | "indigo";
-  kind: "no-meeting" | "task" | "action" | "complete-meeting";
+  kind: "no-meeting" | "task" | "action" | "complete-meeting" | "onboarding-ready";
   meetingId?: string;
 };
 
@@ -613,6 +613,24 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
     const now = new Date();
     const activeStudents = students.filter((s) => !pendingIds.has(s.id));
 
+    notifications
+      .filter(
+        (n) =>
+          String(n.category || "").toUpperCase() === "STUDENT_ONBOARDING_READY" && !n.is_read,
+      )
+      .forEach((n) => {
+        alerts.push({
+          id: `onboarding-${n.id}`,
+          title: n.title || "Student finished onboarding",
+          message: n.message || "Their information is ready to review.",
+          studentId: n.related_id || null,
+          tab: "records",
+          icon: ClipboardList,
+          color: "indigo",
+          kind: "onboarding-ready",
+        });
+      });
+
     notesReadyMeetings.forEach((meeting) => {
       const student = students.find((s) => s.id === studentIdOf(meeting));
       const first = student?.name?.split(" ")[0] || "student";
@@ -700,11 +718,13 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
 
       const priority = { rose: 0, amber: 1, indigo: 2 };
     return alerts.sort((a, b) => {
-      const aRank = a.kind === "complete-meeting" ? -1 : (priority[a.color] ?? 3);
-      const bRank = b.kind === "complete-meeting" ? -1 : (priority[b.color] ?? 3);
+      const pin = (kind: SmartAlert["kind"]) =>
+        kind === "complete-meeting" || kind === "onboarding-ready" ? -1 : null;
+      const aRank = pin(a.kind) ?? (priority[a.color] ?? 3);
+      const bRank = pin(b.kind) ?? (priority[b.color] ?? 3);
       return aRank - bRank;
     });
-  }, [students, pendingIds, mentorMeetings, mentorTasks, actionItems, notesReadyMeetings]);
+  }, [students, pendingIds, mentorMeetings, mentorTasks, actionItems, notesReadyMeetings, notifications]);
 
   const getNextMeeting = (sid: string) => {
     const now = new Date();
@@ -1298,12 +1318,19 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
               {smartAlerts.length > 0 ? (
             <div className="grid gap-5 sm:grid-cols-2">
               {[
-                ...smartAlerts.filter((alert) => alert.kind === "complete-meeting"),
-                ...smartAlerts.filter((alert) => alert.kind !== "complete-meeting").slice(0, 4),
+                ...smartAlerts.filter(
+                  (alert) => alert.kind === "complete-meeting" || alert.kind === "onboarding-ready",
+                ),
+                ...smartAlerts
+                  .filter(
+                    (alert) => alert.kind !== "complete-meeting" && alert.kind !== "onboarding-ready",
+                  )
+                  .slice(0, 4),
               ].map((alert) => {
                 const Icon = alert.icon;
                 const isNoMeeting = alert.kind === "no-meeting" && !!alert.studentId;
                 const isCompleteMeeting = alert.kind === "complete-meeting" && !!alert.meetingId;
+                const isOnboardingReady = alert.kind === "onboarding-ready" && !!alert.studentId;
                 return (
                   <div
                     key={alert.id}
@@ -1346,9 +1373,11 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                             {isCompleteMeeting
                               ? "Needs completion"
-                              : isNoMeeting
-                                ? "Needs scheduling"
-                                : "System alert"}
+                              : isOnboardingReady
+                                ? "Ready to review"
+                                : isNoMeeting
+                                  ? "Needs scheduling"
+                                  : "System alert"}
                           </span>
                           <span className="rounded-full border border-slate-700/80 bg-slate-800/40 px-2 py-0.5 text-[9px] font-bold text-slate-500">
                             Priority
@@ -1375,6 +1404,21 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
                         >
                           <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                           Complete
+                        </button>
+                      </div>
+                    )}
+
+                    {isOnboardingReady && (
+                      <div className="flex items-center gap-2 border-t border-slate-800/80 bg-slate-950/40 px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (alert.studentId) onSelectStudent(alert.studentId, "records");
+                          }}
+                          className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500"
+                        >
+                          <ClipboardList className="h-3.5 w-3.5 shrink-0" />
+                          Review
                         </button>
                       </div>
                     )}

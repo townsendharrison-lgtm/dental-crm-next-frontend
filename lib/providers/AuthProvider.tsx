@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           avatar: raw.avatar,
           timezone: raw.timezone,
           onboardingCompletedAt: raw.onboardingCompletedAt || null,
+          onboardingStepIds: Array.isArray(raw.onboardingStepIds) ? raw.onboardingStepIds : [],
         };
         const synced = await syncUserTimezone(user);
         if (cancelled) return;
