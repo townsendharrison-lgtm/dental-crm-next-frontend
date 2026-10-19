@@ -51,6 +51,7 @@ import {
   matchSessionType,
   readMeetingAiDraft,
 } from "@/lib/utils/meetingAiDraft";
+import { extractGeminiFullNotes } from "@/lib/utils/geminiFullNotes";
 import {
   ActionItemBookshelfModal,
   SaveToBookshelfButton,
@@ -183,13 +184,17 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
 
   const defaultType = meetingTypeLabels[0] || "Other";
   const aiDraft = readMeetingAiDraft(meeting?.ai_draft);
+  const copiedNotes = extractGeminiFullNotes(meeting?.notes || "", student.name);
   const draftedNext = aiDraft?.nextMeeting?.mentioned ? aiDraft.nextMeeting : null;
   const draftedNextType = matchSessionType(draftedNext?.typeName, meetingTypeLabels);
   const draftedClock = clockFrom24(draftedNext?.time);
   const notesDocUrl = (meeting?.notes_doc_url || meeting?.transcript_doc_url || "").trim();
 
   const [officialSummary, setOfficialSummary] = useState(
-    aiDraft?.summary?.trim() || meeting?.official_summary || "",
+    (copiedNotes.hasSummary ? copiedNotes.summary : "") ||
+      aiDraft?.summary?.trim() ||
+      meeting?.official_summary ||
+      "",
   );
   const [commitmentsCompleted, setCommitmentsCompleted] = useState<CommitmentStatus | "">(
     meeting?.commitments_completed || "",
@@ -217,16 +222,24 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   );
   const [studentActionItems, setStudentActionItems] = useState<
     CompleteMeetingData["studentActionItems"]
-  >(() =>
-    (aiDraft?.studentActionItems || [])
+  >(() => {
+    const source = copiedNotes.hasNextSteps
+      ? copiedNotes.studentActionItems.map((task) => ({
+          task,
+          dueInDays: 7,
+          priority: "MEDIUM" as const,
+        }))
+      : aiDraft?.studentActionItems || [];
+    return source
       .filter((item) => item.task?.trim())
       .map((item) => ({
         task: item.task.trim(),
         dueDate: dueDateFromDays(item.dueInDays || 7),
         priority: item.priority || "MEDIUM",
-      })),
-  );
+      }));
+  });
   const [mentorActionItems, setMentorActionItems] = useState<string[]>(() => {
+    if (copiedNotes.hasNextSteps) return copiedNotes.mentorActionItems;
     const drafted = (aiDraft?.mentorActionItems || []).map((item) => item.trim()).filter(Boolean);
     if (drafted.length) return drafted;
     return parseMentorActionItems(meeting?.mentorActionItems);
@@ -637,7 +650,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                 label="Meeting summary"
                 htmlFor="official-summary"
                 required
-                hint="Review and edit before submitting. This becomes the official meeting record."
+                hint="Copied from the Summary in the Gemini notes. Review and edit before submitting. This becomes the official meeting record."
               >
                 <Textarea
                   id="official-summary"
@@ -832,8 +845,8 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                 </div>
               </div>
               <p className="text-xs text-slate-500">
-                Required. Filled from the meeting notes when Gemini found next steps. Use the
-                recommended tasks or add your own.
+                Required. Copied from Next steps in the Gemini notes when the student’s name is on
+                the line. Use the recommended tasks or add your own.
               </p>
 
               {recommendedForType.length > 0 && (
@@ -982,7 +995,8 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                 </Button>
               </div>
               <p className="text-xs text-slate-500">
-                Private to you — reminders for what you still need to do for this student.
+                Private to you. Next steps in the Gemini notes that are not assigned to the student
+                are copied here, including Dental School Guide follow-ups.
               </p>
               <div className="space-y-2">
                 {mentorActionItems.map((item, index) => (
