@@ -21,6 +21,7 @@ import { USER_KEY, persistTokens } from "@/lib/auth/cookies";
 import { syncUserTimezone } from "@/lib/auth/syncTimezone";
 import { getInitialRouteForRole } from "@/lib/navigation";
 import { supabaseClient } from "@/lib/utils/supabase";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import type { UserRole } from "@/lib/types";
 
 const LOGO_URL =
@@ -66,6 +67,13 @@ function extractHashParam(href: string, key: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+const OTP_TYPES: EmailOtpType[] = ["invite", "magiclink", "signup", "email", "recovery"];
+
+function normalizeOtpType(value: string): EmailOtpType {
+  const normalized = value.toLowerCase() as EmailOtpType;
+  return OTP_TYPES.includes(normalized) ? normalized : "invite";
+}
+
 export default function CompleteInvitationPage() {
   const router = useRouter();
   const setUser = useAuthStore((s) => s.setUser);
@@ -84,6 +92,44 @@ export default function CompleteInvitationPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [pendingOtp, setPendingOtp] = useState<{ tokenHash: string; type: EmailOtpType } | null>(null);
+  const [acceptingLink, setAcceptingLink] = useState(false);
+
+  const applyAccessToken = (token: string) => {
+    setAccessToken(token);
+    setPendingOtp(null);
+    const payload = parseJwtPayload(token);
+    if (payload?.email) setEmail(payload.email);
+    if (payload?.user_metadata?.role) setRole(payload.user_metadata.role);
+    if (payload?.user_metadata?.name) setName(payload.user_metadata.name);
+    if (payload?.user_metadata?.invited_by_name) setInviterName(payload.user_metadata.invited_by_name);
+  };
+
+  const acceptInviteLink = async () => {
+    if (!pendingOtp) return;
+    setAcceptingLink(true);
+    setError("");
+    try {
+      const { data, error: verifyError } = await supabaseClient.auth.verifyOtp({
+        token_hash: pendingOtp.tokenHash,
+        type: pendingOtp.type,
+      });
+      const token = data?.session?.access_token;
+      if (verifyError || !token) {
+        setError(
+          verifyError?.message ||
+            "This invitation link is no longer valid. Ask your administrator to resend it.",
+        );
+        return;
+      }
+      window.history.replaceState(null, "", "/complete-invitation");
+      applyAccessToken(token);
+    } catch {
+      setError("This invitation link is no longer valid. Ask your administrator to resend it.");
+    } finally {
+      setAcceptingLink(false);
+    }
+  };
 
   useEffect(() => {
     async function initToken() {
@@ -133,24 +179,20 @@ export default function CompleteInvitationPage() {
       }
 
       if (token) {
-        setAccessToken(token);
-        const payload = parseJwtPayload(token);
-        if (payload?.email) {
-          setEmail(payload.email);
-        }
-        if (payload?.user_metadata?.role) {
-          setRole(payload.user_metadata.role);
-        }
-        if (payload?.user_metadata?.name) {
-          setName(payload.user_metadata.name);
-        }
-        if (payload?.user_metadata?.invited_by_name) {
-          setInviterName(payload.user_metadata.invited_by_name);
-        }
+        applyAccessToken(token);
       } else {
-        setError(
-          "Invalid or missing invitation token. The link may have expired or already been used. Please ask your administrator to resend your invitation.",
-        );
+        const urlParams = new URLSearchParams(window.location.search);
+        const tokenHash = urlParams.get("token_hash");
+        const otpType = urlParams.get("type");
+        if (tokenHash && otpType) {
+          // Do not redeem the token on page load. Inbox scanners open the link
+          // before the person does, and that used to burn the one-time Supabase URL.
+          setPendingOtp({ tokenHash, type: normalizeOtpType(otpType) });
+        } else {
+          setError(
+            "Invalid or missing invitation token. The link may have expired or already been used. Please ask your administrator to resend your invitation.",
+          );
+        }
       }
 
       setIsInitializing(false);
@@ -306,6 +348,29 @@ export default function CompleteInvitationPage() {
             <div className="flex flex-col items-center justify-center py-12 gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
               <p className="text-xs text-slate-400">Verifying your invitation…</p>
+            </div>
+          ) : pendingOtp && !accessToken ? (
+            <div className="space-y-6 pt-2">
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-center text-sm text-slate-300 space-y-2">
+                <p>Your invitation is ready. Continue to choose your name and password.</p>
+                <p className="text-xs text-slate-500">
+                  The link stays valid until you continue, for the same time Supabase allows.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void acceptInviteLink()}
+                disabled={acceptingLink}
+                className="login-submit w-full justify-center"
+              >
+                {acceptingLink ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    Continue <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
             </div>
           ) : !accessToken ? (
             <div className="space-y-6 pt-2">

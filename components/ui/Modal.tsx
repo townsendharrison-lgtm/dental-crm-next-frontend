@@ -57,7 +57,10 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className={cn(
+        "fixed inset-0 z-50 flex justify-center",
+        fullHeight ? "items-stretch p-0 sm:items-center sm:p-4" : "items-center p-4",
+      )}
       role="dialog"
       aria-modal="true"
     >
@@ -70,11 +73,12 @@ export function Modal({
           "relative z-10 w-full overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-2xl shadow-black/50",
           "opacity-0 animate-[menu-fade-in_150ms_ease-out_forwards]",
           sizeMap[size],
-          fullHeight && "flex h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex-col",
+          fullHeight &&
+            "flex h-[100dvh] max-h-[100dvh] flex-col rounded-none border-x-0 sm:h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-2rem)] sm:rounded-xl sm:border-x",
         )}
       >
         {(title || description) && (
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-800 p-5 sm:p-6">
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-800 p-4 sm:p-6">
             <div>
               {title ? (
                 <h2
@@ -108,9 +112,9 @@ export function Modal({
         )}
         <div
           className={cn(
-            size === "2xl" || size === "full" ? "p-5 sm:p-6" : "p-5",
+            size === "2xl" || size === "full" ? "p-3 sm:p-6" : "p-4 sm:p-5",
             fullHeight
-              ? "min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
               : "max-h-[70vh] overflow-y-auto",
           )}
         >

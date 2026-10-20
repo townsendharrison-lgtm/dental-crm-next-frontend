@@ -41,18 +41,22 @@ export function SelectMenu({
 
   const selected = options.find((o) => o.value === value);
 
-  const measure = (): MenuPos | null => {
+  const measure = (menuEl?: HTMLElement | null): MenuPos | null => {
     const el = triggerRef.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    const menuHeight = Math.min(options.length * 40 + 16, 280);
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const openUp = spaceBelow < menuHeight && rect.top > spaceBelow;
-    return {
-      top: openUp ? rect.top - menuHeight - 6 : rect.bottom + 6,
-      left: rect.left,
-      width: rect.width,
-    };
+    const natural = menuEl?.scrollHeight ?? options.length * 52 + 16;
+    const menuHeight = Math.min(natural, 320);
+    const spaceBelow = window.innerHeight - rect.bottom - 12;
+    const spaceAbove = rect.top - 12;
+    const openUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+    const width = Math.min(Math.max(rect.width, 260), window.innerWidth - 16);
+    let left = rect.left;
+    if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - width);
+    const top = openUp
+      ? Math.max(8, rect.top - menuHeight - 6)
+      : Math.min(rect.bottom + 6, Math.max(8, window.innerHeight - menuHeight - 8));
+    return { top, left, width };
   };
 
   const openMenu = () => {
@@ -68,12 +72,12 @@ export function SelectMenu({
 
   useLayoutEffect(() => {
     if (!open) return;
-    setPos(measure());
+    setPos(measure(menuRef.current));
   }, [open, options.length]);
 
   useEffect(() => {
     if (!open) return;
-    const onScroll = () => setPos(measure());
+    const onScroll = () => setPos(measure(menuRef.current));
     const onClick = (e: MouseEvent) => {
       const t = e.target as Node;
       if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return;
@@ -100,16 +104,17 @@ export function SelectMenu({
         disabled={disabled}
         onClick={() => (open ? closeMenu() : openMenu())}
         className={cn(
-          "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-surface px-3 text-sm text-foreground shadow-sm transition-colors",
+          "flex min-h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-surface px-3 py-2 text-left text-sm text-foreground shadow-sm transition-colors",
           "hover:bg-surface-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           "disabled:cursor-not-allowed disabled:opacity-50",
           open && "ring-2 ring-ring",
           className,
+          "h-auto",
         )}
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-2">
           {leftIcon}
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>
+          <span className={cn("min-w-0 flex-1 whitespace-normal break-words leading-snug", !selected && "text-muted-foreground")}>
             {selected?.label || placeholder}
           </span>
         </span>
@@ -124,7 +129,7 @@ export function SelectMenu({
             ref={menuRef}
             role="listbox"
             style={{ top: pos.top, left: pos.left, width: pos.width }}
-            className="fixed z-[200] max-h-[17.5rem] overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-xl shadow-black/30 opacity-0 animate-[menu-fade-in_100ms_ease-out_forwards]"
+            className="fixed z-[200] max-h-80 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-xl shadow-black/30 opacity-0 animate-[menu-fade-in_100ms_ease-out_forwards]"
           >
             {options.map((opt) => {
               const isActive = opt.value === value;
@@ -141,14 +146,14 @@ export function SelectMenu({
                     closeMenu();
                   }}
                   className={cn(
-                    "flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                    "flex w-full cursor-pointer items-start justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
                     "disabled:cursor-not-allowed disabled:opacity-40",
                     isActive
                       ? "bg-indigo-600/15 text-indigo-300"
                       : "text-muted-foreground hover:bg-surface-muted hover:text-foreground",
                   )}
                 >
-                  <span className="truncate">{opt.label}</span>
+                  <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">{opt.label}</span>
                   {isActive && <Check className="h-4 w-4 shrink-0 text-indigo-400" />}
                 </button>
               );

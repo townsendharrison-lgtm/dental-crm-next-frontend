@@ -747,7 +747,8 @@ export default function UserManagement() {
               <div className="divide-y divide-slate-800/50">
                 {pendingInvitations.map((inv) => {
                   const roleBadge = getRoleBadge(inv.role);
-                  const isExpired = new Date(inv.expires_at) < new Date();
+                  const expiresAt = inv.expires_at ? new Date(inv.expires_at) : null;
+                  const isExpired = !!expiresAt && !Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() < Date.now();
                   return (
                     <div key={inv.id} className="p-4 hover:bg-slate-800/30 transition-colors">
                       <div className="flex items-center justify-between gap-4">
@@ -759,7 +760,11 @@ export default function UserManagement() {
                             <p className="text-sm font-bold text-white truncate">{inv.email}</p>
                             <p className="text-xs text-slate-500">
                               Invited by {inv.invited_by_name} &bull; {new Date(inv.created_at).toLocaleDateString()}
-                              {isExpired && <span className="text-rose-400 ml-2">EXPIRED</span>}
+                              {expiresAt && !Number.isNaN(expiresAt.getTime()) && (
+                                <span className={isExpired ? "text-rose-400 ml-2" : "ml-2"}>
+                                  {isExpired ? "EXPIRED" : `Valid until ${expiresAt.toLocaleString()}`}
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
