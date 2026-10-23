@@ -2202,6 +2202,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
         student={student}
         meeting={selectedMeetingToComplete || undefined}
         mentorName={selectedMeetingToComplete?.mentor?.name || ""}
+        existingActionItems={studentActions}
         onClose={() => {
           setIsCompletingMeeting(false);
           setSelectedMeetingToComplete(null);

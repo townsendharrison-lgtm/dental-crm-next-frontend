@@ -75,6 +75,17 @@ interface CompleteMeetingFormProps {
     student: CompleteMeetingData["studentActionItems"];
     mentor: CompleteMeetingData["mentorActionItems"];
   };
+  /** Saved student tasks when editing a completed meeting. */
+  existingActionItems?: Array<{
+    task: string;
+    dueDate?: string;
+    due_date?: string;
+    priority?: "HIGH" | "MEDIUM" | "LOW";
+    description?: string | null;
+    resourceLink?: string | null;
+    resource_link?: string | null;
+    meeting_id?: string | null;
+  }>;
 }
 
 export type CommitmentStatus = "ALL" | "SOME" | "NONE";
@@ -143,6 +154,46 @@ function parseMentorActionItems(raw?: string): string[] {
   return [raw];
 }
 
+function parseMentorNotesItems(
+  mentorNotes?: string | null,
+): CompleteMeetingData["mentorActionItems"] {
+  if (!mentorNotes) return [];
+  const match = mentorNotes.match(/Mentor action items:\s*\n([\s\S]*?)(?:\n\n[A-Z]|$)/i);
+  const block = match?.[1] || "";
+  const lines = block
+    .split(/\n/)
+    .map((line) => line.replace(/^•\s*/, "").trim())
+    .filter(Boolean);
+  return lines.map((line) => {
+    const withExtras = line.match(/^(.*?)\s*\((.*)\)\s*$/);
+    if (!withExtras) {
+      return { task: line, dueDate: "", priority: "MEDIUM" as const };
+    }
+    const task = withExtras[1].trim();
+    let dueDate = "";
+    let priority: "HIGH" | "MEDIUM" | "LOW" = "MEDIUM";
+    let description = "";
+    let resourceLink = "";
+    for (const part of withExtras[2].split(";").map((value) => value.trim()).filter(Boolean)) {
+      if (/^due\s+\d{4}-\d{2}-\d{2}/i.test(part)) {
+        dueDate = part.replace(/^due\s+/i, "").trim();
+      } else if (/^(HIGH|MEDIUM|LOW)$/i.test(part)) {
+        priority = part.toUpperCase() as "HIGH" | "MEDIUM" | "LOW";
+      } else if (/^https?:\/\//i.test(part)) {
+        resourceLink = part;
+      } else if (!description) {
+        description = part;
+      }
+    }
+    return { task, dueDate, priority, description, resourceLink };
+  });
+}
+
+function dateOnly(value?: string | null): string {
+  if (!value) return "";
+  return value.includes("T") ? value.split("T")[0] : value.slice(0, 10);
+}
+
 const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   student,
   meeting,
@@ -150,6 +201,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   onSubmit,
   embedded = false,
   confirmedPlan,
+  existingActionItems = [],
 }) => {
   const studentTz = resolveStudentTimezone(student);
   const platformConfig = usePlatformConfig();
@@ -238,6 +290,17 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     CompleteMeetingData["studentActionItems"]
   >(() => {
     if (confirmedPlan) return confirmedPlan.student;
+    if (meeting?.completed) {
+      return existingActionItems
+        .filter((item) => item.task?.trim())
+        .map((item) => ({
+          task: item.task.trim(),
+          dueDate: dateOnly(item.dueDate || item.due_date),
+          priority: item.priority || ("MEDIUM" as const),
+          description: item.description || "",
+          resourceLink: item.resourceLink || item.resource_link || "",
+        }));
+    }
     const source = copiedNotes.hasNextSteps
       ? copiedNotes.studentActionItems.map((item) => ({
           task: item.task,
@@ -261,6 +324,15 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     CompleteMeetingData["mentorActionItems"]
   >(() => {
     if (confirmedPlan) return confirmedPlan.mentor;
+    if (meeting?.completed) {
+      const fromNotes = parseMentorNotesItems(meeting.mentor_notes);
+      if (fromNotes.length) return fromNotes;
+      return parseMentorActionItems(meeting.mentorActionItems).map((task) => ({
+        task,
+        dueDate: "",
+        priority: "MEDIUM" as const,
+      }));
+    }
     const source = copiedNotes.hasNextSteps
       ? copiedNotes.mentorActionItems
       : (aiDraft?.mentorActionItems || []).map((task) => ({ task, dueDate: "" }));
@@ -279,7 +351,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     }));
   });
   const [unassignedActionItems, setUnassignedActionItems] = useState<string[]>(() => {
-    if (confirmedPlan) return [];
+    if (confirmedPlan || meeting?.completed) return [];
     const source = copiedNotes.hasNextSteps
       ? copiedNotes.unassignedActionItems.map((item) => item.task)
       : aiDraft?.unassignedActionItems || [];

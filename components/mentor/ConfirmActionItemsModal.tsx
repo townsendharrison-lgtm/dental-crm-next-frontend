@@ -4,20 +4,21 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowLeftRight,
-  ExternalLink,
   FileText,
   GripVertical,
+  Library,
   Link2,
   Plus,
   Trash2,
   UserRound,
   X,
 } from "lucide-react";
-import type { Meeting, Student } from "@/lib/types";
+import type { ActionItemBookshelfItem, ActionItem, Meeting, Student } from "@/lib/types";
 import { Button, DatePicker, ResourcePicker } from "@/components/ui";
+import { Input } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import CompleteMeetingForm, { type CompleteMeetingData } from "@/components/mentor/CompleteMeetingForm";
-import { useResources } from "@/lib/hooks/useResources";
+import { ActionItemBookshelfModal } from "@/components/action-items/ActionItemBookshelfModal";
 import { cn } from "@/lib/utils/cn";
 import { formatMeetingLocal } from "@/lib/utils/dateUtils";
 import { extractGeminiFullNotes, type ExtractedActionItem } from "@/lib/utils/geminiFullNotes";
@@ -83,36 +84,26 @@ function ResourceLine({
   link: string;
   onChange: (link: string) => void;
 }) {
-  const { data: resources = [] } = useResources();
-  const [picking, setPicking] = useState(false);
-  const match = resources.find((resource) => (resource.url || "").trim() === link.trim());
-  const label = match?.title || (link ? link.replace(/^https?:\/\//, "") : "");
-
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      {link ? (
-        <a
-          href={link}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex max-w-full items-center gap-1.5 text-xs text-indigo-300 hover:text-white"
-        >
-          <Link2 className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{label}</span>
-          <ExternalLink className="h-3 w-3 shrink-0" />
-        </a>
-      ) : null}
-      {picking || !link ? (
-        <ResourcePicker value={link} onPick={(next) => { onChange(next); setPicking(false); }} className="h-8 w-full sm:w-40" />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setPicking(true)}
-          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 hover:text-white"
-        >
-          <Plus className="h-3 w-3" /> Add resource
-        </button>
-      )}
+    <div className="mt-2 space-y-1.5">
+      <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-500">Resource</span>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Link2 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+          <Input
+            type="url"
+            value={link}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Paste a link (https://...)"
+            className="h-9 pl-8"
+          />
+        </div>
+        <ResourcePicker
+          value={link}
+          onPick={onChange}
+          className="h-9 w-full sm:w-40"
+        />
+      </div>
     </div>
   );
 }
@@ -204,6 +195,21 @@ export function ConfirmActionItemsModal({
     return (aiDraft?.unassignedActionItems || []).map((task) => fromExtracted(task)).filter((item) => item.task);
   });
   const [error, setError] = useState("");
+  const [bookshelfOpen, setBookshelfOpen] = useState(false);
+  const [bookshelfTarget, setBookshelfTarget] = useState<"student" | "mentor">("student");
+
+  const addFromBookshelf = (item: ActionItemBookshelfItem) => {
+    const next: ReviewActionItem = {
+      ...blankItem(),
+      task: item.title,
+      description: item.description || "",
+      priority: item.priority || "MEDIUM",
+      resourceLink: item.resourceLink?.trim() || "",
+    };
+    if (bookshelfTarget === "mentor") setMentorItems((prev) => [...prev, next]);
+    else setStudentItems((prev) => [...prev, next]);
+    setBookshelfOpen(false);
+  };
 
   const patch = (
     list: ReviewActionItem[],
@@ -290,6 +296,10 @@ export function ConfirmActionItemsModal({
           subtitle="Items assigned to the student"
           count={studentItems.length}
           onAdd={() => setStudentItems((prev) => [...prev, blankItem()])}
+          onBookshelf={() => {
+            setBookshelfTarget("student");
+            setBookshelfOpen(true);
+          }}
         >
           {studentItems.map((item) => (
             <ItemCard
@@ -308,6 +318,10 @@ export function ConfirmActionItemsModal({
           subtitle="Items assigned to you"
           count={mentorItems.length}
           onAdd={() => setMentorItems((prev) => [...prev, blankItem()])}
+          onBookshelf={() => {
+            setBookshelfTarget("mentor");
+            setBookshelfOpen(true);
+          }}
         >
           {mentorItems.map((item) => (
             <ItemCard
@@ -401,6 +415,12 @@ export function ConfirmActionItemsModal({
         <Button type="button" variant="secondary" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
         <Button type="button" onClick={continueNext} className="w-full sm:w-auto">Confirm & Continue</Button>
       </div>
+
+      <ActionItemBookshelfModal
+        open={bookshelfOpen}
+        onClose={() => setBookshelfOpen(false)}
+        onPick={addFromBookshelf}
+      />
     </Modal>
   );
 }
@@ -411,6 +431,7 @@ function Section({
   subtitle,
   count,
   onAdd,
+  onBookshelf,
   children,
 }: {
   tone: "student" | "mentor";
@@ -418,6 +439,7 @@ function Section({
   subtitle: string;
   count: number;
   onAdd: () => void;
+  onBookshelf?: () => void;
   children: ReactNode;
 }) {
   return (
@@ -447,9 +469,20 @@ function Section({
         </span>
       </div>
       <div className="space-y-2">{children}</div>
-      <button type="button" onClick={onAdd} className="mt-3 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white">
-        <Plus className="h-3.5 w-3.5" /> Add item
-      </button>
+      <div className="mt-3 flex flex-wrap gap-3">
+        {onBookshelf ? (
+          <button
+            type="button"
+            onClick={onBookshelf}
+            className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white"
+          >
+            <Library className="h-3.5 w-3.5" /> Bookshelf
+          </button>
+        ) : null}
+        <button type="button" onClick={onAdd} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white">
+          <Plus className="h-3.5 w-3.5" /> Add item
+        </button>
+      </div>
     </section>
   );
 }
@@ -461,6 +494,7 @@ export function CompleteMeetingFlow({
   student,
   meeting,
   mentorName,
+  existingActionItems = [],
   onClose,
   onSubmit,
   closeOnBackdrop = true,
@@ -472,12 +506,16 @@ export function CompleteMeetingFlow({
   student: Student;
   meeting?: Meeting;
   mentorName: string;
+  existingActionItems?: ActionItem[];
   onClose: () => void;
   onSubmit: (data: CompleteMeetingData) => void | Promise<void>;
   closeOnBackdrop?: boolean;
   closeOnEscape?: boolean;
 }) {
   const [plan, setPlan] = useState<ConfirmedActionPlan | null>(null);
+  // Editing or logging an already-completed meeting should show the saved form,
+  // not re-run Confirm Action Items (which would drop due dates).
+  const needsConfirm = Boolean(meeting && !meeting.completed);
 
   useEffect(() => {
     if (!open) setPlan(null);
@@ -485,7 +523,7 @@ export function CompleteMeetingFlow({
 
   if (!open) return null;
 
-  if (!plan) {
+  if (needsConfirm && !plan) {
     return (
       <ConfirmActionItemsModal
         student={student}
@@ -496,6 +534,16 @@ export function CompleteMeetingFlow({
       />
     );
   }
+
+  const meetingItems = meeting?.id
+    ? existingActionItems.filter((item) => {
+        const byMeeting =
+          item.meeting_id === meeting.id ||
+          (item as { meetingId?: string }).meetingId === meeting.id;
+        const byCreated = Boolean(meeting.actionItemsCreated?.includes(item.id));
+        return byMeeting || byCreated;
+      })
+    : [];
 
   return (
     <Modal
@@ -512,22 +560,27 @@ export function CompleteMeetingFlow({
         student={student}
         meeting={meeting}
         embedded
-        confirmedPlan={{
-          student: plan.student.map(({ task, description, dueDate, priority, resourceLink }) => ({
-            task,
-            description,
-            dueDate,
-            priority,
-            resourceLink,
-          })),
-          mentor: plan.mentor.map(({ task, description, dueDate, priority, resourceLink }) => ({
-            task,
-            description,
-            dueDate,
-            priority,
-            resourceLink,
-          })),
-        }}
+        existingActionItems={meetingItems}
+        confirmedPlan={
+          plan
+            ? {
+                student: plan.student.map(({ task, description, dueDate, priority, resourceLink }) => ({
+                  task,
+                  description,
+                  dueDate,
+                  priority,
+                  resourceLink,
+                })),
+                mentor: plan.mentor.map(({ task, description, dueDate, priority, resourceLink }) => ({
+                  task,
+                  description,
+                  dueDate,
+                  priority,
+                  resourceLink,
+                })),
+              }
+            : undefined
+        }
         onClose={onClose}
         onSubmit={onSubmit}
       />
