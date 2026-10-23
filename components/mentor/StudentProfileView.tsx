@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Student, ActionItem, StaffTask, Message, Meeting, Experience, ImprovementGoal, LetterOfRecommendationRequest, OptimizationPlan, School, StudentDocument, Application, PlatformConfig } from '@/lib/types';
-import CompleteMeetingForm, { CompleteMeetingData } from './CompleteMeetingForm';
+import { CompleteMeetingData } from './CompleteMeetingForm';
+import { CompleteMeetingFlow } from './ConfirmActionItemsModal';
 import { StudentProfileDocumentsView } from '../student/StudentProfileDocumentsView';
 import { StudentProfileEditForm } from './StudentProfileEditForm';
 import { MentorStudentPlanTab } from './MentorStudentPlanTab';
@@ -2174,13 +2175,8 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
           </div>
         )}
       </AnimatePresence>
-      {/* Complete Meeting Modal */}
-      <Modal
+      <CompleteMeetingFlow
         open={isCompletingMeeting}
-        onClose={() => {
-          setIsCompletingMeeting(false);
-          setSelectedMeetingToComplete(null);
-        }}
         title={
           !selectedMeetingToComplete
             ? "Add Completed Meeting"
@@ -2203,24 +2199,19 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
               )}`
             : `Log an unscheduled session with ${student.name}`
         }
-        size="2xl"
-        fullHeight
-      >
-        <CompleteMeetingForm
-          student={student}
-          meeting={selectedMeetingToComplete || undefined}
-          embedded
-          onClose={() => {
-            setIsCompletingMeeting(false);
-            setSelectedMeetingToComplete(null);
-          }}
-          onSubmit={async (data) => {
-            await onCompleteMeeting(selectedMeetingToComplete?.id, data);
-            setIsCompletingMeeting(false);
-            setSelectedMeetingToComplete(null);
-          }}
-        />
-      </Modal>
+        student={student}
+        meeting={selectedMeetingToComplete || undefined}
+        mentorName={selectedMeetingToComplete?.mentor?.name || ""}
+        onClose={() => {
+          setIsCompletingMeeting(false);
+          setSelectedMeetingToComplete(null);
+        }}
+        onSubmit={async (data) => {
+          await onCompleteMeeting(selectedMeetingToComplete?.id, data);
+          setIsCompletingMeeting(false);
+          setSelectedMeetingToComplete(null);
+        }}
+      />
       {/* Add Strategic Goal Modal */}
       <AnimatePresence>
         {isAddingGoal && (

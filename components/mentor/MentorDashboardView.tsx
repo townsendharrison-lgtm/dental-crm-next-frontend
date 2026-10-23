@@ -65,9 +65,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { AcceptAssignmentModal } from "@/components/mentor/AcceptAssignmentModal";
-import CompleteMeetingForm, {
-  type CompleteMeetingData,
-} from "@/components/mentor/CompleteMeetingForm";
+import { type CompleteMeetingData } from "@/components/mentor/CompleteMeetingForm";
+import { CompleteMeetingFlow } from "@/components/mentor/ConfirmActionItemsModal";
 import { Modal } from "@/components/ui/Modal";
 import { meetingsApi } from "@/lib/api/meetings";
 import { QuickScheduleMeetingModal } from "@/components/mentor/QuickScheduleMeetingModal";
@@ -2461,44 +2460,32 @@ const MentorDashboard: React.FC<MentorDashboardProps> = ({
         </div>
       </section>
 
-      <Modal
-        open={!!promptMeeting && !!promptStudent}
-        onClose={() => {
-          if (promptMeeting && !promptBusy) void dismissCompletePrompt(promptMeeting);
-        }}
-        title="Complete meeting"
-        description={
-          promptStudent
-            ? `Gemini notes for ${promptStudent.name} are ready.`
-            : "Gemini notes are ready."
-        }
-        size="2xl"
-        fullHeight
-        closeOnBackdrop={!promptBusy}
-        closeOnEscape={!promptBusy}
-      >
-        {promptMeeting && promptStudent && (
-          <CompleteMeetingForm
-            student={promptStudent}
-            meeting={promptMeeting}
-            embedded
-            onClose={() => {
-              if (!promptBusy) void dismissCompletePrompt(promptMeeting);
-            }}
-            onSubmit={async (data) => {
-              if (!onCompleteMeeting) return;
-              setPromptBusy(true);
-              try {
-                await onCompleteMeeting(promptMeeting.id, data);
-                sessionStorage.removeItem(completePromptDismissKey(promptMeeting.id));
-                setPromptMeeting(null);
-              } finally {
-                setPromptBusy(false);
-              }
-            }}
-          />
-        )}
-      </Modal>
+      {promptMeeting && promptStudent && (
+        <CompleteMeetingFlow
+          open
+          title="Complete meeting"
+          description={`Gemini notes for ${promptStudent.name} are ready.`}
+          student={promptStudent}
+          meeting={promptMeeting}
+          mentorName={promptMeeting.mentor?.name || mentor.name}
+          closeOnBackdrop={!promptBusy}
+          closeOnEscape={!promptBusy}
+          onClose={() => {
+            if (!promptBusy) void dismissCompletePrompt(promptMeeting);
+          }}
+          onSubmit={async (data) => {
+            if (!onCompleteMeeting) return;
+            setPromptBusy(true);
+            try {
+              await onCompleteMeeting(promptMeeting.id, data);
+              sessionStorage.removeItem(completePromptDismissKey(promptMeeting.id));
+              setPromptMeeting(null);
+            } finally {
+              setPromptBusy(false);
+            }
+          }}
+        />
+      )}
 
       <AcceptAssignmentModal
         open={!!acceptingAssignment}

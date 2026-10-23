@@ -3,12 +3,14 @@
 import { SelectMenu } from "./SelectMenu";
 
 export interface TimePickerProps {
-  /** 12-hour clock time as HH:MM (e.g. "12:30") */
+  /** 12-hour clock time as HH:MM (e.g. "12:30"). Empty when allowEmpty and nothing is chosen. */
   time: string;
   ampm: "AM" | "PM";
   onChange: (next: { time: string; ampm: "AM" | "PM" }) => void;
   disabled?: boolean;
   className?: string;
+  /** Show empty hour/minute menus until the mentor picks a time. */
+  allowEmpty?: boolean;
 }
 
 const HOURS = Array.from({ length: 12 }, (_, i) => {
@@ -22,7 +24,8 @@ const MINUTES = Array.from({ length: 12 }, (_, i) => {
   return { value: v, label: v };
 });
 
-export function TimePicker({ time, ampm, onChange, disabled, className }: TimePickerProps) {
+export function TimePicker({ time, ampm, onChange, disabled, className, allowEmpty = false }: TimePickerProps) {
+  const blank = allowEmpty && !time.trim();
   const [rawH = "12", rawM = "00"] = (time || "12:00").split(":");
   // Snap minute to nearest 5 for the menu
   const minuteNum = Math.round(parseInt(rawM, 10) / 5) * 5;
@@ -36,25 +39,28 @@ export function TimePicker({ time, ampm, onChange, disabled, className }: TimePi
   return (
     <div className={`grid grid-cols-3 gap-2 ${className || ""}`}>
       <SelectMenu
-        value={hour}
+        value={blank ? "" : hour}
         disabled={disabled}
         options={HOURS}
-        onChange={(h) => onChange({ time: `${h}:${minute}`, ampm })}
+        placeholder="Hour"
+        onChange={(h) => onChange({ time: `${h}:${blank ? "00" : minute}`, ampm })}
       />
       <SelectMenu
-        value={minute}
+        value={blank ? "" : minute}
         disabled={disabled}
         options={MINUTES}
-        onChange={(m) => onChange({ time: `${hour}:${m}`, ampm })}
+        placeholder="Min"
+        onChange={(m) => onChange({ time: `${blank ? "12" : hour}:${m}`, ampm })}
       />
       <SelectMenu
-        value={ampm}
+        value={blank ? "" : ampm}
         disabled={disabled}
         options={[
           { value: "AM", label: "AM" },
           { value: "PM", label: "PM" },
         ]}
-        onChange={(next) => onChange({ time: `${hour}:${minute}`, ampm: next as "AM" | "PM" })}
+        placeholder="AM/PM"
+        onChange={(next) => onChange({ time: blank ? "12:00" : `${hour}:${minute}`, ampm: next as "AM" | "PM" })}
       />
     </div>
   );

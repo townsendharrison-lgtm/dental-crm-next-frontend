@@ -11,6 +11,7 @@ const sizeMap = {
   lg: "max-w-lg",
   xl: "max-w-2xl",
   "2xl": "max-w-5xl",
+  wide: "max-w-[92rem]",
   full: "max-w-6xl",
 };
 
@@ -84,7 +85,7 @@ export function Modal({
                 <h2
                   className={cn(
                     "font-semibold text-white",
-                    size === "2xl" || size === "full" ? "text-xl sm:text-2xl" : "text-lg",
+                    size === "2xl" || size === "wide" || size === "full" ? "text-xl sm:text-2xl" : "text-lg",
                   )}
                 >
                   {title}
@@ -94,7 +95,7 @@ export function Modal({
                 <p
                   className={cn(
                     "mt-1 text-muted-foreground",
-                    size === "2xl" || size === "full" ? "text-sm sm:text-base" : "text-sm",
+                    size === "2xl" || size === "wide" || size === "full" ? "text-sm sm:text-base" : "text-sm",
                   )}
                 >
                   {description}
@@ -112,7 +113,7 @@ export function Modal({
         )}
         <div
           className={cn(
-            size === "2xl" || size === "full" ? "p-3 sm:p-6" : "p-4 sm:p-5",
+            size === "2xl" || size === "wide" || size === "full" ? "p-3 sm:p-6" : "p-4 sm:p-5",
             fullHeight
               ? "flex min-h-0 flex-1 flex-col overflow-hidden"
               : "max-h-[70vh] overflow-y-auto",
@@ -124,7 +125,7 @@ export function Modal({
           <div
             className={cn(
               "flex shrink-0 items-center justify-end gap-2 border-t border-slate-800 bg-slate-800/30",
-              size === "2xl" || size === "full" ? "p-4 sm:p-5" : "p-4",
+              size === "2xl" || size === "wide" || size === "full" ? "p-4 sm:p-5" : "p-4",
             )}
           >
             {footer}

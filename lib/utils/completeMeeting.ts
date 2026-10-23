@@ -34,9 +34,21 @@ function buildMentorNotes(data: CompleteMeetingData): string {
   }
   parts.push("Verified summary and action items: yes");
   parts.push("Updated school selection and timeline if needed: yes");
-  const mentorItems = data.mentorActionItems.filter((item) => item.trim());
+  const mentorItems = data.mentorActionItems.filter((item) => item.task.trim());
   if (mentorItems.length > 0) {
-    parts.push(`Mentor action items:\n${mentorItems.map((item) => `• ${item}`).join("\n")}`);
+    parts.push(
+      `Mentor action items:\n${mentorItems
+        .map((item) => {
+          const extras = [
+            item.dueDate ? `due ${item.dueDate}` : "",
+            item.priority || "",
+            item.description?.trim() || "",
+            item.resourceLink?.trim() || "",
+          ].filter(Boolean);
+          return `• ${item.task.trim()}${extras.length ? ` (${extras.join("; ")})` : ""}`;
+        })
+        .join("\n")}`,
+    );
   }
   return parts.join("\n\n");
 }

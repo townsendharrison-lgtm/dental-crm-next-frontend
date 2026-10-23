@@ -92,8 +92,8 @@ export default function CompleteInvitationPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [invitationToken, setInvitationToken] = useState("");
   const [pendingOtp, setPendingOtp] = useState<{ tokenHash: string; type: EmailOtpType } | null>(null);
-  const [acceptingLink, setAcceptingLink] = useState(false);
 
   const applyAccessToken = (token: string) => {
     setAccessToken(token);
@@ -103,32 +103,6 @@ export default function CompleteInvitationPage() {
     if (payload?.user_metadata?.role) setRole(payload.user_metadata.role);
     if (payload?.user_metadata?.name) setName(payload.user_metadata.name);
     if (payload?.user_metadata?.invited_by_name) setInviterName(payload.user_metadata.invited_by_name);
-  };
-
-  const acceptInviteLink = async () => {
-    if (!pendingOtp) return;
-    setAcceptingLink(true);
-    setError("");
-    try {
-      const { data, error: verifyError } = await supabaseClient.auth.verifyOtp({
-        token_hash: pendingOtp.tokenHash,
-        type: pendingOtp.type,
-      });
-      const token = data?.session?.access_token;
-      if (verifyError || !token) {
-        setError(
-          verifyError?.message ||
-            "This invitation link is no longer valid. Ask your administrator to resend it.",
-        );
-        return;
-      }
-      window.history.replaceState(null, "", "/complete-invitation");
-      applyAccessToken(token);
-    } catch {
-      setError("This invitation link is no longer valid. Ask your administrator to resend it.");
-    } finally {
-      setAcceptingLink(false);
-    }
   };
 
   useEffect(() => {
@@ -182,16 +156,31 @@ export default function CompleteInvitationPage() {
         applyAccessToken(token);
       } else {
         const urlParams = new URLSearchParams(window.location.search);
-        const tokenHash = urlParams.get("token_hash");
-        const otpType = urlParams.get("type");
-        if (tokenHash && otpType) {
-          // Do not redeem the token on page load. Inbox scanners open the link
-          // before the person does, and that used to burn the one-time Supabase URL.
-          setPendingOtp({ tokenHash, type: normalizeOtpType(otpType) });
+        const inviteToken = urlParams.get("token");
+        if (inviteToken) {
+          // Opening the link does not redeem it. The name and password form is the first page.
+          try {
+            const preview = await authApi.getInvitation(inviteToken);
+            setInvitationToken(inviteToken);
+            if (preview.email) setEmail(preview.email);
+            if (preview.role) setRole(preview.role);
+            if (preview.invitedByName) setInviterName(preview.invitedByName);
+          } catch (err: any) {
+            setError(
+              err?.message ||
+                "This invitation link is no longer valid. Ask your administrator to resend it.",
+            );
+          }
         } else {
-          setError(
-            "Invalid or missing invitation token. The link may have expired or already been used. Please ask your administrator to resend your invitation.",
-          );
+          const tokenHash = urlParams.get("token_hash");
+          const otpType = urlParams.get("type");
+          if (tokenHash && otpType) {
+            setPendingOtp({ tokenHash, type: normalizeOtpType(otpType) });
+          } else {
+            setError(
+              "Invalid or missing invitation token. The link may have expired or already been used. Please ask your administrator to resend your invitation.",
+            );
+          }
         }
       }
 
@@ -222,14 +211,32 @@ export default function CompleteInvitationPage() {
       return;
     }
 
-    if (!accessToken) {
+    if (!accessToken && !invitationToken && !pendingOtp) {
       setError("Missing invitation token. Please request a new invitation link.");
       return;
     }
 
     setIsLoading(true);
     try {
-      const result = await authApi.completeInvitation(accessToken, name.trim(), password);
+      let sessionToken = accessToken;
+      if (!sessionToken && pendingOtp) {
+        const { data, error: verifyError } = await supabaseClient.auth.verifyOtp({
+          token_hash: pendingOtp.tokenHash,
+          type: pendingOtp.type,
+        });
+        sessionToken = data?.session?.access_token || "";
+        if (verifyError || !sessionToken) {
+          setError(
+            verifyError?.message ||
+              "This invitation link is no longer valid. Ask your administrator to resend it.",
+          );
+          return;
+        }
+      }
+
+      const result = invitationToken
+        ? await authApi.completeInvitationByToken(invitationToken, name.trim(), password)
+        : await authApi.completeInvitation(sessionToken, name.trim(), password);
 
       // Clean up token from URL hash so it's not exposed
       window.history.replaceState(null, "", "/complete-invitation");
@@ -349,30 +356,7 @@ export default function CompleteInvitationPage() {
               <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
               <p className="text-xs text-slate-400">Verifying your invitation…</p>
             </div>
-          ) : pendingOtp && !accessToken ? (
-            <div className="space-y-6 pt-2">
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-center text-sm text-slate-300 space-y-2">
-                <p>Your invitation is ready. Continue to choose your name and password.</p>
-                <p className="text-xs text-slate-500">
-                  The link stays valid until you continue, for the same time Supabase allows.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void acceptInviteLink()}
-                disabled={acceptingLink}
-                className="login-submit w-full justify-center"
-              >
-                {acceptingLink ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    Continue <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </button>
-            </div>
-          ) : !accessToken ? (
+          ) : !accessToken && !invitationToken && !pendingOtp ? (
             <div className="space-y-6 pt-2">
               <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 text-center text-sm text-slate-400 space-y-2">
                 <p>

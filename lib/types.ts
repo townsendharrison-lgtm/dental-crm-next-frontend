@@ -489,9 +489,11 @@ export interface MeetingAiDraft {
   studentActionItems?: Array<{
     task: string;
     dueInDays?: number;
+    dueDate?: string;
     priority?: "HIGH" | "MEDIUM" | "LOW";
   }>;
   mentorActionItems?: string[];
+  unassignedActionItems?: string[];
   nextMeeting?: {
     mentioned?: boolean;
     typeName?: string;

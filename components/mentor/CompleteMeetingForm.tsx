@@ -49,14 +49,10 @@ import {
 import { usePlatformConfig } from "@/lib/hooks/usePlatformConfig";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRole } from "@/lib/hooks/useRole";
-import { usePreviewSubject } from "@/lib/hooks/usePreviewSubject";
-import { useMentor, useUpdateMentor } from "@/lib/hooks/useMentors";
 import { DEFAULT_MEETING_TYPES } from "@/lib/api/adminSettings";
 import { timezoneLabel, timezoneSelectOptions } from "@/lib/utils/timezoneOptions";
-import { MeetingTimePresetsPicker } from "@/components/mentor/MeetingTimePresetsPicker";
 import {
   clockFrom24,
-  dueDateFromDays,
   matchSessionType,
   readMeetingAiDraft,
 } from "@/lib/utils/meetingAiDraft";
@@ -66,7 +62,6 @@ import {
   SaveToBookshelfButton,
 } from "@/components/action-items/ActionItemBookshelfModal";
 import type { ActionItemBookshelfItem } from "@/lib/types";
-import { toast } from "sonner";
 
 interface CompleteMeetingFormProps {
   student: Student;
@@ -75,6 +70,11 @@ interface CompleteMeetingFormProps {
   onSubmit: (data: CompleteMeetingData) => void | Promise<void>;
   /** When true, skip the built-in header (parent Modal provides chrome). */
   embedded?: boolean;
+  /** Action items already reviewed in the confirm step. */
+  confirmedPlan?: {
+    student: CompleteMeetingData["studentActionItems"];
+    mentor: CompleteMeetingData["mentorActionItems"];
+  };
 }
 
 export type CommitmentStatus = "ALL" | "SOME" | "NONE";
@@ -100,7 +100,13 @@ export interface CompleteMeetingData {
     description?: string;
     resourceLink?: string;
   }>;
-  mentorActionItems: string[];
+  mentorActionItems: Array<{
+    task: string;
+    dueDate: string;
+    priority: "HIGH" | "MEDIUM" | "LOW";
+    description?: string;
+    resourceLink?: string;
+  }>;
   nextStep: "SCHEDULE" | "DEFER";
   nextMeetingType?: string;
   nextMeetingDate?: string;
@@ -143,20 +149,13 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   onClose,
   onSubmit,
   embedded = false,
+  confirmedPlan,
 }) => {
   const studentTz = resolveStudentTimezone(student);
   const platformConfig = usePlatformConfig();
   const { user } = useAuth();
   const { role } = useRole();
-  const { subjectId: previewMentorId } = usePreviewSubject("MENTOR");
-  const mentorId =
-    role === "MENTOR" ? previewMentorId || user?.id || "" : "";
-  const { data: mentorProfile } = useMentor(mentorId);
-  const updateMentorMutation = useUpdateMentor();
-  const defaultAvailability =
-    mentorProfile?.defaultAvailability ||
-    mentorProfile?.profile?.default_availability ||
-    [];
+  const mentorName = meeting?.mentor?.name || (role === "MENTOR" ? user?.name || "" : "");
 
   const meetingTypes = useMemo(() => {
     const types =
@@ -193,10 +192,16 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
 
   const defaultType = meetingTypeLabels[0] || "Other";
   const aiDraft = readMeetingAiDraft(meeting?.ai_draft);
-  const copiedNotes = extractGeminiFullNotes(meeting?.notes || "", student.name);
-  const draftedNext = aiDraft?.nextMeeting?.mentioned ? aiDraft.nextMeeting : null;
-  const draftedNextType = matchSessionType(draftedNext?.typeName, meetingTypeLabels);
-  const draftedClock = clockFrom24(draftedNext?.time);
+  const copiedNotes = extractGeminiFullNotes(meeting?.notes || "", student.name, {
+    mentorName,
+    meetingDate: meeting?.date || "",
+  });
+  const notedNext = copiedNotes.nextMeeting;
+  const draftedNext = notedNext && aiDraft?.nextMeeting?.mentioned ? aiDraft.nextMeeting : null;
+  const draftedNextType = draftedNext?.typeName
+    ? matchSessionType(draftedNext.typeName, meetingTypeLabels)
+    : { type: "", custom: "" };
+  const draftedClock = clockFrom24(notedNext?.time);
   const notesDocUrl = (meeting?.notes_doc_url || meeting?.transcript_doc_url || "").trim();
 
   const [officialSummary, setOfficialSummary] = useState(
@@ -232,35 +237,62 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   const [studentActionItems, setStudentActionItems] = useState<
     CompleteMeetingData["studentActionItems"]
   >(() => {
+    if (confirmedPlan) return confirmedPlan.student;
     const source = copiedNotes.hasNextSteps
-      ? copiedNotes.studentActionItems.map((task) => ({
-          task,
-          dueInDays: 7,
+      ? copiedNotes.studentActionItems.map((item) => ({
+          task: item.task,
+          dueDate: item.dueDate || "",
           priority: "MEDIUM" as const,
         }))
-      : aiDraft?.studentActionItems || [];
+      : (aiDraft?.studentActionItems || []).map((item) => ({
+          task: item.task,
+          dueDate: item.dueDate || "",
+          priority: item.priority || ("MEDIUM" as const),
+        }));
     return source
       .filter((item) => item.task?.trim())
       .map((item) => ({
         task: item.task.trim(),
-        dueDate: dueDateFromDays(item.dueInDays || 7),
+        dueDate: item.dueDate || "",
         priority: item.priority || "MEDIUM",
       }));
   });
-  const [mentorActionItems, setMentorActionItems] = useState<string[]>(() => {
-    if (copiedNotes.hasNextSteps) return copiedNotes.mentorActionItems;
-    const drafted = (aiDraft?.mentorActionItems || []).map((item) => item.trim()).filter(Boolean);
+  const [mentorActionItems, setMentorActionItems] = useState<
+    CompleteMeetingData["mentorActionItems"]
+  >(() => {
+    if (confirmedPlan) return confirmedPlan.mentor;
+    const source = copiedNotes.hasNextSteps
+      ? copiedNotes.mentorActionItems
+      : (aiDraft?.mentorActionItems || []).map((task) => ({ task, dueDate: "" }));
+    const drafted = source
+      .map((item) => ({
+        task: item.task.trim(),
+        dueDate: item.dueDate || "",
+        priority: "MEDIUM" as const,
+      }))
+      .filter((item) => item.task);
     if (drafted.length) return drafted;
-    return parseMentorActionItems(meeting?.mentorActionItems);
+    return parseMentorActionItems(meeting?.mentorActionItems).map((task) => ({
+      task,
+      dueDate: "",
+      priority: "MEDIUM" as const,
+    }));
+  });
+  const [unassignedActionItems, setUnassignedActionItems] = useState<string[]>(() => {
+    if (confirmedPlan) return [];
+    const source = copiedNotes.hasNextSteps
+      ? copiedNotes.unassignedActionItems.map((item) => item.task)
+      : aiDraft?.unassignedActionItems || [];
+    return source.map((item) => item.trim()).filter(Boolean);
   });
   const [nextStep, setNextStep] = useState<"SCHEDULE" | "DEFER">("SCHEDULE");
-  const [nextMeetingType, setNextMeetingType] = useState(draftedNextType.type || defaultType);
+  const [nextMeetingType, setNextMeetingType] = useState(draftedNextType.type);
   const [nextOtherType, setNextOtherType] = useState(draftedNextType.custom);
   const [nextMeetingDateOnly, setNextMeetingDateOnly] = useState(
-    draftedNext?.date && /^\d{4}-\d{2}-\d{2}$/.test(draftedNext.date) ? draftedNext.date : "",
+    notedNext?.date && /^\d{4}-\d{2}-\d{2}$/.test(notedNext.date) ? notedNext.date : "",
   );
-  const [nextMeetingTime, setNextMeetingTime] = useState(draftedClock?.time || "12:00");
-  const [nextMeetingAmpm, setNextMeetingAmpm] = useState<"AM" | "PM">(draftedClock?.ampm || "PM");
+  const [nextMeetingTime, setNextMeetingTime] = useState(draftedClock?.time || "");
+  const [nextMeetingAmpm, setNextMeetingAmpm] = useState<"AM" | "PM">(draftedClock?.ampm || "AM");
   const [nextMeetingTimezone, setNextMeetingTimezone] = useState(
     meeting?.nextMeetingTimezone || meeting?.timezone || studentTz,
   );
@@ -284,7 +316,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
       setMeetingType(defaultType);
     }
     if (nextMeetingType && !meetingTypeLabels.includes(nextMeetingType)) {
-      setNextMeetingType(defaultType);
+      setNextMeetingType("");
     }
   }, [meetingTypeLabels, meetingType, nextMeetingType, defaultType]);
 
@@ -332,9 +364,6 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     studentTz,
   ]);
 
-  const defaultDueDate = () =>
-    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
   const recommendedForType = useMemo(() => {
     const match = meetingTypes.find((type) => type.label === meetingType);
     return (match?.recommendedActionItems || []).filter((item) => item.task.trim());
@@ -345,7 +374,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
       ...prev,
       {
         task,
-        dueDate: defaultDueDate(),
+        dueDate: "",
         priority: "MEDIUM",
       },
     ]);
@@ -355,7 +384,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
     const preset = {
       task: item.title,
       description: item.description || "",
-      dueDate: defaultDueDate(),
+      dueDate: "",
       priority: item.priority || ("MEDIUM" as const),
       ...(item.resourceLink?.trim() ? { resourceLink: item.resourceLink.trim() } : {}),
     };
@@ -381,7 +410,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
         ...prev,
         {
           task,
-          dueDate: defaultDueDate(),
+          dueDate: "",
           priority: "MEDIUM",
           ...(resourceLink?.trim() ? { resourceLink: resourceLink.trim() } : {}),
         },
@@ -403,11 +432,22 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
   };
 
   const addMentorAction = () => {
-    setMentorActionItems([...mentorActionItems, ""]);
+    setMentorActionItems([
+      ...mentorActionItems,
+      { task: "", dueDate: "", priority: "MEDIUM" },
+    ]);
   };
 
   const removeMentorAction = (index: number) => {
     setMentorActionItems(mentorActionItems.filter((_, i) => i !== index));
+  };
+
+  const assignUnassigned = (index: number, to: "student" | "mentor") => {
+    const task = unassignedActionItems[index]?.trim();
+    if (!task) return;
+    setUnassignedActionItems((prev) => prev.filter((_, i) => i !== index));
+    if (to === "student") addStudentAction(task);
+    else setMentorActionItems((prev) => [...prev, { task, dueDate: "", priority: "MEDIUM" }]);
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -435,9 +475,23 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
       return;
     }
 
+    if (unassignedActionItems.some((item) => item.trim())) {
+      setError("Assign each item under Needs assignment to the student or to yourself.");
+      return;
+    }
+
     const validStudentItems = studentActionItems.filter((item) => item.task.trim() !== "");
     if (validStudentItems.length === 0) {
       setError("At least one student action item is required.");
+      return;
+    }
+    if (validStudentItems.some((item) => !item.dueDate)) {
+      setError("Every student action item needs a due date.");
+      return;
+    }
+    const validMentorItems = mentorActionItems.filter((item) => item.task.trim() !== "");
+    if (validMentorItems.some((item) => !item.dueDate)) {
+      setError("Every mentor action item needs a due date.");
       return;
     }
     if (!verifiedSummary || !verifiedSchoolTimeline) {
@@ -482,7 +536,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
         meetingDate,
         duration,
         studentActionItems: validStudentItems,
-        mentorActionItems: mentorActionItems.filter((item) => item.trim() !== ""),
+        mentorActionItems: validMentorItems,
         nextStep,
         nextMeetingType: nextStep === "SCHEDULE" ? resolvedNextType : undefined,
         nextMeetingDate: finalNextMeetingDate,
@@ -779,6 +833,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                         value={nextMeetingType}
                         onChange={setNextMeetingType}
                         options={meetingTypeOptions}
+                        placeholder="Select type"
                         className="w-full"
                       />
                     </FormField>
@@ -796,32 +851,6 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                           placeholder="Enter meeting type..."
                         />
                       </FormField>
-                    )}
-                    {!!mentorId && (
-                      <div className="sm:col-span-2">
-                        <MeetingTimePresetsPicker
-                          mode="apply"
-                          savedPresets={defaultAvailability}
-                          onApply={(_label, next) => {
-                            setNextMeetingDateOnly(next.date);
-                            setNextMeetingTime(next.time);
-                            setNextMeetingAmpm(next.ampm);
-                          }}
-                          isSavingPresets={updateMentorMutation.isPending}
-                          onSavePresets={async (presets) => {
-                            try {
-                              await updateMentorMutation.mutateAsync({
-                                id: mentorId,
-                                updates: { default_availability: presets },
-                              });
-                              toast.success("Time presets saved");
-                            } catch (err: unknown) {
-                              toast.error(err instanceof Error ? err.message : "Failed to save presets");
-                              throw err;
-                            }
-                          }}
-                        />
-                      </div>
                     )}
                     <FormField label="Date" htmlFor="next-meeting-date">
                       <DatePicker value={nextMeetingDateOnly} onChange={setNextMeetingDateOnly} />
@@ -841,6 +870,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                       htmlFor="next-meeting-time"
                     >
                       <TimePicker
+                        allowEmpty
                         time={nextMeetingTime}
                         ampm={nextMeetingAmpm}
                         onChange={({ time, ampm }) => {
@@ -868,6 +898,43 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                   </p>
                 )}
               </FormCard>
+
+              {unassignedActionItems.length > 0 && (
+                <FormCard
+                  icon={<AlertCircle className="h-4 w-4" />}
+                  iconClass="bg-amber-500/15 text-amber-300"
+                  title="Needs assignment"
+                  subtitle="The transcript did not make it clear who owns these. Move each one before saving."
+                >
+                  <div className="space-y-2">
+                    {unassignedActionItems.map((item, index) => (
+                      <div key={index} className="flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-slate-950/70 p-3 sm:flex-row sm:items-start">
+                        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-snug text-slate-100">
+                          {item}
+                        </p>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <Button type="button" size="sm" onClick={() => assignUnassigned(index, "student")}>
+                            Student
+                          </Button>
+                          <Button type="button" size="sm" variant="secondary" onClick={() => assignUnassigned(index, "mentor")}>
+                            Mentor
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-500 hover:text-rose-400"
+                            aria-label="Remove unassigned item"
+                            onClick={() => setUnassignedActionItems((prev) => prev.filter((_, i) => i !== index))}
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </FormCard>
+              )}
 
               <FormCard
                 icon={<ListChecks className="h-4 w-4" />}
@@ -899,7 +966,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                 }
               >
                 <p className="text-xs text-slate-500">
-                  Copied from Next steps in the Gemini notes when the student’s name is on the line.
+                  Taken from the transcript when the student agreed to do it, or the mentor told them to.
                 </p>
                 {recommendedForType.length > 0 && (
                   <div className="flex flex-wrap gap-2">
@@ -931,17 +998,19 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                   {studentActionItems.map((item, index) => {
                     const showResource = resourceOpen.includes(index) || Boolean(item.resourceLink);
                     return (
-                      <div key={index} className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
-                        <div className="flex flex-col gap-2 lg:flex-row lg:items-start">
-                          <FitTextarea
-                            id={`task-${index}`}
-                            value={item.task}
-                            onChange={(e) => updateStudentAction(index, { task: e.target.value })}
-                            placeholder="Task for the student"
-                            className="min-h-[44px] flex-1 resize-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
-                            required
-                          />
-                          <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+                      <div key={index} className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                          <div className="min-w-0 flex-1">
+                            <FitTextarea
+                              id={`task-${index}`}
+                              value={item.task}
+                              onChange={(e) => updateStudentAction(index, { task: e.target.value })}
+                              placeholder="Task for the student"
+                              className="min-h-[40px] w-full resize-none whitespace-pre-wrap break-words border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                              required
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 sm:max-w-[16rem] sm:shrink-0 sm:justify-end">
                             <DatePicker
                               value={item.dueDate}
                               onChange={(value) => updateStudentAction(index, { dueDate: value })}
@@ -989,13 +1058,15 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                             </Button>
                           </div>
                         </div>
-                        <FitTextarea
-                          id={`details-${index}`}
-                          value={item.description || ""}
-                          onChange={(e) => updateStudentAction(index, { description: e.target.value })}
-                          placeholder="Details (optional)"
-                          className="min-h-[44px] resize-none"
-                        />
+                        {(item.description || "").trim() ? (
+                          <FitTextarea
+                            id={`details-${index}`}
+                            value={item.description || ""}
+                            onChange={(e) => updateStudentAction(index, { description: e.target.value })}
+                            placeholder="Details (optional)"
+                            className="min-h-[40px] w-full resize-none break-words"
+                          />
+                        ) : null}
                         <div className="flex justify-end">
                           <SaveToBookshelfButton
                             title={item.task}
@@ -1036,7 +1107,7 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                 icon={<UserRound className="h-4 w-4" />}
                 iconClass="bg-amber-500/15 text-amber-300"
                 title="Mentor Next Steps / Follow-Ups"
-                subtitle="Private tasks for you. Copied from Gemini notes."
+                subtitle="Tasks you agreed to do yourself."
                 action={
                   <Button
                     type="button"
@@ -1051,17 +1122,20 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
               >
                 <div className="space-y-2">
                   {mentorActionItems.map((item, index) => (
-                    <div key={index} className="flex items-start gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-2">
-                      <FitTextarea
-                        value={item}
-                        onChange={(e) => {
-                          const next = [...mentorActionItems];
-                          next[index] = e.target.value;
-                          setMentorActionItems(next);
-                        }}
-                        placeholder="Follow-up for you"
-                        className="min-h-[44px] flex-1 resize-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
-                      />
+                    <div key={index} className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                      <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <FitTextarea
+                          value={item.task}
+                          onChange={(e) => {
+                            const next = [...mentorActionItems];
+                            next[index] = { ...item, task: e.target.value };
+                            setMentorActionItems(next);
+                          }}
+                          placeholder="Follow-up for you"
+                          className="min-h-[40px] w-full resize-none whitespace-pre-wrap break-words border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                        />
+                      </div>
                       <Button
                         type="button"
                         variant="ghost"
@@ -1072,6 +1146,76 @@ const CompleteMeetingForm: React.FC<CompleteMeetingFormProps> = ({
                       >
                         <Trash2 size={16} />
                       </Button>
+                      </div>
+                      {(item.description || "").trim() ? (
+                        <FitTextarea
+                          value={item.description || ""}
+                          onChange={(e) => {
+                            const next = [...mentorActionItems];
+                            next[index] = { ...item, description: e.target.value };
+                            setMentorActionItems(next);
+                          }}
+                          placeholder="Details"
+                          className="min-h-[40px] w-full resize-none break-words"
+                        />
+                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="max-w-xs">
+                          <DatePicker
+                            value={item.dueDate}
+                            onChange={(value) => {
+                              const next = [...mentorActionItems];
+                              next[index] = { ...item, dueDate: value };
+                              setMentorActionItems(next);
+                            }}
+                            placeholder="Due date"
+                          />
+                        </div>
+                        <select
+                          aria-label="Priority"
+                          value={item.priority}
+                          onChange={(e) => {
+                            const next = [...mentorActionItems];
+                            next[index] = {
+                              ...item,
+                              priority: e.target.value as "HIGH" | "MEDIUM" | "LOW",
+                            };
+                            setMentorActionItems(next);
+                          }}
+                          className={cn(
+                            "h-8 rounded-lg px-2 text-xs font-bold",
+                            PRIORITY_PILL[item.priority],
+                          )}
+                        >
+                          <option value="HIGH">High</option>
+                          <option value="MEDIUM">Medium</option>
+                          <option value="LOW">Low</option>
+                        </select>
+                      </div>
+                      {item.resourceLink?.trim() ? (
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <Input
+                            type="url"
+                            value={item.resourceLink}
+                            onChange={(e) => {
+                              const next = [...mentorActionItems];
+                              next[index] = { ...item, resourceLink: e.target.value };
+                              setMentorActionItems(next);
+                            }}
+                            placeholder="https://..."
+                            className="min-w-0 flex-1"
+                          />
+                          <ResourcePicker
+                            value={item.resourceLink}
+                            onPick={(link) => {
+                              const next = [...mentorActionItems];
+                              next[index] = { ...item, resourceLink: link };
+                              setMentorActionItems(next);
+                            }}
+                            className="h-10 w-full sm:w-36"
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                   {mentorActionItems.length === 0 && (
