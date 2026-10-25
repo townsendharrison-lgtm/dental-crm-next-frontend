@@ -25,6 +25,17 @@ async function loadData(): Promise<SchoolSearchData> {
   return { schools, columns, geo };
 }
 
+const FONT_HREF = "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap";
+
+/** Fonts can't be declared inside a shadow root, so load the feature's typeface on the document. */
+function ensureFont() {
+  if (document.querySelector(`link[href="${FONT_HREF}"]`)) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = FONT_HREF;
+  document.head.appendChild(link);
+}
+
 /** Closest scrollable ancestor (the AppShell `<main>`), used to jump back to the top on view change. */
 function scrollParent(el: HTMLElement | null): HTMLElement | null {
   let node = el?.parentElement ?? null;
@@ -53,6 +64,7 @@ export default function SchoolSearchView() {
     let cleanup: (() => void) | undefined;
     let cancelled = false;
     setStatus("loading");
+    ensureFont();
 
     loadData()
       .then((data) => {

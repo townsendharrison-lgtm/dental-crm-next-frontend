@@ -1453,7 +1453,7 @@ onDoc('keydown',e=>{if(e.key==='Escape'){ if(!$('#pmBg').hidden) closeProfile();
 
 
 /* ---- boot ---- */
-computeChances(); applyState(); startHero(); setSync(false);
+computeChances(); applyState(); startHero(); setSync(false); playIntro(false);
 
   return () => {
     LISTENERS.forEach(([t, type, fn, o]) => t.removeEventListener(type, fn, o));
