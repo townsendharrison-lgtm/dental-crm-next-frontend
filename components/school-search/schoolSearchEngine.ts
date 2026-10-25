@@ -213,11 +213,11 @@ function chance(s){
   if(s.gpa==null && s.aa==null) return {tier:'unknown',score:-9,reasons:[{ok:null,t:'Not enough admissions data in the sheet yet'}],missing:[],shadowGap:null};
   const zs=[];
   if(p.gpa!=null && s.gpa!=null){ const sd=s.gpaLo!=null?Math.max(.06,(s.gpa-s.gpaLo)/1.645):.2; const z=(p.gpa-s.gpa)/sd; zs.push([z,1]);
-    reasons.push({ok:z>=-.25,t:`Your GPA ${p.gpa.toFixed(2)} vs. their mean ${s.gpa.toFixed(2)}`}); }
+    reasons.push({ok:z>=-.25,t:`Student's GPA ${p.gpa.toFixed(2)} vs. their mean ${s.gpa.toFixed(2)}`}); }
   if(p.sgpa!=null && s.sgpa!=null){ const sd=s.sgpaLo!=null?Math.max(.06,(s.sgpa-s.sgpaLo)/1.645):.22; const z=(p.sgpa-s.sgpa)/sd; zs.push([z,.6]);
-    reasons.push({ok:z>=-.25,t:`Your science GPA ${p.sgpa.toFixed(2)} vs. ${s.sgpa.toFixed(2)}`}); }
+    reasons.push({ok:z>=-.25,t:`Student's science GPA ${p.sgpa.toFixed(2)} vs. ${s.sgpa.toFixed(2)}`}); }
   if(p.aa!=null && s.aa!=null){ const sd=s.aaLo!=null?Math.max(6,(s.aa-s.aaLo)/1.645):25; const z=(p.aa-s.aa)/sd; zs.push([z,1.2]);
-    reasons.push({ok:z>=-.25,t:`Your DAT AA ${p.aa} vs. their mean ${s.aa}`}); }
+    reasons.push({ok:z>=-.25,t:`Student's DAT AA ${p.aa} vs. their mean ${s.aa}`}); }
   const w=zs.reduce((a,[,x])=>a+x,0), z=w?zs.reduce((a,[v,x])=>a+v*x,0)/w:0;
   let odds=null, pool='';
   if(p.home==='INTL'){ odds=s.intlOdds; pool='International'; }
@@ -267,8 +267,8 @@ function groupMeters(s){
   const row=(label,share,acc)=>`<div class="gm"><span>${esc(label)}</span><div class="tr"><i style="width:${share??0}%"></i></div><b>${share!=null?Math.round(share)+'%':'—'}</b><em>${acc!=null?pct(acc)+' accepted':'no rate'}</em></div>`;
   if(gender){ const n=E[gender], share=E.total&&n!=null?n/E.total*100:null; rows.push(row(gender==='men'?'Men':'Women',share,s.grp&&s.grp.all?s.grp.all[gender]:null)); }
   if(eth){ const n=E.race?E.race[eth]:null, share=E.total&&n!=null?n/E.total*100:null; rows.push(row(ETH_SHORT[eth]||eth,share,s.grp&&s.grp[eth]?s.grp[eth].all:null)); }
-  if(!rows.length) return `<div class="dmeters"><span class="gm-empty">Add your gender and ethnicity in <span class="linkbtn" data-profile="1">My Chances</span> to see your group's share of the class and acceptance rate here.</span></div>`;
-  return `<div class="dmeters"><div class="gm-h"><span>Your group</span><span>% of class</span></div>${rows.join('')}</div>`;
+  if(!rows.length) return `<div class="dmeters"><span class="gm-empty">Add your student's gender and ethnicity in <span class="linkbtn" data-profile="1">Student Profile</span> to see their group's share of the class and acceptance rate here.</span></div>`;
+  return `<div class="dmeters"><div class="gm-h"><span>Student's group</span><span>% of class</span></div>${rows.join('')}</div>`;
 }
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function fmtDeadline(v){ if(!v) return null; const m=String(v).match(/^(\d{1,2})\/(\d{1,2})/); if(m) return `${MON[+m[1]-1]} ${+m[2]}`; return String(v).length>18?String(v).slice(0,18)+'…':String(v); }
@@ -357,8 +357,8 @@ function renderShelves(){
   if(hasProfile()){
     const bf=bestFits();
     const likely=bf.filter(s=>CH.get(s.id).tier==='likely'), target=bf.filter(s=>CH.get(s.id).tier==='target');
-    top+=`<section class="shelf"><div class="shelf-head"><h2>Best Fits for You</h2><p>Ranked by your stats and residency</p><button class="more" data-fit="all">See all</button></div>${railHTML(bf.slice(0,14))}</section>`;
-    if(target.length) top+=`<section class="shelf"><div class="shelf-head"><h2>Your Targets</h2><p>${target.length} schools where you look competitive</p><button class="more" data-fit="target">See all</button></div>${railHTML(target.slice(0,14))}</section>`;
+    top+=`<section class="shelf"><div class="shelf-head"><h2>Best Fits for Your Student</h2><p>Ranked by your student's stats and residency</p><button class="more" data-fit="all">See all</button></div>${railHTML(bf.slice(0,14))}</section>`;
+    if(target.length) top+=`<section class="shelf"><div class="shelf-head"><h2>Your Student's Targets</h2><p>${target.length} schools where your student looks competitive</p><button class="more" data-fit="target">See all</button></div>${railHTML(target.slice(0,14))}</section>`;
   }
   const list=S.filter(s=>isSaved(s.name));
   if(list.length) top+=`<section class="shelf"><div class="shelf-head"><h2>My Schools</h2><p>${list.length} saved</p><button class="more" data-goto="board">Open tracker</button></div>${railHTML(list)}</section>`;
@@ -366,8 +366,8 @@ function renderShelves(){
     <div class="shelf-head"><h2>${esc(sh.t)}</h2><p>${esc(sh.d||'')}</p><button class="more" data-shelf="${i}">See all</button></div>${railHTML(sh.items, sh.ranked)}</section>`).join('');
   wireRails($('#shelves'));
   ROOT.querySelectorAll('#shelves .rail').forEach((r,i)=>{ if(scroll[i]) r.scrollLeft=scroll[i]; });
-  $('#ctaSlot').innerHTML = hasProfile() ? '' : `<div class="cta"><div><h3>See your chances at every school</h3><p>Add your GPA, DAT and home state once. Every card then shows whether it’s a Reach, Target or Likely for you, plus any missing prerequisites.</p></div>
-    <div class="tiers"><span class="tier reach">Reach</span><span class="tier target">Target</span><span class="tier likely">Likely</span></div><button class="btn btn-primary" data-profile="1">Set up My Chances</button></div>`;
+  $('#ctaSlot').innerHTML = hasProfile() ? '' : `<div class="cta"><div><h3>See your student’s chances at every school</h3><p>Add your student’s GPA, DAT and home state once. Every card then shows whether it’s a Reach, Target or Likely for them, plus any missing prerequisites.</p></div>
+    <div class="tiers"><span class="tier reach">Reach</span><span class="tier target">Target</span><span class="tier likely">Likely</span></div><button class="btn btn-primary" data-profile="1">Set up Student Profile</button></div>`;
 }
 function wireRails(root){
   root.querySelectorAll('.rail-wrap').forEach(w=>{
@@ -521,7 +521,7 @@ function renderGrid(){
   $('#fScoresFill').hidden=!hasProfile(); $('#fCoursesFill').hidden=!(state.profile.courses&&state.profile.courses.length);
   updateFbar();
   const list=S.filter(matches).sort(sorter(F.sort));
-  $('#resultN').innerHTML=`<b>${list.length}</b> of ${S.length} schools`+(F.only?' · from shelf':'')+(gridMode==='detail'&&hasProfile()?' · <span style="color:#5de38a">Green</span> scores: you’re at or above the school’s average; <span style="color:#ffd60a">yellow</span>: below':'');
+  $('#resultN').innerHTML=`<b>${list.length}</b> of ${S.length} schools`+(F.only?' · from shelf':'')+(gridMode==='detail'&&hasProfile()?' · <span style="color:#5de38a">Green</span> scores: your student is at or above the school’s average; <span style="color:#ffd60a">yellow</span>: below':'');
   $('#grid').classList.toggle('detail',gridMode==='detail');
   ROOT.querySelectorAll('#gridMode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode===gridMode));
   $('#grid').innerHTML = list.length ? list.map(gridMode==='detail'?dcardHTML:cardHTML).join('') :
@@ -561,10 +561,10 @@ function applyState(){
 }
 function renderMeBtn(){
   const b=$('#meBtn'), p=state.profile;
-  if(!hasProfile()){ b.classList.add('empty'); $('#meLbl').textContent='My Chances'; b.style.removeProperty('--l'); return; }
+  if(!hasProfile()){ b.classList.add('empty'); $('#meLbl').textContent='Student Profile'; b.style.removeProperty('--l'); return; }
   const cs=[...CH.values()].filter(c=>c.tier!=='unknown'), L=cs.filter(c=>c.tier==='likely').length, T=cs.filter(c=>c.tier==='target').length, tot=cs.length||1;
   b.classList.remove('empty'); b.style.setProperty('--l',(L/tot*100)+'%'); b.style.setProperty('--t',((L+T)/tot*100)+'%');
-  $('#meLbl').innerHTML=`My Chances <small>${[p.gpa!=null?fx(p.gpa):null,p.aa!=null?p.aa+' AA':null].filter(Boolean).join(' · ')}</small>`;
+  $('#meLbl').innerHTML=`Student Profile <small>${[p.gpa!=null?fx(p.gpa):null,p.aa!=null?p.aa+' AA':null].filter(Boolean).join(' · ')}</small>`;
 }
 
 /* ---- compare tray + view ---- */
@@ -601,7 +601,7 @@ function visualCompare(list){
   const myPool=s=>pool==='intl'?'intlOdds':pool==='res'?(s.st===p.home?'inOdds':'outOdds'):null;
   const series=[['acc','Overall acceptance'],['inOdds','In-state odds'],['outOdds','Out-of-state odds']];
   const oddsMax=Math.max(1,...list.flatMap(s=>series.map(([k])=>s[k]||0)));
-  const odds=`<div class="vc-card vc-wide"><div class="vc-h"><h4>Acceptance odds</h4><span>${pool?'<b class="you">Gold outline = your residency pool</b>':'Add your home state in My Chances to highlight your odds'}</span></div>
+  const odds=`<div class="vc-card vc-wide"><div class="vc-h"><h4>Acceptance odds</h4><span>${pool?'<b class="you">Gold outline = your student’s residency pool</b>':'Add your student’s home state in Student Profile to highlight their odds'}</span></div>
     <div class="vc-legend">${series.map(([k,l],i)=>`<span><i class="o${i}"></i>${l}</span>`).join('')}</div>
     <div class="vc-odds">${list.map(s=>`<div class="vc-og">${name(s)}<div class="vc-bars">${series.map(([k],i)=>{const v=s[k]; const mine=myPool(s)===k;
       return `<div class="vc-bw"><div class="vc-b o${i}${mine?' mine':''}" style="height:${v!=null?Math.max(2,v/oddsMax*100):0}%"></div><span class="vc-bv${mine?' mine':''}">${v!=null?pct(v):'—'}</span></div>`;}).join('')}</div></div>`).join('')}</div></div>`;
@@ -612,12 +612,12 @@ function visualCompare(list){
   const cmax=Math.max(1,...C.map(c=>c.total||0));
   const cheapest=Math.min(...C.filter(c=>c.total!=null).map(c=>c.total*c.yrs));
   const cost=`<div class="vc-card vc-wide"><div class="vc-h"><h4>Cost per year</h4>
-      <span class="seg2" role="group" aria-label="Tuition type"><button data-vccost="auto" aria-pressed="${vcCost==='auto'}">For me</button><button data-vccost="res" aria-pressed="${vcCost==='res'}">Resident</button><button data-vccost="non" aria-pressed="${vcCost==='non'}">Non-resident</button></span></div>
+      <span class="seg2" role="group" aria-label="Tuition type"><button data-vccost="auto" aria-pressed="${vcCost==='auto'}">For student</button><button data-vccost="res" aria-pressed="${vcCost==='res'}">Resident</button><button data-vccost="non" aria-pressed="${vcCost==='non'}">Non-resident</button></span></div>
     <div class="vc-legend"><span><i class="c0"></i>Tuition</span><span><i class="c1"></i>Fees, books, supplies</span><span><i class="c2"></i>Rent (12 × median 1-bed)</span></div>
     <div class="vc-rows">${C.map(c=>`<div class="vc-row vc-crow">${name(c.s)}<div class="vc-stack">${c.total==null?'<span class="vc-na">Tuition not in the sheet</span>':`
       <i class="c0" style="width:${c.t/cmax*100}%" title="Tuition ${moneyFull(c.t)}"></i><i class="c1" style="width:${c.fe/cmax*100}%" title="Fees ${moneyFull(c.fe)}"></i><i class="c2" style="width:${c.rn/cmax*100}%" title="Rent ${moneyFull(c.rn)}"></i>`}</div>
       <div class="vc-tot">${c.total!=null?`<b>${moneyFull(c.total)}</b><small>${moneyFull(c.total*c.yrs)} over ${Math.round(c.yrs*10)/10} yrs</small>${c.total*c.yrs===cheapest&&C.filter(x=>x.total!=null).length>1?'<em>Cheapest</em>':''}`:'<b>—</b>'}</div></div>`).join('')}</div>
-    <p class="cap" style="margin:10px 0 0">${vcCost==='auto'?(p.home?'“For me” uses resident tuition at schools in your home state and non-resident tuition elsewhere.':'Set your home state in My Chances for “For me”; until then it uses non-resident tuition.'):''} Totals are estimates from the sheet’s tuition, fees and rent.</p></div>`;
+    <p class="cap" style="margin:10px 0 0">${vcCost==='auto'?(p.home?'“For student” uses resident tuition at schools in your student’s home state and non-resident tuition elsewhere.':'Set your student’s home state in Student Profile for “For student”; until then it uses non-resident tuition.'):''} Totals are estimates from the sheet’s tuition, fees and rent.</p></div>`;
   return `<div class="pad vc"><div class="vc-title"><h2>Visual compare</h2><p>Scores, odds and cost at a glance. The full table is below.</p></div>
     <div class="vc-grid">${scoreChart('DAT Academic Average','aa','aaLo','aaHi',p.aa,false,200,600)}${scoreChart('Overall GPA','gpa','gpaLo','gpaHi',p.gpa,true,2,4)}${odds}${cost}</div></div>`;
 }
@@ -637,10 +637,10 @@ function renderCompare(){
   const range=(s,mean,lo,hi,mn,mx,you)=>{ if(mean==null) return '<span class="v na">—</span>'; const P=v=>Math.max(0,Math.min(100,(v-mn)/(mx-mn)*100));
     return `<span class="v">${mean}</span>${lo!=null&&hi!=null?`<span style="color:var(--fg-3);font-size:12px"> · ${lo}–${hi}</span>`:''}<div class="mbar">${lo!=null&&hi!=null?`<i style="left:${P(lo)}%;width:${P(hi)-P(lo)}%"></i>`:''}<b style="left:${P(mean)}%"></b>${you!=null?`<u style="left:${P(you)}%"></u>`:''}</div>`; };
   const ROWS=[];
-  if(hasProfile()) ROWS.push(['sec','Your chances'],
-    ['Fit for you',s=>{const c=CH.get(s.id);return c?tierPill(c):'—';},s=>{const c=CH.get(s.id);return c?({likely:3,target:2,reach:1}[c.tier]??null):null;},'high'],
-    ['Your acceptance odds',s=>{const c=CH.get(s.id); if(!p.home) return '<span class="v na">Add your home state in My Chances</span>'; return c&&c.odds!=null?`${pct(c.odds)} <span style="color:var(--fg-3);font-size:12px">${esc(c.pool.toLowerCase())}</span>`:'<span class="v na">No residency data</span>';},s=>{const c=CH.get(s.id);return c?c.odds:null;},'high'],
-    ['Missing prerequisites',s=>{const c=CH.get(s.id); if(!p.courses) return '<span class="v na">Add courses in My Chances</span>'; return c&&c.missing.length?`<span class="txt">${esc(c.missing.join(', '))}</span>`:'<span class="yes">None</span>';},s=>{const c=CH.get(s.id);return p.courses&&c?c.missing.length:null;},'low']);
+  if(hasProfile()) ROWS.push(['sec','Student’s chances'],
+    ['Fit for student',s=>{const c=CH.get(s.id);return c?tierPill(c):'—';},s=>{const c=CH.get(s.id);return c?({likely:3,target:2,reach:1}[c.tier]??null):null;},'high'],
+    ['Student’s acceptance odds',s=>{const c=CH.get(s.id); if(!p.home) return '<span class="v na">Add your student’s home state in Student Profile</span>'; return c&&c.odds!=null?`${pct(c.odds)} <span style="color:var(--fg-3);font-size:12px">${esc(c.pool.toLowerCase())}</span>`:'<span class="v na">No residency data</span>';},s=>{const c=CH.get(s.id);return c?c.odds:null;},'high'],
+    ['Missing prerequisites',s=>{const c=CH.get(s.id); if(!p.courses) return '<span class="v na">Add courses in Student Profile</span>'; return c&&c.missing.length?`<span class="txt">${esc(c.missing.join(', '))}</span>`:'<span class="yes">None</span>';},s=>{const c=CH.get(s.id);return p.courses&&c?c.missing.length:null;},'low']);
   ROWS.push(['sec','Odds'],
     ['Acceptance rate',s=>pct(s.acc),s=>s.acc,'high'],['Interview rate',s=>pct(s.intv),s=>s.intv,'high'],
     ['In-state acceptance odds',s=>pct(s.inOdds),s=>s.inOdds,'high'],['Out-of-state acceptance odds',s=>pct(s.outOdds),s=>s.outOdds,'high'],
@@ -652,7 +652,7 @@ function renderCompare(){
     ['sec','Cost'],
     ['Resident tuition',s=>s.resT?esc(s.resT):'—',s=>s.res,'low'],['Non-resident tuition',s=>s.nonT?esc(s.nonT):'—',s=>s.non,'low'],
     ['Fees, books, supplies',s=>moneyFull(s.fees),s=>s.fees,'low'],['Median rent (1-bed)',s=>s.rent?moneyFull(s.rent)+'/mo':'—',s=>s.rent,'low'],
-    [p.home?'Est. yearly cost for you':'Est. yearly cost (non-resident)',s=>moneyFull(yearCost(s)),yearCost,'low'],
+    [p.home?'Est. yearly cost for student':'Est. yearly cost (non-resident)',s=>moneyFull(yearCost(s)),yearCost,'low'],
     ['sec','Program'],
     ['Institution',s=>esc(s.type||'—'),null],['Degree',s=>esc(s.deg||'—'),null],['Length',s=>s.len?s.len+' months':'—',null],['Starts',s=>esc(s.start||'—'),null],
     ['Application deadline',s=>esc(s.deadline||'—'),null],['Campus housing',s=>s.housing?(s.housing==='Yes'?'<span class="yes">Yes</span>':esc(s.housing)):'—',null],
@@ -698,7 +698,7 @@ const METRICS={
   acc:{label:'Average acceptance rate',val:l=>avgOf(l,'acc'),fmt:v=>pct(v),lo:'#4a1730',hi:'#30d158',good:'high'},
   tuition:{label:'Average resident tuition',val:l=>avgOf(l,'res'),fmt:v=>money(v),lo:'#30d158',hi:'#5a1a2a',good:'low'},
   instate:{label:'In-state share of class',val:l=>avgOf(l,'instate'),fmt:v=>pct(v),lo:'#2a1f55',hi:'#bf5af2',good:'high'},
-  chances:{label:'Your best chance',val:l=>{const t=l.map(s=>CH.get(s.id)).filter(c=>c&&c.tier!=='unknown').map(c=>({reach:1,target:2,likely:3}[c.tier])); return t.length?Math.max(...t):null;},fmt:v=>['','Reach','Target','Likely'][v],tier:true},
+  chances:{label:'Student’s best chance',val:l=>{const t=l.map(s=>CH.get(s.id)).filter(c=>c&&c.tier!=='unknown').map(c=>({reach:1,target:2,likely:3}[c.tier])); return t.length?Math.max(...t):null;},fmt:v=>['','Reach','Target','Likely'][v],tier:true},
 };
 function avgOf(l,k){const v=l.map(s=>s[k]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;}
 function mix(a,b,t){const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));const A=p(a),B=p(b);return '#'+A.map((x,i)=>Math.round(x+(B[i]-x)*t).toString(16).padStart(2,'0')).join('');}
@@ -714,7 +714,7 @@ function stateFill(ab){
 }
 function legendHTML(){
   const M=METRICS[mapMetric];
-  if(M.tier) return hasProfile()?`<span class="lg-t"><i style="background:#1d5a30"></i>Likely</span><span class="lg-t"><i style="background:#6b5a12"></i>Target</span><span class="lg-t"><i style="background:#6b2a2a"></i>Reach</span>`:`<span class="lg-note">Set up My Chances to color the map by your odds.</span>`;
+  if(M.tier) return hasProfile()?`<span class="lg-t"><i style="background:#1d5a30"></i>Likely</span><span class="lg-t"><i style="background:#6b5a12"></i>Target</span><span class="lg-t"><i style="background:#6b2a2a"></i>Reach</span>`:`<span class="lg-note">Set up a Student Profile to color the map by your student’s odds.</span>`;
   const all=Object.keys(GEO.states).map(a=>{const x=schoolsIn(a); return x.length?M.val(x):null;}).filter(x=>x!=null);
   const mn=Math.min(...all), mx=Math.max(...all);
   return `<span class="lg-v">${M.fmt(mn)}</span><span class="lg-bar" style="background:linear-gradient(90deg,${M.lo},${M.hi})"></span><span class="lg-v">${M.fmt(mx)}</span><span class="lg-note">${M.good==='low'?'Green = cheaper':'Brighter = higher'}</span>`;
@@ -749,9 +749,9 @@ function renderMap(){
     <g class="dots" filter="url(#glow)">${dots}</g>`;
   $('#mapLegend').innerHTML=`<span class="lg-h">${esc(METRICS[mapMetric].label)}</span>${legendHTML()}`;
   const mine=S.filter(s=>isSaved(s.name)).length;
-  $('#mapHint').innerHTML = !home ? `<button class="linkbtn" data-profile="1">Set your home state</button> to see arcs to your schools and in-state glow.` :
-    home==='INTL' ? 'Arcs need a US state or Canadian province as your home.' :
-    mine ? `Arcs connect ${esc(NAME_OF[home]||home)} to your ${mine} saved school${mine===1?'':'s'}. Gold-ringed dots give ${esc(NAME_OF[home]||home)} residents preference.` : `Add schools to My Schools to draw arcs from ${esc(NAME_OF[home]||home)}.`;
+  $('#mapHint').innerHTML = !home ? `<button class="linkbtn" data-profile="1">Set your student’s home state</button> to see arcs to their schools and in-state glow.` :
+    home==='INTL' ? 'Arcs need a US state or Canadian province as your student’s home.' :
+    mine ? `Arcs connect ${esc(NAME_OF[home]||home)} to your student’s ${mine} saved school${mine===1?'':'s'}. Gold-ringed dots give ${esc(NAME_OF[home]||home)} residents preference.` : `Add schools to My Schools to draw arcs from ${esc(NAME_OF[home]||home)}.`;
   renderMapSide();
 }
 function renderMapSide(){
@@ -800,14 +800,14 @@ function renderBoard(){
     <div class="kpi"><div class="l">Accepted</div><div class="v" style="color:var(--good)">${entries.filter(e=>e.v.stage==='accepted').length}</div></div>
     <div class="kpi"><div class="l">Steps done</div><div class="v">${stepsAll?Math.round(stepsDone/stepsAll*100):0}<small>%</small></div></div>
     ${nd?`<div class="kpi" style="flex:1;min-width:220px"><div class="l">Next deadline</div><div class="v" style="font-size:17px;letter-spacing:-.01em">${esc(nd.e.s.abbr)} · ${nd.d.date.toLocaleDateString(undefined,{month:'short',day:'numeric'})} <small>in ${nd.d.days} days</small></div></div>`:''}` : '';
-  if(!entries.length){ $('#board').innerHTML=`<div class="empty-big" style="grid-column:1/-1;margin:0"><h3>No schools tracked yet</h3><p>Tap + on any school card to add it here. It starts in Researching; drag it along as your application moves.</p>${hasProfile()?'<button class="btn btn-primary" data-track-fits="1">Add my top 8 fits</button>':'<button class="btn btn-primary" data-goto="all">Browse schools</button>'}</div>`; return; }
+  if(!entries.length){ $('#board').innerHTML=`<div class="empty-big" style="grid-column:1/-1;margin:0"><h3>No schools tracked yet</h3><p>Tap + on any school card to add it here. It starts in Researching; drag it along as the application moves.</p>${hasProfile()?'<button class="btn btn-primary" data-track-fits="1">Add my top 8 fits</button>':'<button class="btn btn-primary" data-goto="all">Browse schools</button>'}</div>`; return; }
   $('#board').innerHTML=STAGES.map(([k,l,c])=>{const items=entries.filter(e=>e.v.stage===k).sort((a,b)=>(nextDeadline(a.s)?.days??999)-(nextDeadline(b.s)?.days??999));
     return `<section class="col" data-stage="${k}"><div class="col-h" style="--c:${c}"><i></i>${l}<span>${items.length}</span></div><div class="col-b">${items.length?items.map(tcardHTML).join(''):'<div class="col-empty">Drop a school here</div>'}</div></section>`;}).join('');
 }
 function tcardHTML({s,v}){
   return `<article class="tcard tcard-d" draggable="true" data-card="${esc(s.name)}">
     ${dcardHTML(s)}
-    <div class="bd"><div class="bd-l">Your progress</div>
+    <div class="bd"><div class="bd-l">Application progress</div>
       <div class="prog">${STEPS.map(([k,l])=>`<button aria-pressed="${!!(v.steps&&v.steps[k])}" data-step="${k}" title="${l}">${l}</button>`).join('')}</div>
       <div class="foot"><select aria-label="Stage for ${esc(s.name)}" data-stage-sel="1">${STAGES.map(([k,l])=>`<option value="${k}"${k===v.stage?' selected':''}>${l}</option>`).join('')}</select><button class="ib" data-notes="1">${v.notes?'Notes •':'Notes'}</button><button class="ib" data-untrack="1" aria-label="Remove ${esc(s.name)}">✕</button></div>
       <textarea data-note-area="1" placeholder="Notes: contacts, essay prompts, interview dates…" ${v.notes?'':'hidden'}>${esc(v.notes)}</textarea>
@@ -883,8 +883,8 @@ function openProfile(){
   const p=state.profile;
   const homes=[['','Choose…'],...Object.entries(ABBR).filter(([n,a])=>!CA_PROV.includes(a)).sort((a,b)=>a[0].localeCompare(b[0])).map(([n,a])=>[a,n]),...CA_PROV.map(a=>[a,NAME_OF[a]+' (Canada)']),['INTL','International applicant']];
   $('#pm').innerHTML=`<button class="close" id="pmClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    <div class="pm-h"><span class="eyebrow"><span class="dot" style="--rc:var(--good)"></span><span>My Chances</span></span><h2 id="pmTitle">Your applicant profile</h2>
-    <p>Enter what you know. Every school gets a Reach, Target or Likely label from its GPA and DAT averages and the odds for your residency.</p></div>
+    <div class="pm-h"><span class="eyebrow"><span class="dot" style="--rc:var(--good)"></span><span>Student Profile</span></span><h2 id="pmTitle">Your student’s profile</h2>
+    <p>Enter what you know about your student. Every school gets a Reach, Target or Likely label from its GPA and DAT averages and the odds for their residency.</p></div>
     <div class="pm-b">
       <div class="pf">
         <label for="pGpa">Overall GPA<input id="pGpa" type="number" inputmode="decimal" step="0.01" min="0" max="4.3" placeholder="3.60" value="${p.gpa??''}"></label>
@@ -896,11 +896,11 @@ function openProfile(){
         <label for="pEth">Ethnicity<select id="pEth"><option value="">Prefer not to say</option>${RACES.filter(r=>r!=='Unkown').map(r=>`<option value="${esc(r)}"${p.eth===r?' selected':''}>${esc(r)}</option>`).join('')}</select></label>
         <label for="pHome" style="grid-column:span 2">Home state or province<select id="pHome">${homes.map(([v,l])=>`<option value="${v}"${p.home===v?' selected':''}>${esc(l)}</option>`).join('')}</select></label>
       </div>
-      <div><div class="bt" style="margin-bottom:10px">Courses you have completed or will finish before matriculating</div>
+      <div><div class="bt" style="margin-bottom:10px">Courses your student has completed or will finish before matriculating</div>
         <div class="chips" id="pCourses">${COURSES.map(c=>`<button class="chip" aria-pressed="${!!(p.courses&&p.courses.includes(c))}" data-course="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>
       <div class="pm-sum" id="pmSum"></div>
       <div class="pm-foot"><span class="note2">Saved ${dbRef?'to your account, so it follows you across devices':'in this browser'}. Only you can see it. A rough guide from the sheet’s averages, not a prediction.</span>
-        <button class="btn btn-glass" id="pmClear">Clear profile</button><button class="btn btn-primary" id="pmDone">See my schools</button></div>
+        <button class="btn btn-glass" id="pmClear">Clear profile</button><button class="btn btn-primary" id="pmDone">See matching schools</button></div>
     </div>`;
   const bg=$('#pmBg'); bg.hidden=false; document.body.style.overflow='hidden'; requestAnimationFrame(()=>bg.classList.add('open'));
   renderProfileSummary();
@@ -918,7 +918,7 @@ function openProfile(){
 }
 function renderProfileSummary(){
   const el=$('#pmSum'); if(!el) return;
-  if(!hasProfile()){ el.innerHTML='<div class="kpi" style="flex:1"><div class="l">Status</div><div class="v" style="font-size:16px">Add a GPA or DAT score to see your labels</div></div>'; return; }
+  if(!hasProfile()){ el.innerHTML='<div class="kpi" style="flex:1"><div class="l">Status</div><div class="v" style="font-size:16px">Add a GPA or DAT score to see their labels</div></div>'; return; }
   const cs=[...CH.values()], k=t=>cs.filter(c=>c.tier===t).length;
   el.innerHTML=[['likely','Likely'],['target','Target'],['reach','Reach']].map(([t,l])=>`<div class="kpi"><div class="l">${l}</div><div class="v" style="color:${TIERC[t]}">${k(t)}<small> schools</small></div></div>`).join('')+`<div class="kpi"><div class="l">No data yet</div><div class="v" style="color:var(--fg-3)">${k('unknown')}</div></div>`;
 }
@@ -1073,14 +1073,14 @@ function tabOverview(s,G){
     const items=[...ch.reasons.map(r=>`<li>${r.ok===null?'':`<span class="ic ${r.ok?'y':'w'}">${r.ok?I.check:'!'}</span>`}<span>${esc(r.t)}</span></li>`),
       ...(ch.missing.length?[`<li><span class="ic w">!</span><span>Missing required courses: <b>${esc(ch.missing.join(', '))}</b></span></li>`]:state.profile.courses&&s.req.length?[`<li><span class="ic y">${I.check}</span><span>You meet all ${s.req.length} required courses</span></li>`]:[]),
       ...(ch.shadowGap?[`<li><span class="ic w">!</span><span>${ch.shadowGap} more shadowing hours to reach their ${s.shadowHrs}</span></li>`]:[])];
-    h+=`<div class="bento" style="margin-bottom:12px"><div class="b glow"><div class="bt">${I.star}Your chances<span class="r"><button class="linkbtn" data-profile="1">Edit profile</button></span></div>
+    h+=`<div class="bento" style="margin-bottom:12px"><div class="b glow"><div class="bt">${I.star}Student’s chances<span class="r"><button class="linkbtn" data-profile="1">Edit profile</button></span></div>
       <div class="chance"><div class="gauge"><svg viewBox="0 0 130 76"><defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" stop-color="#ff6961"/><stop offset=".5" stop-color="#ffd60a"/><stop offset="1" stop-color="#30d158"/></linearGradient></defs>
         <path d="M13 66 A52 52 0 0 1 117 66" fill="none" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" opacity="${ch.tier==='unknown'?.25:1}"/>${ch.tier==='unknown'?'':`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="8" fill="#fff" stroke="#0b0c12" stroke-width="3"/>`}</svg>
         <div class="lbl">${TIER_LABEL[ch.tier]}</div></div>
         <ul class="reasons">${items.join('')}</ul></div>
       <div class="cap" style="margin-top:12px">A rough guide from this school’s averages and residency odds in the sheet, not a prediction.</div></div></div>`;
   } else {
-    h+=`<div class="bento" style="margin-bottom:12px"><div class="b"><div class="exp-hero"><div style="flex:1;min-width:220px"><div class="bt" style="margin-bottom:6px">${I.star}Your chances</div><div class="cap" style="margin:0">Add your GPA, DAT and home state to see whether this school is a Reach, Target or Likely for you.</div></div><button class="btn btn-primary" data-profile="1">Set up My Chances</button></div></div></div>`;
+    h+=`<div class="bento" style="margin-bottom:12px"><div class="b"><div class="exp-hero"><div style="flex:1;min-width:220px"><div class="bt" style="margin-bottom:6px">${I.star}Student’s chances</div><div class="cap" style="margin:0">Add your student’s GPA, DAT and home state to see whether this school is a Reach, Target or Likely for them.</div></div><button class="btn btn-primary" data-profile="1">Set up Student Profile</button></div></div></div>`;
   }
   h+=`<div class="bento">
     <div class="b s3 glow stat"><div class="bt">Acceptance</div><div class="big">${s.acc!=null?`<span data-count="${s.acc}" data-dec="2">${fx(s.acc,2)}</span>`:'—'}<small>%</small></div><div class="cap">${s.acc?`About <b>${oneIn(s.acc)}</b> applicants enrolled`:'No acceptance data yet'}</div></div>
@@ -1141,7 +1141,7 @@ function tabAdmissions(s,G){
   let h='';
   // residency
   const rc=['In-State','Out-of-State','International'].map((n,i)=>residencyCard(G,n,['var(--accent)','var(--r-south)','var(--r-pr)'][i])).join('');
-  if(rc) h+=`<div class="sect-title"><h3>Your odds by residency</h3><p>Interview and acceptance odds for each applicant pool</p></div><div class="bento">${rc}</div>`;
+  if(rc) h+=`<div class="sect-title"><h3>Odds by residency</h3><p>Interview and acceptance odds for each applicant pool</p></div><div class="bento">${rc}</div>`;
   // gender
   const mA=pn(T('Total # of Men Applicants')), wA=pn(T('Total # of Women Applicants')), uA=pn(T('Total # of Applicants Who\'s Gender Was Unkown'));
   const mE=pn(T('Total # of Men Enrolled')), wE=pn(T('Total # of Women Enrolled')), uE=pn(T('Total # Enrolled Who\'s Gender Was Unkown'));
@@ -1191,7 +1191,7 @@ function scoreRow(name,full,mean,lo,hi,min,max,you,decimals){
       <div class="srail"></div>
       ${lo!=null&&hi!=null?`<div class="band" style="left:${P(lo)}%;width:${P(hi)-P(lo)}%"></div><div class="rl" style="left:${P(lo)}%">${decimals?lo.toFixed(2):lo}</div><div class="rl" style="left:${P(hi)}%">${decimals?hi.toFixed(2):hi}</div>`:''}
       ${mean!=null?`<div class="mk" style="left:${P(mean)}%"></div>`:''}
-      ${you!=null?`<div class="you" style="left:${P(you)}%"><span>YOU</span></div>`:''}
+      ${you!=null?`<div class="you" style="left:${P(you)}%"><span>STUDENT</span></div>`:''}
     </div>${verdict}</div>`;
 }
 function tabScores(s,G){
@@ -1210,18 +1210,18 @@ function tabScores(s,G){
   const gpaRows = scoreRow('Overall GPA','Cumulative, grad + undergrad',TG[0],TG[1],TG[2],2.5,4.0,me.gpa,true)
     + scoreRow('Science GPA','Biology, chemistry, physics, math',SG[0],SG[1],SG[2],2.5,4.0,null,true);
   let h=`<div class="bento">
-    <div class="b"><div class="bt">${I.star}Your stats</div>
-      <div class="mystats">${hasProfile()?`<span class="cap" style="margin:0">Yellow markers show your <b>${me.gpa!=null?'GPA '+fx(me.gpa):''}${me.gpa!=null&&me.aa!=null?' and ':''}${me.aa!=null?'DAT AA '+me.aa:''}</b> against this school's admitted class.</span>`:`<span class="cap" style="margin:0">Add your GPA and DAT in My Chances to see where you land against this school's admitted class.</span>`}
-      <button class="btn btn-glass" data-profile="1" style="margin-left:auto;padding:7px 14px;font-size:13px">${hasProfile()?'Edit My Chances':'Set up My Chances'}</button></div></div>
+    <div class="b"><div class="bt">${I.star}Student’s stats</div>
+      <div class="mystats">${hasProfile()?`<span class="cap" style="margin:0">Yellow markers show your student’s <b>${me.gpa!=null?'GPA '+fx(me.gpa):''}${me.gpa!=null&&me.aa!=null?' and ':''}${me.aa!=null?'DAT AA '+me.aa:''}</b> against this school's admitted class.</span>`:`<span class="cap" style="margin:0">Add your student’s GPA and DAT in Student Profile to see where they land against this school's admitted class.</span>`}
+      <button class="btn btn-glass" data-profile="1" style="margin-left:auto;padding:7px 14px;font-size:13px">${hasProfile()?'Edit Student Profile':'Set up Student Profile'}</button></div></div>
     <div class="b s6"><div class="bt">${I.chart}DAT scores<span class="r">white dot = mean · bar = middle 90%</span></div>${datRows||'<p class="empty-b">No DAT score data in the sheet yet.</p>'}</div>
     <div class="b s6"><div class="bt">${I.chart}GPA<span class="r">white dot = mean · bar = middle 90%</span></div>${gpaRows||'<p class="empty-b">No GPA data in the sheet yet.</p>'}</div>
   </div>`;
   // levels of consideration
   const lv=[...G.all(D,e=>/Levels of Consideration/.test(e.sub)),...G.all(GP,e=>/Level of Consideration/.test(e.sub))]; G.use(lv);
   if(lv.length) h+=`<div class="sect-title"><h3>How much each score matters</h3></div><div class="b"><div class="levels">${lv.map(e=>`<div class="lvl ${LVL(e.v)}"><span class="cap" style="margin:0">${esc(e.lab)}</span><b>${esc(e.v)}</b></div>`).join('')}</div></div>`;
-  h+=`<div class="b" style="margin-top:12px"><div class="bt">${I.chart}Old DAT scores</div><div class="cap" style="margin:0">Took the DAT on the old 1–30 scale? Convert it with the table below, or enter it in My Chances.</div>${datTable()}</div>`;
+  h+=`<div class="b" style="margin-top:12px"><div class="bt">${I.chart}Old DAT scores</div><div class="cap" style="margin:0">Took the DAT on the old 1–30 scale? Convert it with the table below, or enter it in Student Profile.</div>${datTable()}</div>`;
   const pol=G.left([D,GP]); G.use(pol);
-  if(pol.length) h+=`<div class="sect-title"><h3>Policies</h3><p>How this school treats your scores and grades</p></div>${facts(pol)}`;
+  if(pol.length) h+=`<div class="sect-title"><h3>Policies</h3><p>How this school treats a student’s scores and grades</p></div>${facts(pol)}`;
   return h;
 }
 
@@ -1354,7 +1354,7 @@ function quickFacts(s){
     ${cell('In-state',s.instate!=null?pct(s.instate):'—','of the class')}
     ${cell('Resident tuition',s.res!=null?money(s.res):(s.resT?esc(s.resT):'—'),s.non!=null?`${money(s.non)} non-res.`:'')}
     ${cell('Avg DAT · GPA',`${s.aa??'—'} · ${fx(s.gpa)}`,s.sgpa!=null?`sGPA ${fx(s.sgpa)}`:'')}
-    ${c?`<div class="qf qf-you" data-profile="1"><span class="l">You</span>${tierPill(c,true)}<small>${c.odds!=null?`${pct(c.odds)} ${esc(c.pool.toLowerCase())} odds`:'Edit profile'}</small></div>`:`<button class="qf qf-you" data-profile="1"><span class="l">You</span><b style="font-size:14px">Set up</b><small>See your label</small></button>`}
+    ${c?`<div class="qf qf-you" data-profile="1"><span class="l">Student</span>${tierPill(c,true)}<small>${c.odds!=null?`${pct(c.odds)} ${esc(c.pool.toLowerCase())} odds`:'Edit profile'}</small></div>`:`<button class="qf qf-you" data-profile="1"><span class="l">Student</span><b style="font-size:14px">Set up</b><small>See their label</small></button>`}
   </div>`;
 }
 function tabRubric(s){
