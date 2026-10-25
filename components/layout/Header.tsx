@@ -1009,6 +1009,10 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
     title: "School Filter",
     description: "Compare and filter dental school requirements.",
   },
+  "/mentor/school-search": {
+    title: "School Search",
+    description: "Browse, compare and track dental schools.",
+  },
   "/mentor/messages": {
     title: "Inbox",
     description: "Communicate with student applicants and manager.",

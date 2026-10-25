@@ -72,6 +72,7 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { label: "My Tasks", href: "/mentor/tasks", icon: CheckSquare },
     { label: "My Students", href: "/mentor/students", icon: Users },
     { label: "School Filter", href: "/mentor/school-filter", icon: Search },
+    { label: "School Search", href: "/mentor/school-search", icon: GraduationCap },
     { label: "Inbox", href: "/mentor/messages", icon: MessageSquare },
     { label: "Analytics", href: "/mentor/analytics", icon: BarChart3 },
   ],
