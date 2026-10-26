@@ -780,7 +780,12 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center gap-3",
+          isModal ? "min-h-0 flex-1" : "h-[60vh]",
+        )}
+      >
         <Spinner className="h-8 w-8 text-indigo-500" />
         <p className="text-sm text-slate-500">Fetching live school data...</p>
       </div>
@@ -803,7 +808,13 @@ const SchoolFilterView: React.FC<SchoolFilterViewProps> = ({
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div
+      className={cn(
+        "space-y-6 animate-in fade-in duration-500",
+        // fullHeight Modal body is overflow-hidden; this view must own the scroll.
+        isModal && "min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1",
+      )}
+    >
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-white mb-1">Dental School Catalog</h2>
