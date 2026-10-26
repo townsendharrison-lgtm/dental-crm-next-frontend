@@ -913,7 +913,7 @@ const ROUTE_DETAILS: Record<string, { title: string; description: string }> = {
   },
   "/admin/admission-research": {
     title: "Admission Research",
-    description: "Research school admissions factors, rubrics, and student fit scores via school-ai-service.",
+    description: "School admissions research is coming soon.",
   },
   "/admin/courses": {
     title: "Courses",
